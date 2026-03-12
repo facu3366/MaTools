@@ -601,6 +601,32 @@ def ask_natural(request: NaturalRequest):
 
 
 
+@app.get("/yf/search")
+async def yf_search(q: str):
+    """
+    Proxy para Yahoo Finance search — evita CORS desde el browser.
+    Ejemplo: GET /yf/search?q=mercado libre
+    """
+    import httpx
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={q}&quotesCount=8&newsCount=0&listsCount=0"
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        return res.json()
+
+
+@app.get("/yf/{ticker}")
+async def yf_quote(ticker: str):
+    """
+    Proxy para Yahoo Finance quoteSummary — evita CORS desde el browser.
+    Ejemplo: GET /yf/MELI
+    """
+    import httpx
+    url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=financialData,defaultKeyStatistics,assetProfile"
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        return res.json()
+
+
 @app.get("/bcra/bancos")
 def bcra_bancos(top_n: int = None):
     """

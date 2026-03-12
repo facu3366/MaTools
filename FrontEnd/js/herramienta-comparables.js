@@ -1,43 +1,11 @@
 // ─────────────────────────────────────────────────────────────
 //  HERRAMIENTA COMPARABLES — DealDesk
-//  Autocomplete live via Yahoo Finance Search API
+//  Autocomplete live via Yahoo Finance (proxied por backend propio)
 // ─────────────────────────────────────────────────────────────
 
 let selectedSuggestion = -1;
 let searchTimeout      = null;
 let selectedTicker     = null;
-
-// ── PROXY HELPER ──────────────────────────────────────────────
-// Intenta 3 proxies en cadena. Si uno falla, pasa al siguiente.
-
-async function fetchYF(url) {
-  const proxies = [
-    async () => {
-      const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(url)}`);
-      return res.json();
-    },
-    async () => {
-      const res  = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-      const json = await res.json();
-      return JSON.parse(json.contents);
-    },
-    async () => {
-      const res = await fetch(`https://thingproxy.freeboard.io/fetch/${url}`);
-      return res.json();
-    },
-  ];
-
-  for (const proxy of proxies) {
-    try {
-      const data = await proxy();
-      if (data) return data;
-    } catch (err) {
-      // proxy falló, prueba el siguiente
-    }
-  }
-
-  throw new Error("Todos los proxies fallaron. Verificá tu conexión.");
-}
 
 // ── AUTOCOMPLETE ──────────────────────────────────────────────
 
@@ -45,8 +13,8 @@ async function searchEmpresas(query) {
   if (!query || query.length < 2) return [];
 
   try {
-    const url  = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0&listsCount=0`;
-    const data = await fetchYF(url);
+    const res  = await fetch(`${API}/yf/search?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
 
     return (data.quotes || [])
       .filter(q => ["EQUITY", "ETF"].includes(q.quoteType))
@@ -151,8 +119,8 @@ async function autoDetectSector(ticker) {
   if (!ticker) return;
 
   try {
-    const url     = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=assetProfile`;
-    const data    = await fetchYF(url);
+    const res     = await fetch(`${API}/yf/${ticker}`);
+    const data    = await res.json();
     const profile = data?.quoteSummary?.result?.[0]?.assetProfile;
 
     if (!profile?.sector) return;
@@ -199,8 +167,8 @@ async function fetchRevenueCard(ticker, name) {
   container.style.display = "block";
 
   try {
-    const url   = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics`;
-    const data  = await fetchYF(url);
+    const res   = await fetch(`${API}/yf/${ticker}`);
+    const data  = await res.json();
     const fin   = data?.quoteSummary?.result?.[0]?.financialData;
     const stats = data?.quoteSummary?.result?.[0]?.defaultKeyStatistics;
 
