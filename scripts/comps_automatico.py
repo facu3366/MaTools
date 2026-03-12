@@ -25,7 +25,6 @@ DEAL_CONFIG = {
     "revenue_target": 1_000,
     "rango_min_pct":  0.3,
     "rango_max_pct":  3.0,
-    "analista":       "Francisco Pini",
     "fecha":          datetime.now().strftime("%d/%m/%Y"),
 }
 

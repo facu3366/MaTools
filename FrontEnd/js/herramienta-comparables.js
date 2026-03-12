@@ -12,9 +12,13 @@ let selectedTicker     = null;
 async function searchEmpresas(query) {
   if (!query || query.length < 2) return [];
 
+  const yfUrl  = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0&listsCount=0`;
+  const proxy  = `https://api.allorigins.win/get?url=${encodeURIComponent(yfUrl)}`;
+
   try {
-    const res  = await fetch(`${API}/yf/search?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
+    const res  = await fetch(proxy);
+    const raw  = await res.json();
+    const data = JSON.parse(raw.contents);
 
     return (data.quotes || [])
       .filter(q => ["EQUITY", "ETF"].includes(q.quoteType))
@@ -119,8 +123,11 @@ async function autoDetectSector(ticker) {
   if (!ticker) return;
 
   try {
-    const res     = await fetch(`${API}/yf/${ticker}`);
-    const data    = await res.json();
+    const yfUrl  = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics,assetProfile`;
+    const proxy  = `https://api.allorigins.win/get?url=${encodeURIComponent(yfUrl)}`;
+    const res    = await fetch(proxy);
+    const raw    = await res.json();
+    const data   = JSON.parse(raw.contents);
     const profile = data?.quoteSummary?.result?.[0]?.assetProfile;
 
     if (!profile?.sector) return;
@@ -167,8 +174,11 @@ async function fetchRevenueCard(ticker, name) {
   container.style.display = "block";
 
   try {
-    const res   = await fetch(`${API}/yf/${ticker}`);
-    const data  = await res.json();
+    const yfUrl  = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics,assetProfile`;
+    const proxy  = `https://api.allorigins.win/get?url=${encodeURIComponent(yfUrl)}`;
+    const res    = await fetch(proxy);
+    const raw    = await res.json();
+    const data   = JSON.parse(raw.contents);
     const fin   = data?.quoteSummary?.result?.[0]?.financialData;
     const stats = data?.quoteSummary?.result?.[0]?.defaultKeyStatistics;
 
