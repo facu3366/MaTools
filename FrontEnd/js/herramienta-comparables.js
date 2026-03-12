@@ -7,16 +7,31 @@ let selectedSuggestion = -1;
 let searchTimeout      = null;
 let selectedTicker     = null;
 
+// ── PROXY HELPER ──────────────────────────────────────────────
+// corsproxy.io  → funciona bien para el search (GET simple)
+// allorigins    → funciona para quoteSummary (responde JSON wrapped)
+
+async function fetchYF(url, useAllOrigins = false) {
+  if (useAllOrigins) {
+    const wrapped = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const res     = await fetch(wrapped);
+    const json    = await res.json();
+    return JSON.parse(json.contents);
+  } else {
+    const proxied = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+    const res     = await fetch(proxied);
+    return res.json();
+  }
+}
+
 // ── AUTOCOMPLETE ──────────────────────────────────────────────
 
 async function searchEmpresas(query) {
   if (!query || query.length < 2) return [];
 
   try {
-    const yf  = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0&listsCount=0`;
-    const url = `https://corsproxy.io/?url=${encodeURIComponent(yf)}`;
-    const res  = await fetch(url);
-    const data = await res.json();
+    const url  = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0&listsCount=0`;
+    const data = await fetchYF(url, false);
 
     return (data.quotes || [])
       .filter(q => ["EQUITY", "ETF"].includes(q.quoteType))
@@ -108,8 +123,11 @@ async function selectSuggestion(ticker, name) {
   document.getElementById("comps-empresa").value = `${name} (${ticker})`;
   document.getElementById("suggestions").style.display = "none";
 
-  await autoDetectSector(ticker);
-  await fetchRevenueCard(ticker, name);
+  // Corren en paralelo para ser más rápido
+  await Promise.all([
+    autoDetectSector(ticker),
+    fetchRevenueCard(ticker, name),
+  ]);
 }
 
 // ── AUTO-DETECT SECTOR ────────────────────────────────────────
@@ -119,10 +137,8 @@ async function autoDetectSector(ticker) {
   if (!ticker) return;
 
   try {
-    const yf  = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=assetProfile`;
-    const url = `https://corsproxy.io/?url=${encodeURIComponent(yf)}`;
-    const res  = await fetch(url);
-    const data = await res.json();
+    const url     = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=assetProfile`;
+    const data    = await fetchYF(url, true);
     const profile = data?.quoteSummary?.result?.[0]?.assetProfile;
 
     if (!profile?.sector) return;
@@ -169,10 +185,8 @@ async function fetchRevenueCard(ticker, name) {
   container.style.display = "block";
 
   try {
-    const yf  = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics`;
-    const url = `https://corsproxy.io/?url=${encodeURIComponent(yf)}`;
-    const res  = await fetch(url);
-    const data = await res.json();
+    const url   = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics`;
+    const data  = await fetchYF(url, true);
     const fin   = data?.quoteSummary?.result?.[0]?.financialData;
     const stats = data?.quoteSummary?.result?.[0]?.defaultKeyStatistics;
 
@@ -188,7 +202,6 @@ async function fetchRevenueCard(ticker, name) {
     const profitMgn = fin.profitMargins?.raw;
     const ev        = stats?.enterpriseValue?.raw;
 
-    // Pre-llenar campo revenue en millones
     if (revenue != null) {
       document.getElementById("comps-revenue").value = Math.round(revenue / 1e6);
     }
@@ -204,7 +217,6 @@ async function fetchRevenueCard(ticker, name) {
 
     container.innerHTML = `
       <div class="rev-card">
-
         <div class="rev-card-header">
           <div class="rev-company">
             <span class="rev-ticker-badge">${ticker}</span>
@@ -215,7 +227,6 @@ async function fetchRevenueCard(ticker, name) {
             &nbsp;·&nbsp; TTM (Trailing Twelve Months)
           </div>
         </div>
-
         <div class="rev-grid">
           <div class="rev-metric rev-metric--main">
             <div class="rev-metric-label">Revenue</div>
@@ -238,11 +249,9 @@ async function fetchRevenueCard(ticker, name) {
             <div class="rev-metric-sub">USD</div>
           </div>
         </div>
-
         <div class="rev-auto-note">
           ↑ Revenue pre-cargado en el campo. Podés editarlo manualmente.
         </div>
-
       </div>
     `;
   } catch (err) {
