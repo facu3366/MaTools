@@ -8,20 +8,35 @@ let searchTimeout      = null;
 let selectedTicker     = null;
 
 // ── PROXY HELPER ──────────────────────────────────────────────
-// corsproxy.io  → funciona bien para el search (GET simple)
-// allorigins    → funciona para quoteSummary (responde JSON wrapped)
+// Intenta 3 proxies en cadena. Si uno falla, pasa al siguiente.
 
-async function fetchYF(url, useAllOrigins = false) {
-  if (useAllOrigins) {
-    const wrapped = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res     = await fetch(wrapped);
-    const json    = await res.json();
-    return JSON.parse(json.contents);
-  } else {
-    const proxied = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
-    const res     = await fetch(proxied);
-    return res.json();
+async function fetchYF(url) {
+  const proxies = [
+    async () => {
+      const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(url)}`);
+      return res.json();
+    },
+    async () => {
+      const res  = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+      const json = await res.json();
+      return JSON.parse(json.contents);
+    },
+    async () => {
+      const res = await fetch(`https://thingproxy.freeboard.io/fetch/${url}`);
+      return res.json();
+    },
+  ];
+
+  for (const proxy of proxies) {
+    try {
+      const data = await proxy();
+      if (data) return data;
+    } catch (err) {
+      // proxy falló, prueba el siguiente
+    }
   }
+
+  throw new Error("Todos los proxies fallaron. Verificá tu conexión.");
 }
 
 // ── AUTOCOMPLETE ──────────────────────────────────────────────
@@ -31,7 +46,7 @@ async function searchEmpresas(query) {
 
   try {
     const url  = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=8&newsCount=0&listsCount=0`;
-    const data = await fetchYF(url, false);
+    const data = await fetchYF(url);
 
     return (data.quotes || [])
       .filter(q => ["EQUITY", "ETF"].includes(q.quoteType))
@@ -123,7 +138,6 @@ async function selectSuggestion(ticker, name) {
   document.getElementById("comps-empresa").value = `${name} (${ticker})`;
   document.getElementById("suggestions").style.display = "none";
 
-  // Corren en paralelo para ser más rápido
   await Promise.all([
     autoDetectSector(ticker),
     fetchRevenueCard(ticker, name),
@@ -138,7 +152,7 @@ async function autoDetectSector(ticker) {
 
   try {
     const url     = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=assetProfile`;
-    const data    = await fetchYF(url, true);
+    const data    = await fetchYF(url);
     const profile = data?.quoteSummary?.result?.[0]?.assetProfile;
 
     if (!profile?.sector) return;
@@ -186,7 +200,7 @@ async function fetchRevenueCard(ticker, name) {
 
   try {
     const url   = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics`;
-    const data  = await fetchYF(url, true);
+    const data  = await fetchYF(url);
     const fin   = data?.quoteSummary?.result?.[0]?.financialData;
     const stats = data?.quoteSummary?.result?.[0]?.defaultKeyStatistics;
 
