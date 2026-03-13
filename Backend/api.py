@@ -27,12 +27,10 @@ import json
 import os
 import sys
 sys.path.append(os.path.dirname(__file__))
+from scrapers.bcra_scraper import get_bcra_bancos
 
-from bcra_scraper import get_bcra_bancos
-from comps_automatico import (
-    get_financials, get_dcf_inputs, calcular_wacc,
-    generar_excel, _generar_excel_buffer, UNIVERSE, DEAL_CONFIG
-)
+
+from scrapers.bcra_scraper import get_bcra_bancos
 import pandas as pd
 import time
 from datetime import datetime
@@ -150,7 +148,7 @@ Solo el JSON, nada más."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=300,
+        max_tokens=3000,
         messages=[{"role": "user", "content": prompt}]
     )
 
@@ -613,19 +611,56 @@ async def yf_search(q: str):
         res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
         return res.json()
 
-
 @app.get("/yf/{ticker}")
 async def yf_quote(ticker: str):
-    """
-    Proxy para Yahoo Finance quoteSummary — evita CORS desde el browser.
-    Ejemplo: GET /yf/MELI
-    """
     import httpx
-    url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{ticker}?modules=financialData,defaultKeyStatistics,assetProfile"
-    async with httpx.AsyncClient() as client:
-        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        return res.json()
 
+    async with httpx.AsyncClient() as client:
+
+        # ── PRECIO (chart endpoint)
+        chart_url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range=1d&interval=1d"
+
+        chart_res = await client.get(
+            chart_url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+
+        chart = chart_res.json()
+
+        result = chart.get("chart", {}).get("result", [{}])[0]
+        meta = result.get("meta", {})
+
+        # ── FUNDAMENTALS
+        quote_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={ticker}"
+
+        quote_res = await client.get(
+            quote_url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+
+        quote = quote_res.json()
+
+        q = quote.get("quoteResponse", {}).get("result", [{}])[0]
+
+        return {
+            "ticker": ticker,
+
+            # precio
+            "price": meta.get("regularMarketPrice"),
+
+            # fundamentals
+            "marketCap": q.get("marketCap"),
+            "enterpriseValue": q.get("enterpriseValue"),
+            "revenue": q.get("totalRevenue"),
+            "ebitda": q.get("ebitda"),
+            "netIncome": q.get("netIncomeToCommon"),
+
+            # metadata
+            "currency": meta.get("currency"),
+            "exchange": meta.get("exchangeName"),
+            "sector": q.get("sector"),
+            "industry": q.get("industry")
+        }
 
 @app.get("/bcra/bancos")
 def bcra_bancos(top_n: int = None):

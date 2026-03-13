@@ -205,12 +205,10 @@ async function fetchRevenueCard(ticker, name) {
   container.style.display = "block";
 
   try {
-    const url = `https://web-production-f0fe2.up.railway.app/yf/${ticker}`;
+    const url = `http://127.0.0.1:8000/yf/${ticker}`;
     console.log("Request URL:", url);
 
     const res = await fetch(url);
-
-    console.log("HTTP status:", res.status);
 
     if (!res.ok) {
       throw new Error(`API respondió HTTP ${res.status}`);
@@ -220,34 +218,22 @@ async function fetchRevenueCard(ticker, name) {
 
     console.log("JSON recibido:", data);
 
-    const result = data?.quoteSummary?.result?.[0];
-
-    if (!result) {
-      container.innerHTML = `<div class="rev-error">Yahoo no devolvió datos válidos</div>`;
-      return;
-    }
-
-    const fin = result.financialData;
-    const stats = result.defaultKeyStatistics;
-
-    const revenue = fin?.totalRevenue?.raw;
-    const ebitda = fin?.ebitda?.raw;
-    const netIncome = fin?.netIncomeToCommon?.raw;
-    const ev = stats?.enterpriseValue?.raw;
-
-    console.log("Revenue:", revenue);
-
-    if (revenue != null) {
-      document.getElementById("comps-revenue").value = Math.round(
-        revenue / 1e6,
-      );
-    }
+    const revenue = data?.revenue;
+    const ev = data?.enterpriseValue;
+    const marketCap = data?.marketCap;
+    const price = data?.price;
 
     const fmt = (v) => {
       if (!v) return "—";
       const mm = v / 1e6;
       return mm >= 1000 ? `${(mm / 1000).toFixed(1)}B` : `${mm.toFixed(0)}M`;
     };
+
+    if (revenue != null) {
+      document.getElementById("comps-revenue").value = Math.round(
+        revenue / 1e6,
+      );
+    }
 
     container.innerHTML = `
       <div class="rev-card">
@@ -265,18 +251,18 @@ async function fetchRevenueCard(ticker, name) {
           </div>
 
           <div class="rev-metric">
-            <div class="rev-metric-label">EBITDA</div>
-            <div class="rev-metric-value">${fmt(ebitda)}</div>
-          </div>
-
-          <div class="rev-metric">
-            <div class="rev-metric-label">Net Income</div>
-            <div class="rev-metric-value">${fmt(netIncome)}</div>
-          </div>
-
-          <div class="rev-metric">
             <div class="rev-metric-label">Enterprise Value</div>
             <div class="rev-metric-value">${fmt(ev)}</div>
+          </div>
+
+          <div class="rev-metric">
+            <div class="rev-metric-label">Market Cap</div>
+            <div class="rev-metric-value">${fmt(marketCap)}</div>
+          </div>
+
+          <div class="rev-metric">
+            <div class="rev-metric-label">Price</div>
+            <div class="rev-metric-value">$${price ?? "—"}</div>
           </div>
         </div>
       </div>
@@ -288,7 +274,6 @@ async function fetchRevenueCard(ticker, name) {
 
   console.log("===== fetchRevenueCard END =====");
 }
-
 // ── GENERAR COMPS ─────────────────────────────────────────────
 
 async function runComps() {
