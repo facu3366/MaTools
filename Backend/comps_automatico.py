@@ -131,17 +131,14 @@ def get_financials(ticker: str) -> dict | None:
 # ─────────────────────────────────────────────
 # 4. FETCH DE DATOS — DCF + WACC INPUTS
 # ─────────────────────────────────────────────
-
 def get_dcf_inputs(ticker: str) -> dict:
     """
-    Trae todos los inputs necesarios para DCF y WACC:
-    - Beta, cost of debt, tax rate
-    - CapEx, D&A, FCF
-    - Working capital
-    - Shares outstanding, price
+    Trae todos los inputs necesarios para DCF y WACC.
+    Revenue y EBITDA se calculan como TTM (suma de últimos 4 quarters)
+    para que coincidan con Yahoo Finance.
     """
     try:
-        t    = yf.Ticker(ticker)
+        t = yf.Ticker(ticker)
         info = t.info or {}
 
         def mm(val):
@@ -150,110 +147,162 @@ def get_dcf_inputs(ticker: str) -> dict:
         def pct(val):
             return round(val * 100, 2) if val else None
 
-        # ── Income Statement inputs ──
-        revenue      = mm(info.get("totalRevenue"))
-        ebitda       = mm(info.get("ebitda"))
-        ebit         = mm(info.get("ebit")) if info.get("ebit") else None
-        net_income   = mm(info.get("netIncomeToCommon"))
-        tax_rate     = pct(info.get("effectiveTaxRate"))
+        # ─────────────────────────────────────────
+        # TTM REAL DESDE QUARTERLY FINANCIALS
+        # ─────────────────────────────────────────
+
+        revenue = None
+        ebitda = None
+        ebit = None
+
+        try:
+            q = t.quarterly_financials
+
+            if q is not None and not q.empty:
+
+                if "Total Revenue" in q.index:
+                    revenue = round(q.loc["Total Revenue"].iloc[:4].sum() / 1_000_000, 1)
+
+                if "EBITDA" in q.index:
+                    ebitda = round(q.loc["EBITDA"].iloc[:4].sum() / 1_000_000, 1)
+
+                if "EBIT" in q.index:
+                    ebit = round(q.loc["EBIT"].iloc[:4].sum() / 1_000_000, 1)
+
+        except Exception:
+            pass
+
+        # fallback si no hay quarterly
+        if revenue is None:
+            revenue = mm(info.get("totalRevenue"))
+
+        if ebitda is None:
+            ebitda = mm(info.get("ebitda"))
+
+        if ebit is None and info.get("ebit"):
+            ebit = mm(info.get("ebit"))
+
+        # ─────────────────────────────────────────
+        # INCOME STATEMENT
+        # ─────────────────────────────────────────
+
+        net_income = mm(info.get("netIncomeToCommon"))
+        tax_rate = pct(info.get("effectiveTaxRate"))
         interest_exp = mm(info.get("totalInterestExpense")) if info.get("totalInterestExpense") else None
 
-        # ── Balance Sheet inputs ──
-        total_debt   = mm(info.get("totalDebt"))
-        cash         = mm(info.get("totalCash"))
-        net_debt     = round(total_debt - cash, 1) if total_debt and cash else None
-        mkt_cap      = mm(info.get("marketCap"))
-        ev           = mm(info.get("enterpriseValue"))
+        # ─────────────────────────────────────────
+        # BALANCE SHEET
+        # ─────────────────────────────────────────
 
-        # ── Cash Flow inputs ──
-        capex        = mm(info.get("capitalExpenditures"))
-        fcf          = mm(info.get("freeCashflow"))
-        op_cf        = mm(info.get("operatingCashflow"))
+        total_debt = mm(info.get("totalDebt"))
+        cash = mm(info.get("totalCash"))
+        net_debt = round(total_debt - cash, 1) if total_debt and cash else None
+        mkt_cap = mm(info.get("marketCap"))
 
-        # D&A: estimado como EBITDA - EBIT si disponibles
+        # EV recalculado (más consistente)
+        ev = None
+        if mkt_cap and total_debt and cash is not None:
+            ev = round(mkt_cap + total_debt - cash, 1)
+        else:
+            ev = mm(info.get("enterpriseValue"))
+
+        # ─────────────────────────────────────────
+        # CASH FLOW
+        # ─────────────────────────────────────────
+
+        capex = mm(info.get("capitalExpenditures"))
+        fcf = mm(info.get("freeCashflow"))
+        op_cf = mm(info.get("operatingCashflow"))
+
+        # D&A aproximado
         da = None
         if ebitda and ebit:
             da = round(ebitda - ebit, 1)
 
-        # ── WACC inputs ──
-        beta         = round(info.get("beta"), 2) if info.get("beta") else None
-        shares       = mm(info.get("sharesOutstanding"))
-        price        = info.get("currentPrice") or info.get("regularMarketPrice")
+        # ─────────────────────────────────────────
+        # WACC INPUTS
+        # ─────────────────────────────────────────
 
-        # Cost of Debt estimado: interest / total_debt
+        beta = round(info.get("beta"), 2) if info.get("beta") else None
+        shares = mm(info.get("sharesOutstanding"))
+        price = info.get("currentPrice") or info.get("regularMarketPrice")
+
         cost_of_debt = None
         if interest_exp and total_debt and total_debt > 0:
             cost_of_debt = round(abs(interest_exp) / total_debt * 100, 2)
 
-        # Weights para WACC
-        debt_weight   = None
+        debt_weight = None
         equity_weight = None
-        if mkt_cap and total_debt:
-            total_capital  = mkt_cap + total_debt
-            equity_weight  = round(mkt_cap / total_capital * 100, 1)
-            debt_weight    = round(total_debt / total_capital * 100, 1)
 
-        # Leverage
+        if mkt_cap and total_debt:
+            total_capital = mkt_cap + total_debt
+            equity_weight = round(mkt_cap / total_capital * 100, 1)
+            debt_weight = round(total_debt / total_capital * 100, 1)
+
+        # leverage
         net_debt_ebitda = round(net_debt / ebitda, 1) if net_debt and ebitda and ebitda > 0 else None
 
+        # ─────────────────────────────────────────
+        # RETURN
+        # ─────────────────────────────────────────
+
         return {
+
             # Identificación
-            "ticker":          ticker,
-            "empresa":         info.get("shortName", ticker),
-            "sector":          info.get("sector", "N/A"),
-            "pais":            info.get("country", "N/A"),
+            "ticker": ticker,
+            "empresa": info.get("shortName", ticker),
+            "sector": info.get("sector", "N/A"),
+            "pais": info.get("country", "N/A"),
 
             # P&L
-            "revenue_mm":      revenue,
-            "ebitda_mm":       ebitda,
-            "ebit_mm":         ebit,
-            "net_income_mm":   net_income,
-            "tax_rate_pct":    tax_rate,
+            "revenue_mm": revenue,
+            "ebitda_mm": ebitda,
+            "ebit_mm": ebit,
+            "net_income_mm": net_income,
+            "tax_rate_pct": tax_rate,
             "interest_exp_mm": interest_exp,
 
             # Márgenes
             "ebitda_margin_pct": round(ebitda / revenue * 100, 1) if ebitda and revenue else None,
-            "ebit_margin_pct":   round(ebit   / revenue * 100, 1) if ebit and revenue else None,
-            "net_margin_pct":    round(net_income / revenue * 100, 1) if net_income and revenue else None,
+            "ebit_margin_pct": round(ebit / revenue * 100, 1) if ebit and revenue else None,
+            "net_margin_pct": round(net_income / revenue * 100, 1) if net_income and revenue else None,
 
             # Balance
-            "total_debt_mm":   total_debt,
-            "cash_mm":         cash,
-            "net_debt_mm":     net_debt,
-            "mkt_cap_mm":      mkt_cap,
-            "ev_mm":           ev,
+            "total_debt_mm": total_debt,
+            "cash_mm": cash,
+            "net_debt_mm": net_debt,
+            "mkt_cap_mm": mkt_cap,
+            "ev_mm": ev,
 
-            # Cash Flow / DCF
-            "capex_mm":        capex,
-            "fcf_mm":          fcf,
-            "op_cashflow_mm":  op_cf,
-            "da_mm":           da,
-            "capex_pct_rev":   round(abs(capex) / revenue * 100, 1) if capex and revenue else None,
-            "fcf_margin_pct":  round(fcf / revenue * 100, 1) if fcf and revenue else None,
+            # Cash Flow
+            "capex_mm": capex,
+            "fcf_mm": fcf,
+            "op_cashflow_mm": op_cf,
+            "da_mm": da,
+            "capex_pct_rev": round(abs(capex) / revenue * 100, 1) if capex and revenue else None,
+            "fcf_margin_pct": round(fcf / revenue * 100, 1) if fcf and revenue else None,
 
             # WACC inputs
-            "beta":            beta,
-            "shares_mm":       shares,
-            "price":           price,
-            "cost_of_debt_pct":  cost_of_debt,
+            "beta": beta,
+            "shares_mm": shares,
+            "price": price,
+            "cost_of_debt_pct": cost_of_debt,
             "equity_weight_pct": equity_weight,
-            "debt_weight_pct":   debt_weight,
+            "debt_weight_pct": debt_weight,
 
             # Leverage
             "net_debt_ebitda": net_debt_ebitda,
 
             # Múltiplos
-            "ev_revenue":      round(ev / revenue, 1) if ev and revenue else None,
-            "ev_ebitda":       round(ev / ebitda, 1)  if ev and ebitda else None,
-            "pe":              round(info.get("trailingPE"), 1) if info.get("trailingPE") else None,
-            "pb":              round(info.get("priceToBook"), 2) if info.get("priceToBook") else None,
-            "rev_growth_pct":  round(info.get("revenueGrowth") * 100, 1) if info.get("revenueGrowth") else None,
+            "ev_revenue": round(ev / revenue, 1) if ev and revenue else None,
+            "ev_ebitda": round(ev / ebitda, 1) if ev and ebitda else None,
+            "pe": round(info.get("trailingPE"), 1) if info.get("trailingPE") else None,
+            "pb": round(info.get("priceToBook"), 2) if info.get("priceToBook") else None,
+            "rev_growth_pct": round(info.get("revenueGrowth") * 100, 1) if info.get("revenueGrowth") else None,
         }
 
     except Exception as e:
         return {"ticker": ticker, "error": str(e)}
-
-
 def calcular_wacc(dcf_data: dict, risk_free_rate: float = 4.5, equity_risk_premium: float = 5.5) -> dict:
     """
     Calcula WACC usando CAPM para cost of equity.

@@ -638,3 +638,53 @@ input:focus, select:focus, textarea:focus {
   font-size: 12px;
   opacity: 0.65;
 }
+
+/* ───────── COMPS TABLE ───────── */
+
+.comps-table-wrapper {
+  margin-top: 18px;
+  overflow-x: auto;
+}
+
+.comps-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.comps-table thead {
+  background: #f3efe7;
+  border-bottom: 1px solid #ddd2c0;
+}
+
+.comps-table th {
+  text-align: left;
+  padding: 10px 8px;
+  font-weight: 600;
+}
+
+.comps-table td {
+  padding: 8px;
+  border-bottom: 1px solid #eee5d8;
+}
+
+.comps-table tbody tr:hover {
+  background: #faf7f2;
+}
+
+.stats-row {
+  background: #f7f2e8;
+  font-weight: 600;
+}
+.btn-secondary {
+  margin-top: 18px;
+  padding: 10px 16px;
+  background: #e7decd;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-secondary:hover {
+  background: #d8cbb3;
+}

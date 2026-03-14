@@ -55,7 +55,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+        "https://web-production-f0fe2.up.railway.app"
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -252,148 +257,187 @@ def get_empresas():
 
 @app.post("/comps")
 def generar_comps(request: CompsRequest):
-    """
-    Genera análisis de comps con TTM REAL.
-    Revenue y EBITDA calculados desde quarterly financials (4Q sum).
-    Múltiplos, stats (mean/median) y TTM quality incluidos en JSON.
-    """
-    print(f"\n📨 Comps request: {request.mensaje}")
-
-    # ── Determinar parámetros del deal ──
-    if request.empresa_override and request.sector_override and request.revenue_override:
-        empresa = request.empresa_override
-        sector  = request.sector_override
-        revenue_raw = request.revenue_override
-        escala_mult = {"mm": 1, "k": 0.001, "b": 1000}.get(request.escala, 1)
-        fx = {"USD": 1, "ARS": 1/1200, "BRL": 1/5, "MXN": 1/17, "COP": 1/4000}
-        fx_mult = fx.get(request.moneda, 1)
-        revenue = revenue_raw * escala_mult * fx_mult
-        print(f"   Override: {empresa} / {sector} / ${revenue:.0f}mm USD")
-    else:
-        try:
-            params = interpretar_pedido(request.mensaje)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"No pude interpretar el pedido: {str(e)}")
-        empresa = params.get("empresa_target", "Target")
-        sector  = params.get("sector", "Health Insurance")
-        revenue = float(params.get("revenue_target", 1000))
-
-    tickers = UNIVERSE.get(sector, UNIVERSE["Health Insurance"])
-    print(f"   Descargando {len(tickers)} empresas con TTM real...")
-
-    # ── Fetch con TTM real ──
-    resultados = []
-    for ticker in tickers:
-        data = get_financials_ttm(ticker)
-        if data and data.get("Revenue ($mm)"):
-            resultados.append(data)
-        time.sleep(0.15)
-
-    if not resultados:
-        raise HTTPException(status_code=500, detail="No se pudieron obtener datos financieros.")
-
-    # ── Build response con stats pre-calculadas ──
-    rango_min = request.rango_min_pct / 100
-    rango_max = request.rango_max_pct / 100
-
-    response = build_comps_response(
-        empresas=resultados,
-        empresa_target=empresa,
-        sector=sector,
-        revenue_target=revenue,
-        rango_min_pct=rango_min,
-        rango_max_pct=rango_max,
-    )
-
-    # ── También preparar Excel ──
-    df = pd.DataFrame(resultados)
-    DEAL_CONFIG.update({
-        "empresa_target": empresa,
-        "sector":         sector,
-        "revenue_target": revenue,
-        "rango_min_pct":  rango_min,
-        "rango_max_pct":  rango_max,
-        "analista":       request.analista,
-        "fecha":          datetime.now().strftime("%d/%m/%Y"),
-    })
+    print(f"\n📨 Comps request: {request.mensaje}", flush=True)
 
     try:
-        archivo = generar_excel(df)
-        response["archivo"] = archivo
+        # ── Determinar parámetros del deal ──
+        if request.empresa_override and request.sector_override and request.revenue_override:
+            empresa = request.empresa_override
+            sector = request.sector_override
+            revenue_raw = request.revenue_override
+
+            escala_mult = {"mm": 1, "k": 0.001, "b": 1000}.get(request.escala, 1)
+            fx = {"USD": 1, "ARS": 1/1200, "BRL": 1/5, "MXN": 1/17, "COP": 1/4000}
+            fx_mult = fx.get(request.moneda, 1)
+
+            revenue = revenue_raw * escala_mult * fx_mult
+            print(f"   Override: {empresa} / {sector} / ${revenue:.0f}mm USD", flush=True)
+
+        else:
+            params = interpretar_pedido(request.mensaje)
+            empresa = params.get("empresa_target", "Target")
+            sector = params.get("sector", "Health Insurance")
+            revenue = float(params.get("revenue_target", 1000))
+
+        # limitar universo para que Railway no mate la request
+        tickers = UNIVERSE.get(sector, UNIVERSE["Health Insurance"])[:25]
+        print(f"   Universo limitado a {len(tickers)} tickers", flush=True)
+
+        resultados = []
+
+        for i, ticker in enumerate(tickers, 1):
+            try:
+                print(f"   [{i}/{len(tickers)}] {ticker}", flush=True)
+
+                data = get_financials_ttm(ticker)
+
+                if not data:
+                    print(f"      skip: sin data", flush=True)
+                    continue
+
+                revenue_ticker = data.get("Revenue ($mm)")
+                if revenue_ticker is None:
+                    print(f"      skip: sin Revenue ($mm)", flush=True)
+                    continue
+
+                resultados.append(data)
+
+            except Exception as e:
+                print(f"      error ticker {ticker}: {e}", flush=True)
+                continue
+
+            time.sleep(0.03)
+
+        print(f"   resultados válidos: {len(resultados)}", flush=True)
+
+        if not resultados:
+            raise HTTPException(status_code=500, detail="No se pudieron obtener datos financieros válidos.")
+
+        rango_min = request.rango_min_pct / 100
+        rango_max = request.rango_max_pct / 100
+
+        response = build_comps_response(
+            empresas=resultados,
+            empresa_target=empresa,
+            sector=sector,
+            revenue_target=revenue,
+            rango_min_pct=rango_min,
+            rango_max_pct=rango_max,
+        )
+
+        df = pd.DataFrame(resultados)
+
+        DEAL_CONFIG.update({
+            "empresa_target": empresa,
+            "sector": sector,
+            "revenue_target": revenue,
+            "rango_min_pct": rango_min,
+            "rango_max_pct": rango_max,
+            "analista": request.analista,
+            "fecha": datetime.now().strftime("%d/%m/%Y"),
+        })
+
+        try:
+            archivo = generar_excel(df)
+            response["archivo"] = archivo
+        except Exception as e:
+            print(f"   ⚠️ Excel generation failed inside /comps: {e}", flush=True)
+            response["archivo"] = None
+
+        response["mensaje"] = (
+            f"✅ Comps de {empresa} listos. "
+            f"{response['n_empresas_filtradas']} empresas filtradas de {response['n_empresas_universe']}."
+        )
+
+        return response
+
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"   ⚠️ Excel generation failed: {e}")
-        response["archivo"] = None
-
-    response["mensaje"] = (
-        f"✅ Comps de {empresa} listos. "
-        f"{response['n_empresas_filtradas']} empresas filtradas de {response['n_empresas_universe']}. "
-        f"TTM real: {response['ttm_quality']['pct_real_ttm']}%"
-    )
-
-    return response
-
-
+        print(f"❌ ERROR GLOBAL /comps: {e}", flush=True)
+        raise HTTPException(status_code=500, detail=str(e))
 @app.post("/comps/excel")
 def descargar_excel_post(request: CompsRequest):
-    """Genera comps con TTM y devuelve Excel en memoria — funciona en Railway."""
-    print(f"\n📥 Excel request: {request.mensaje}")
+    print(f"\n📥 Excel request: {request.mensaje}", flush=True)
 
-    # ── Parámetros ──
-    if request.empresa_override and request.sector_override and request.revenue_override:
-        empresa = request.empresa_override
-        sector  = request.sector_override
-        revenue_raw = request.revenue_override
-        escala_mult = {"mm": 1, "k": 0.001, "b": 1000}.get(request.escala, 1)
-        fx = {"USD": 1, "ARS": 1/1200, "BRL": 1/5, "MXN": 1/17, "COP": 1/4000}
-        fx_mult = fx.get(request.moneda, 1)
-        revenue = revenue_raw * escala_mult * fx_mult
-    else:
-        try:
+    try:
+        if request.empresa_override and request.sector_override and request.revenue_override:
+            empresa = request.empresa_override
+            sector = request.sector_override
+            revenue_raw = request.revenue_override
+
+            escala_mult = {"mm": 1, "k": 0.001, "b": 1000}.get(request.escala, 1)
+            fx = {"USD": 1, "ARS": 1/1200, "BRL": 1/5, "MXN": 1/17, "COP": 1/4000}
+            fx_mult = fx.get(request.moneda, 1)
+
+            revenue = revenue_raw * escala_mult * fx_mult
+        else:
             params = interpretar_pedido(request.mensaje)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"No pude interpretar: {str(e)}")
-        empresa = params.get("empresa_target", "Target")
-        sector  = params.get("sector", "Health Insurance")
-        revenue = float(params.get("revenue_target", 1000))
+            empresa = params.get("empresa_target", "Target")
+            sector = params.get("sector", "Health Insurance")
+            revenue = float(params.get("revenue_target", 1000))
 
-    tickers = UNIVERSE.get(sector, UNIVERSE["Health Insurance"])
+        tickers = UNIVERSE.get(sector, UNIVERSE["Health Insurance"])[:25]
+        print(f"   Excel universo limitado a {len(tickers)} tickers", flush=True)
 
-    # ── Fetch TTM ──
-    resultados = []
-    for ticker in tickers:
-        data = get_financials_ttm(ticker)
-        if data and data.get("Revenue ($mm)"):
-            resultados.append(data)
-        time.sleep(0.15)
+        resultados = []
 
-    if not resultados:
-        raise HTTPException(status_code=500, detail="No se pudieron obtener datos.")
+        for i, ticker in enumerate(tickers, 1):
+            try:
+                print(f"   [excel {i}/{len(tickers)}] {ticker}", flush=True)
 
-    df = pd.DataFrame(resultados)
-    DEAL_CONFIG.update({
-        "empresa_target": empresa,
-        "sector": sector,
-        "revenue_target": revenue,
-        "rango_min_pct": (request.rango_min_pct / 100) if request.rango_min_pct else 0.3,
-        "rango_max_pct": (request.rango_max_pct / 100) if request.rango_max_pct else 3.0,
-        "analista": request.analista,
-        "fecha": datetime.now().strftime("%d/%m/%Y"),
-    })
+                data = get_financials_ttm(ticker)
 
-    fecha_str = datetime.now().strftime("%Y%m%d")
-    fname = f"Comps_{empresa.replace(' ', '_')}_{fecha_str}.xlsx"
+                if not data:
+                    continue
 
-    buffer = io.BytesIO()
-    _generar_excel_buffer(df, buffer)
-    buffer.seek(0)
+                revenue_ticker = data.get("Revenue ($mm)")
+                if revenue_ticker is None:
+                    continue
 
-    return StreamingResponse(
-        buffer,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={fname}"}
-    )
+                resultados.append(data)
 
+            except Exception as e:
+                print(f"      error excel ticker {ticker}: {e}", flush=True)
+                continue
 
+            time.sleep(0.03)
+
+        if not resultados:
+            raise HTTPException(status_code=500, detail="No se pudieron obtener datos para Excel.")
+
+        df = pd.DataFrame(resultados)
+
+        DEAL_CONFIG.update({
+            "empresa_target": empresa,
+            "sector": sector,
+            "revenue_target": revenue,
+            "rango_min_pct": (request.rango_min_pct / 100) if request.rango_min_pct else 0.3,
+            "rango_max_pct": (request.rango_max_pct / 100) if request.rango_max_pct else 3.0,
+            "analista": request.analista,
+            "fecha": datetime.now().strftime("%d/%m/%Y"),
+        })
+
+        fecha_str = datetime.now().strftime("%Y%m%d")
+        fname = f"Comps_{empresa.replace(' ', '_')}_{fecha_str}.xlsx"
+
+        buffer = io.BytesIO()
+        _generar_excel_buffer(df, buffer)
+        buffer.seek(0)
+
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f'attachment; filename="{fname}"'
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ ERROR GLOBAL /comps/excel: {e}", flush=True)
+        raise HTTPException(status_code=500, detail=str(e))
 # ─────────────────────────────────────────────
 # FINANCIALS / DCF / WACC
 # ─────────────────────────────────────────────

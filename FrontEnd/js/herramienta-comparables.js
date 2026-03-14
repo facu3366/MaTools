@@ -18,9 +18,9 @@ let empresasLoaded = false;
 async function loadEmpresas() {
   // Intento 1: endpoint del backend (funciona siempre en Railway)
   try {
-    const res = await fetch(`${API}/api/empresas`);
+    const resAPI = await fetch(`${API}/api/empresas`);
     if (res.ok) {
-      EMPRESA_LIST = await res.json();
+      EMPRESA_LIST = await resAPI.json();
       empresasLoaded = true;
       console.log(`✅ Empresas cargadas desde API: ${EMPRESA_LIST.length}`);
       return;
@@ -31,9 +31,9 @@ async function loadEmpresas() {
 
   // Intento 2: archivo local (solo si abrís index.html directo)
   try {
-    const res = await fetch("Data/empresas.json");
+    const resBack = await fetch("Data/empresas.json");
     if (res.ok) {
-      EMPRESA_LIST = await res.json();
+      EMPRESA_LIST = await resBack.json();
       empresasLoaded = true;
       console.log(
         `✅ Empresas cargadas desde JSON local: ${EMPRESA_LIST.length}`,
@@ -407,8 +407,22 @@ async function runComps() {
       body: JSON.stringify(body),
     });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    let data = null;
+    let text = "";
+
+    try {
+      text = await res.text();
+      data = text ? JSON.parse(text) : null;
+    } catch (err) {
+      console.error("Respuesta no JSON en /comps:", text);
+    }
+
+    if (!res.ok) {
+      console.error("ERROR /comps status:", res.status);
+      console.error("ERROR /comps body:", data || text);
+      throw new Error(data?.detail || `HTTP ${res.status}`);
+    }
+
     renderCompsResult(data);
   } catch (e) {
     document.getElementById("result-comps").innerHTML =
@@ -565,23 +579,33 @@ function fmtPct(val) {
 }
 
 // ── EXCEL DOWNLOAD ────────────────────────────────────────────
-
 async function downloadCompsExcel() {
-  const empresa = document.getElementById("comps-empresa").value || "Target";
+  const btn = document.querySelector(".btn-secondary");
+  const original = btn.innerHTML;
+
+  btn.innerHTML = "⏳ Generando Excel...";
+  btn.disabled = true;
+
+  const empresa =
+    selectedTicker ||
+    document.getElementById("comps-empresa").value ||
+    "Target";
+
   const revenue =
     parseFloat(document.getElementById("comps-revenue").value) || 1000;
+
   const sector = document.getElementById("comps-sector").value;
-  const analista =
-    document.getElementById("comps-analista")?.value || "Analista";
 
   try {
     const res = await fetch(`${API}/comps/excel`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         mensaje: `Comps de ${empresa} en ${sector}`,
-        analista,
-        empresa_override: selectedTicker || empresa,
+        analista: "Analista",
+        empresa_override: empresa,
         sector_override: sector,
         revenue_override: revenue,
         escala: "mm",
@@ -590,15 +614,30 @@ async function downloadCompsExcel() {
         rango_max_pct: 300,
       }),
     });
-    if (!res.ok) throw new Error("Error generando Excel");
+
+    if (!res.ok) {
+      throw new Error(`Backend ${res.status}`);
+    }
+
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+
+    const url = window.URL.createObjectURL(blob);
+
     const a = document.createElement("a");
     a.href = url;
     a.download = `Comps_${empresa}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
   } catch (err) {
-    alert("Error descargando Excel: " + err.message);
+    alert("Error generando Excel");
+
+    console.error(err);
   }
+
+  btn.innerHTML = original;
+  btn.disabled = false;
 }
