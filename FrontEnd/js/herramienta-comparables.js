@@ -255,7 +255,13 @@ async function autoDetectSector(ticker) {
 // ── REVENUE CARD ──────────────────────────────────────────────
 async function fetchRevenueCard(ticker, name) {
   const container = document.getElementById("revenue-preview");
-  container.innerHTML = `<div class="rev-loading">Cargando datos financieros…</div>`;
+
+  container.innerHTML = `
+    <div class="rev-loading">
+      Cargando datos financieros…
+    </div>
+  `;
+
   container.style.display = "block";
 
   try {
@@ -265,64 +271,97 @@ async function fetchRevenueCard(ticker, name) {
       body: JSON.stringify({ ticker }),
     });
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
     const data = await res.json();
 
-    const revenue = data?.revenue;
-    const ev = data?.enterpriseValue;
-    const marketCap = data?.marketCap;
-    const price = data?.price;
-    const ebitda = data?.ebitda;
+    console.log("RAW /financials response:");
+    console.dir(data);
+
+    const f = data?.financials || {};
+
+    const revenue = f?.revenue_mm ? f.revenue_mm * 1e6 : null;
+    const ebitda = f?.ebitda_mm ? f.ebitda_mm * 1e6 : null;
+    const ev = f?.ev_mm ? f.ev_mm * 1e6 : null;
+    const marketCap = f?.mkt_cap_mm ? f.mkt_cap_mm * 1e6 : null;
+    const price = f?.price ?? null;
 
     const fmtVal = (v) => {
       if (!v) return "—";
+
       const mm = v / 1e6;
-      return Math.abs(mm) >= 1000
-        ? `$${(mm / 1000).toFixed(1)}B`
-        : `$${mm.toFixed(0)}M`;
+
+      if (Math.abs(mm) >= 1000) {
+        return `$${(mm / 1000).toFixed(1)}B`;
+      }
+
+      return `$${mm.toFixed(0)}M`;
     };
 
     if (revenue != null) {
-      document.getElementById("comps-revenue").value = Math.round(
-        revenue / 1e6,
-      );
+      const revenueInput = document.getElementById("comps-revenue");
+      if (revenueInput) {
+        revenueInput.value = Math.round(revenue / 1e6);
+      }
     }
 
     container.innerHTML = `
       <div class="rev-card">
+
         <div class="rev-card-header">
           <div class="rev-company">
             <span class="rev-ticker-badge">${ticker}</span>
             <span class="rev-name-text">${name}</span>
           </div>
         </div>
+
         <div class="rev-grid">
+
           <div class="rev-metric rev-metric--main">
             <div class="rev-metric-label">Revenue</div>
             <div class="rev-metric-value">${fmtVal(revenue)}</div>
           </div>
+
           <div class="rev-metric">
             <div class="rev-metric-label">EBITDA</div>
             <div class="rev-metric-value">${fmtVal(ebitda)}</div>
           </div>
+
           <div class="rev-metric">
             <div class="rev-metric-label">Enterprise Value</div>
             <div class="rev-metric-value">${fmtVal(ev)}</div>
           </div>
+
           <div class="rev-metric">
             <div class="rev-metric-label">Market Cap</div>
             <div class="rev-metric-value">${fmtVal(marketCap)}</div>
           </div>
+
           <div class="rev-metric">
             <div class="rev-metric-label">Price</div>
-            <div class="rev-metric-value">$${price ?? "—"}</div>
+            <div class="rev-metric-value">
+              ${price != null ? `$${price}` : "—"}
+            </div>
           </div>
+
         </div>
+
+        <div class="rev-source">
+          Fuente: Yahoo Finance · TTM Financials
+        </div>
+
       </div>
     `;
   } catch (err) {
     console.error("fetchRevenueCard ERROR:", err);
-    container.innerHTML = `<div class="rev-error">No se pudieron cargar datos para <strong>${ticker}</strong>.</div>`;
+
+    container.innerHTML = `
+      <div class="rev-error">
+        No se pudieron cargar datos para <strong>${ticker}</strong>.
+      </div>
+    `;
   }
 }
 

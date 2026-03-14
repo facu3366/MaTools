@@ -633,3 +633,8 @@ input:focus, select:focus, textarea:focus {
 .rev-error {
   color: var(--error);
 }
+.rev-source {
+  margin-top: 12px;
+  font-size: 12px;
+  opacity: 0.65;
+}
