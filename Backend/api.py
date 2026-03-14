@@ -29,7 +29,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(__file__))
 from scrapers.bcra_scraper import get_bcra_bancos
-from Backend.comps_automatico import (
+from comps_automatico import (
     get_financials, get_dcf_inputs, calcular_wacc,
     generar_excel, _generar_excel_buffer, UNIVERSE, DEAL_CONFIG
 )
