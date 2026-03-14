@@ -35,7 +35,9 @@ async function loadEmpresas() {
     if (res.ok) {
       EMPRESA_LIST = await res.json();
       empresasLoaded = true;
-      console.log(`✅ Empresas cargadas desde JSON local: ${EMPRESA_LIST.length}`);
+      console.log(
+        `✅ Empresas cargadas desde JSON local: ${EMPRESA_LIST.length}`,
+      );
       return;
     }
   } catch (err) {
@@ -56,7 +58,7 @@ function searchLocal(query) {
     (e) =>
       (e.name && e.name.toLowerCase().includes(q)) ||
       (e.ticker && e.ticker.toLowerCase().includes(q)) ||
-      (e.alias || []).some((a) => a.toLowerCase().includes(q))
+      (e.alias || []).some((a) => a.toLowerCase().includes(q)),
   )
     .slice(0, 8)
     .map((e) => ({
@@ -146,7 +148,7 @@ function renderSuggestions(box, results) {
       <span class="suggestion-ticker">${r.ticker}</span>
       <span class="suggestion-name">${r.name}</span>
       ${r.exchange ? `<span class="suggestion-exchange">${r.exchange}</span>` : ""}
-    </div>`
+    </div>`,
     )
     .join("");
 }
@@ -222,32 +224,50 @@ function autoMapSector(yfSector) {
   const hint = document.getElementById("detect-hint");
   let found = false;
   for (let opt of sel.options) {
-    if (opt.value === mapped) { sel.value = mapped; found = true; break; }
+    if (opt.value === mapped) {
+      sel.value = mapped;
+      found = true;
+      break;
+    }
   }
   if (!found) sel.add(new Option(mapped, mapped, true, true));
-  if (hint) { hint.textContent = `✓ Sector: ${mapped}`; hint.style.color = "var(--gold)"; }
+  if (hint) {
+    hint.textContent = `✓ Sector: ${mapped}`;
+    hint.style.color = "var(--gold)";
+  }
 }
 
 async function autoDetectSector(ticker) {
   try {
-    const res = await fetch(`${API}/yf/${ticker}`);
+    const res = await fetch(`${API}/financials`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker }),
+    });
     if (!res.ok) return;
     const data = await res.json();
     if (data?.sector) autoMapSector(data.sector);
-  } catch (err) { console.error("autoDetectSector error:", err); }
+  } catch (err) {
+    console.error("autoDetectSector error:", err);
+  }
 }
 
 // ── REVENUE CARD ──────────────────────────────────────────────
-
 async function fetchRevenueCard(ticker, name) {
   const container = document.getElementById("revenue-preview");
   container.innerHTML = `<div class="rev-loading">Cargando datos financieros…</div>`;
   container.style.display = "block";
 
   try {
-    const res = await fetch(`${API}/yf/${ticker}`);
+    const res = await fetch(`${API}/financials`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker }),
+    });
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+
     const revenue = data?.revenue;
     const ev = data?.enterpriseValue;
     const marketCap = data?.marketCap;
@@ -257,11 +277,15 @@ async function fetchRevenueCard(ticker, name) {
     const fmtVal = (v) => {
       if (!v) return "—";
       const mm = v / 1e6;
-      return Math.abs(mm) >= 1000 ? `$${(mm / 1000).toFixed(1)}B` : `$${mm.toFixed(0)}M`;
+      return Math.abs(mm) >= 1000
+        ? `$${(mm / 1000).toFixed(1)}B`
+        : `$${mm.toFixed(0)}M`;
     };
 
     if (revenue != null) {
-      document.getElementById("comps-revenue").value = Math.round(revenue / 1e6);
+      document.getElementById("comps-revenue").value = Math.round(
+        revenue / 1e6,
+      );
     }
 
     container.innerHTML = `
@@ -270,9 +294,6 @@ async function fetchRevenueCard(ticker, name) {
           <div class="rev-company">
             <span class="rev-ticker-badge">${ticker}</span>
             <span class="rev-name-text">${name}</span>
-          </div>
-          <div class="rev-source">
-            Fuente: <a href="https://finance.yahoo.com/quote/${ticker}" target="_blank" rel="noopener">Yahoo Finance</a>
           </div>
         </div>
         <div class="rev-grid">
@@ -297,14 +318,11 @@ async function fetchRevenueCard(ticker, name) {
             <div class="rev-metric-value">$${price ?? "—"}</div>
           </div>
         </div>
-        <div class="rev-auto-note">
-          ↑ Datos de referencia. El análisis de comps usa TTM real (últimos 4 quarters).
-        </div>
       </div>
     `;
   } catch (err) {
     console.error("fetchRevenueCard ERROR:", err);
-    container.innerHTML = `<div class="rev-error">No se pudieron cargar datos para <strong>${ticker}</strong>. Podés ingresar el revenue manualmente.</div>`;
+    container.innerHTML = `<div class="rev-error">No se pudieron cargar datos para <strong>${ticker}</strong>.</div>`;
   }
 }
 
@@ -313,16 +331,22 @@ async function fetchRevenueCard(ticker, name) {
 async function runComps() {
   const rawEmpresa = document.getElementById("comps-empresa").value || "Target";
   const empresa = selectedTicker || rawEmpresa;
-  const revenue = parseFloat(document.getElementById("comps-revenue").value) || 1000;
+  const revenue =
+    parseFloat(document.getElementById("comps-revenue").value) || 1000;
   const sector = document.getElementById("comps-sector").value;
-  const analista = document.getElementById("comps-analista")?.value || "Analista";
+  const analista =
+    document.getElementById("comps-analista")?.value || "Analista";
   const escala = document.getElementById("comps-escala")?.value || "mm";
   const moneda = document.getElementById("comps-moneda")?.value || "USD";
-  const rangoMin = parseFloat(document.getElementById("comps-rango-min")?.value) || 30;
-  const rangoMax = parseFloat(document.getElementById("comps-rango-max")?.value) || 300;
+  const rangoMin =
+    parseFloat(document.getElementById("comps-rango-min")?.value) || 30;
+  const rangoMax =
+    parseFloat(document.getElementById("comps-rango-max")?.value) || 300;
 
   const btn = document.getElementById("btn-comps");
-  document.getElementById("result-comps").innerHTML = spinner("DESCARGANDO TTM FINANCIALS...");
+  document.getElementById("result-comps").innerHTML = spinner(
+    "DESCARGANDO TTM FINANCIALS...",
+  );
   btn.disabled = true;
 
   try {
@@ -332,7 +356,8 @@ async function runComps() {
       empresa_override: empresa,
       sector_override: sector,
       revenue_override: revenue,
-      escala, moneda,
+      escala,
+      moneda,
       rango_min_pct: rangoMin,
       rango_max_pct: rangoMax,
     };
@@ -347,7 +372,8 @@ async function runComps() {
     if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
     renderCompsResult(data);
   } catch (e) {
-    document.getElementById("result-comps").innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+    document.getElementById("result-comps").innerHTML =
+      `<div class="error-msg">Error: ${e.message}</div>`;
   }
 
   btn.disabled = false;
@@ -362,9 +388,11 @@ function renderCompsResult(data) {
 
   const ttmPct = quality.pct_real_ttm ?? 0;
   const ttmBadge =
-    ttmPct >= 80 ? `<span class="ttm-badge ttm-good">TTM ${ttmPct}% real</span>`
-    : ttmPct >= 50 ? `<span class="ttm-badge ttm-warn">TTM ${ttmPct}% real</span>`
-    : `<span class="ttm-badge ttm-bad">TTM ${ttmPct}% — revisar</span>`;
+    ttmPct >= 80
+      ? `<span class="ttm-badge ttm-good">TTM ${ttmPct}% real</span>`
+      : ttmPct >= 50
+        ? `<span class="ttm-badge ttm-warn">TTM ${ttmPct}% real</span>`
+        : `<span class="ttm-badge ttm-bad">TTM ${ttmPct}% — revisar</span>`;
 
   const statCard = (label, key, suffix = "") => {
     const s = stats[key];
@@ -379,7 +407,8 @@ function renderCompsResult(data) {
 
   const tableRows = filtradas
     .sort((a, b) => (b["Revenue ($mm)"] || 0) - (a["Revenue ($mm)"] || 0))
-    .map((e) => `
+    .map(
+      (e) => `
     <tr>
       <td class="t-ticker">${e.Ticker}</td>
       <td class="t-name">${e.Empresa || ""}</td>
@@ -390,7 +419,9 @@ function renderCompsResult(data) {
       <td class="t-mult">${fmtMult(e["EV/EBITDA"])}</td>
       <td class="t-pct">${fmtPct(e["EBITDA Mg%"])}</td>
       <td class="t-ttm">${e.ttm_method === "quarterly" ? "✓ Q4" : "⚠ FY"}</td>
-    </tr>`).join("");
+    </tr>`,
+    )
+    .join("");
 
   const medianRow = `
     <tr class="stats-row stats-median">
@@ -478,7 +509,10 @@ function renderCompsResult(data) {
 
 function fmtNum(val) {
   if (val == null || val === "" || isNaN(val)) return "—";
-  return Number(val).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+  return Number(val).toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  });
 }
 
 function fmtMult(val) {
@@ -495,9 +529,11 @@ function fmtPct(val) {
 
 async function downloadCompsExcel() {
   const empresa = document.getElementById("comps-empresa").value || "Target";
-  const revenue = parseFloat(document.getElementById("comps-revenue").value) || 1000;
+  const revenue =
+    parseFloat(document.getElementById("comps-revenue").value) || 1000;
   const sector = document.getElementById("comps-sector").value;
-  const analista = document.getElementById("comps-analista")?.value || "Analista";
+  const analista =
+    document.getElementById("comps-analista")?.value || "Analista";
 
   try {
     const res = await fetch(`${API}/comps/excel`, {
@@ -509,8 +545,10 @@ async function downloadCompsExcel() {
         empresa_override: selectedTicker || empresa,
         sector_override: sector,
         revenue_override: revenue,
-        escala: "mm", moneda: "USD",
-        rango_min_pct: 30, rango_max_pct: 300,
+        escala: "mm",
+        moneda: "USD",
+        rango_min_pct: 30,
+        rango_max_pct: 300,
       }),
     });
     if (!res.ok) throw new Error("Error generando Excel");

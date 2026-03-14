@@ -652,17 +652,17 @@ def ask_natural(request: NaturalRequest):
 
 @app.get("/yf/search")
 async def yf_search(q: str):
-    """Proxy para Yahoo Finance search — puede fallar si Yahoo bloquea la IP."""
     import httpx
-    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={q}&quotesCount=8&newsCount=0&listsCount=0"
-    try:
-        async with httpx.AsyncClient() as client:
-            res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-            return res.json()
-    except Exception as e:
-        # Yahoo blocked — devolver vacío para que el frontend use el JSON local
-        return {"quotes": [], "error": str(e)}
 
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={q}&quotesCount=8&newsCount=0&listsCount=0"
+
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+
+    return res.json()
 
 @app.get("/yf/{ticker}")
 async def yf_quote(ticker: str):
