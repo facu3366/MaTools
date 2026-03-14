@@ -11,18 +11,24 @@ updateTime();
 setInterval(updateTime, 60000);
 
 // navegación entre herramientas
-function showView(id, title) {
-  document
-    .querySelectorAll(".tool-view")
-    .forEach((v) => v.classList.remove("active"));
+async function showView(view, title) {
+  document.getElementById("topbar-title").textContent = title || view;
 
   document
     .querySelectorAll(".nav-item:not(.disabled)")
     .forEach((n) => n.classList.remove("active"));
 
-  document.getElementById("view-" + id).classList.add("active");
-
-  document.getElementById("topbar-title").textContent = title || id;
-
   event?.currentTarget?.classList?.add("active");
+
+  const res = await fetch(`components/${view}.html`);
+  const html = await res.text();
+
+  const container = document.getElementById("app-content");
+  container.innerHTML = html;
+
+  // 🔴 ESTO ES LO QUE FALTABA
+  const loadedView = container.querySelector(".tool-view");
+  if (loadedView) {
+    loadedView.classList.add("active");
+  }
 }

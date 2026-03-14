@@ -4,7 +4,6 @@
 <head>
 
 <meta charset="UTF-8">
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>DealDesk — M&A Intelligence para LATAM</title>
@@ -12,480 +11,74 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="../css/styles.css">
-</head>
 
+</head>
 
 <body>
 
-
 <div class="shell">
 
-
-
-
 <!-- SIDEBAR -->
-
-<aside class="sidebar">
-
-<div class="logo">
-<div class="logo-gem"></div>
-<div class="logo-name">Deal<span>Desk</span></div>
-</div>
-
-
-
-<div class="nav-label">Herramientas</div>
-
-<div class="nav-item active" onclick="showView('home','Inicio')">
-<span class="nav-icon">⊞</span>
-Inicio
-</div>
-
-<div class="nav-item" onclick="showView('comps','Comparable Companies')">
-<span class="nav-icon">◈</span>
-Comps
-<span class="nav-badge live">LIVE</span>
-</div>
-
-<div class="nav-item" onclick="showView('dcf','DCF & WACC')">
-<span class="nav-icon">◇</span>
-DCF / WACC
-<span class="nav-badge live">LIVE</span>
-</div>
-
-<div class="nav-item" onclick="showView('precedents','Precedent Transactions')">
-<span class="nav-icon">◉</span>
-Precedentes
-<span class="nav-badge live">LIVE</span>
-</div>
-
-<div class="nav-item" onclick="showView('bcra','BCRA Rankings')">
-<span class="nav-icon">▦</span>
-BCRA Rankings
-<span class="nav-badge live">LIVE</span>
-</div>
-
-
-
-<div class="nav-label" style="margin-top:32px">Próximamente</div>
-
-<div class="nav-item disabled">
-<span class="nav-icon">⬡</span>
-Ajuste Inflación
-<span class="nav-badge soon">SOON</span>
-</div>
-
-<div class="nav-item disabled">
-<span class="nav-icon">⬡</span>
-Conversión TC
-<span class="nav-badge soon">SOON</span>
-</div>
-
-<div class="nav-item disabled">
-<span class="nav-icon">⬡</span>
-INDEC Data
-<span class="nav-badge soon">SOON</span>
-</div>
-
-
-
-<div class="sidebar-footer">
-DealDesk v2.3 · Motor financiero LATAM<br>
-© 2026
-</div>
-
-</aside>
-
-
-
-
-
+<div id="sidebar-container"></div>
 
 <!-- MAIN -->
-
 <main class="main">
 
+<div id="topbar-container"></div>
 
-
-<div class="topbar">
-
-<div class="topbar-title" id="topbar-title">
-Inicio
-</div>
-
-<div class="topbar-meta">
-<span id="current-time"></span><br>
-Buenos Aires, Argentina
-</div>
-
-</div>
-
-
-
-
-
-<div class="content">
-
-
-
-
-<!-- HOME -->
-
-<div id="view-home" class="tool-view active">
-
-
-<div class="home-eyebrow">
-M&A Intelligence · LATAM
-</div>
-
-
-<h1 class="home-title">
-Automatizando<br>
-<em>lo automatizable.</em>
-</h1>
-
-
-<p class="home-desc">
-Datos financieros en tiempo real, comps automáticos, precedentes y análisis del sistema financiero argentino.
-Seleccioná una herramienta para comenzar.
-</p>
-
-
-
-<div class="tools-grid">
-
-
-<div class="tool-card" onclick="showView('comps','Comparable Companies')">
-
-<span class="tool-icon">◈</span>
-
-<div class="tool-name">
-Comparable Companies
-</div>
-
-<div class="tool-desc">
-Tablas de comps automáticas por sector y revenue.
-Múltiplos, márgenes y benchmarks en segundos.
-</div>
-
-</div>
-
-
-
-<div class="tool-card" onclick="showView('dcf','DCF & WACC')">
-
-<span class="tool-icon">◇</span>
-
-<div class="tool-name">
-DCF & WACC
-</div>
-
-<div class="tool-desc">
-Inputs para DCF y WACC de cualquier empresa cotizante.
-Beta, cost of debt, tax rate y ponderaciones automáticas.
-</div>
-
-</div>
-
-
-
-<div class="tool-card" onclick="showView('precedents','Precedent Transactions')">
-
-<span class="tool-icon">◉</span>
-
-<div class="tool-name">
-Precedent Transactions
-</div>
-
-<div class="tool-desc">
-Deals históricos por sector y región con EV,
-múltiplos de entrada y estadísticas para justificar valuación.
-</div>
-
-</div>
-
-
-
-<div class="tool-card" onclick="showView('bcra','BCRA Rankings')">
-
-<span class="tool-icon">▦</span>
-
-<div class="tool-name">
-BCRA Rankings
-</div>
-
-<div class="tool-desc">
-Activos, depósitos, patrimonio neto y préstamos
-de todas las entidades del sistema financiero argentino.
-</div>
-
-</div>
-
-
-
-<div class="tool-card disabled">
-
-<span class="tool-icon">⬡</span>
-
-<div class="tool-name">
-Ajuste por Inflación
-</div>
-
-<div class="tool-desc">
-Subí un balance y recibís estados contables ajustados por inflación
-según normas RT 6/17 con índices INDEC.
-</div>
-
-</div>
-
-
-
-<div class="tool-card disabled">
-
-<span class="tool-icon">⬡</span>
-
-<div class="tool-name">
-Conversión Tipo de Cambio
-</div>
-
-<div class="tool-desc">
-Convertí estados contables usando dólar MEP,
-oficial o CCL con datos en tiempo real.
-</div>
-
-</div>
-
-
-
-</div>
-
-</div>
-
-
-
-
-
-<!-- COMPS -->
-
-<div id="view-comps" class="tool-view">
-
-<div class="tool-header">
-
-<div>
-
-<div class="tool-header-icon">◈</div>
-
-<div class="tool-header-name">
-Comparable Companies
-</div>
-
-<div class="tool-header-desc">
-Generá comps automáticos por sector y revenue target
-</div>
-
-</div>
-
-<button class="btn-back" onclick="showView('home','Inicio')">
-← VOLVER
-</button>
-
-</div>
-
-
-
-<div class="form-grid">
-
-
-<div class="form-group" style="position:relative">
-
-<label>Empresa Target</label>
-
-<input type="text"
-id="comps-empresa"
-placeholder="Ej: Mercado Libre, MELI, Apple..."
-oninput="showSuggestions(this.value)"
-onkeydown="handleKey(event)"
-autocomplete="off">
-
-<div id="suggestions"></div>
-
-<span id="detect-hint"></span>
-
-</div>
-
-<!-- Revenue card — se autocompleta al seleccionar empresa -->
-<div id="revenue-preview" style="display:none; grid-column: 1 / -1;"></div>
-
-<div class="form-group">
-
-<label>Revenue Target <span style="font-size:10px;font-weight:400;opacity:.5">(USD mm · editable)</span></label>
-
-<input type="number" id="comps-revenue" placeholder="Se autocompleta al elegir empresa">
-
-</div>
-
-
-
-<div class="form-group">
-
-<label>Sector</label>
-
-<select id="comps-sector">
-
-<option>Health Insurance</option>
-<option>Technology</option>
-<option>Financials</option>
-<option>Energy</option>
-<option>Consumer</option>
-<option>Real Estate</option>
-<option>Industrials</option>
-
-</select>
-
-</div>
-
-
-
-
-
-</div>
-
-
-
-<button class="btn-primary" id="btn-comps" onclick="runComps()">
-▶ GENERAR COMPS
-</button>
-
-<div id="result-comps"></div>
-
-</div>
-
-
-
-
-
-
-<!-- DCF -->
-
-<div id="view-dcf" class="tool-view">
-
-<div class="tool-header">
-
-<div>
-
-<div class="tool-header-icon">◇</div>
-
-<div class="tool-header-name">
-DCF & WACC
-</div>
-
-<div class="tool-header-desc">
-Inputs de valuación y costo de capital por ticker
-</div>
-
-</div>
-
-<button class="btn-back" onclick="showView('home','Inicio')">
-← VOLVER
-</button>
-
-</div>
-
-
-
-<div class="form-grid">
-
-<div class="form-group" style="position:relative">
-    <label>Empresa</label>
-    <input type="text"
-    id="dcf-empresa"
-    placeholder="Ej: Apple, MSFT, Mercado Libre..."
-    oninput="dcfShowSuggestions(this.value)"
-    onkeydown="dcfHandleKey(event)"
-    autocomplete="off">
-    <div id="dcf-suggestions"></div>
-</div>
-
-  <!-- Revenue card — se autocompleta al seleccionar empresa -->
-  <div id="dcf-revenue-preview" style="display:none; grid-column: 1 / -1;"></div>
-
-  <div class="form-group">
-    <label>Incluir WACC</label>
-    <select id="dcf-wacc">
-      <option value="true" selected>Sí</option>
-      <option value="false">No</option>
-    </select>
-  </div>
-
-  <div class="form-group">
-    <label>Risk-Free Rate (%)</label>
-    <input type="number" id="dcf-rfr" value="4.5" step="0.1">
-  </div>
-
-  <div class="form-group">
-    <label>Equity Risk Premium (%)</label>
-    <input type="number" id="dcf-erp" value="5.5" step="0.1">
-  </div>
-
-</div>
-
-
-<button class="btn-primary" id="btn-dcf" onclick="runDCF()">
-▶ ANALIZAR EMPRESA
-</button>
-
-<div id="result-dcf"></div>
-
-</div>
-
-
-
-
-
-
-<!-- PRECEDENTS -->
-
-<div id="view-precedents" class="tool-view">
-
-<button class="btn-primary" id="btn-prec" onclick="runPrecedents()">
-▶ BUSCAR DEALS
-</button>
-
-<div id="result-prec"></div>
-
-</div>
-
-
-
-
-
-
-<!-- BCRA -->
-
-<div id="view-bcra" class="tool-view">
-
-<button class="btn-primary" id="btn-bcra" onclick="runBCRA()">
-▶ CARGAR DATOS BCRA
-</button>
-
-<div id="result-bcra"></div>
-
-</div>
-
-
-
-</div>
+<div class="content" id="app-content"></div>
 
 </main>
 
 </div>
 
-<script src="../js/utilidades-ui.js"></script>
 <script src="../js/controlador-navegacion.js"></script>
+<script src="../js/utilidades-ui.js"></script>
 
 <script src="../js/herramienta-comparables.js"></script>
 <script src="../js/herramienta-dcf-wacc.js"></script>
 <script src="../js/herramienta-precedentes.js"></script>
 <script src="../js/herramienta-ranking-bcra.js"></script>
 
+<script>
+
+async function loadComponent(id, file) {
+    const res = await fetch(file);
+    const html = await res.text();
+    document.getElementById(id).innerHTML = html;
+}
+
+async function loadView(file) {
+    const res = await fetch(file);
+    const html = await res.text();
+    document.getElementById("app-content").innerHTML = html;
+}
+
+window.addEventListener("DOMContentLoaded", async () => {
+
+    await loadComponent(
+        "sidebar-container",
+        "components/sidebar.html"
+    );
+
+    await loadComponent(
+        "topbar-container",
+        "components/topbar.html"
+    );
+
+    await loadView(
+        "components/home.html"
+    );
+
+});
+async function loadHome(){
+  const res = await fetch("components/home.html");
+  const html = await res.text();
+  document.getElementById("app-content").innerHTML = html;
+}
+
+loadHome()
+</script>
+
+</body>
 </html>

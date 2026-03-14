@@ -1,0 +1,106 @@
+<div id="view-dcf" class="tool-view">
+
+<div class="tool-header">
+
+<div>
+
+<div class="tool-header-icon">◇</div>
+
+<div class="tool-header-name">
+DCF & WACC
+</div>
+
+<div class="tool-header-desc">
+Inputs de valuación y costo de capital por ticker
+</div>
+
+</div>
+
+<button class="btn-back" onclick="showView('home','Inicio')">
+← VOLVER
+</button>
+
+</div>
+
+
+
+<div class="form-grid">
+
+<div class="form-group" style="position:relative">
+
+<label>Empresa</label>
+
+<input type="text"
+id="dcf-empresa"
+placeholder="Ej: Apple, MSFT, Mercado Libre..."
+oninput="dcfShowSuggestions(this.value)"
+onkeydown="dcfHandleKey(event)"
+autocomplete="off">
+
+<div id="dcf-suggestions"></div>
+
+</div>
+
+
+
+<!-- Revenue card autocompletado -->
+
+<div id="dcf-revenue-preview"
+style="display:none; grid-column: 1 / -1;"></div>
+
+
+
+<div class="form-group">
+
+<label>Incluir WACC</label>
+
+<select id="dcf-wacc">
+<option value="true" selected>Sí</option>
+<option value="false">No</option>
+</select>
+
+</div>
+
+
+
+<div class="form-group">
+
+<label>Risk-Free Rate (%)</label>
+
+<input
+type="number"
+id="dcf-rfr"
+value="4.5"
+step="0.1">
+
+</div>
+
+
+
+<div class="form-group">
+
+<label>Equity Risk Premium (%)</label>
+
+<input
+type="number"
+id="dcf-erp"
+value="5.5"
+step="0.1">
+
+</div>
+
+
+
+</div>
+
+
+
+<button class="btn-primary" id="btn-dcf" onclick="runDCF()">
+▶ ANALIZAR EMPRESA
+</button>
+
+
+
+<div id="result-dcf"></div>
+
+</div>

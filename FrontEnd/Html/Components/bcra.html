@@ -1,20 +1,70 @@
-
-
-
-
-
-
-
-<!-- BCRA -->
-
 <div id="view-bcra" class="tool-view">
+
+<div class="tool-header">
+
+<div>
+
+<div class="tool-header-icon">▦</div>
+
+<div class="tool-header-name">
+BCRA Rankings
+</div>
+
+<div class="tool-header-desc">
+Activos, depósitos, patrimonio neto y préstamos
+del sistema financiero argentino
+</div>
+
+</div>
+
+<button class="btn-back" onclick="showView('home','Inicio')">
+← VOLVER
+</button>
+
+</div>
+
+
+
+<div class="form-grid">
+
+<div class="form-group">
+
+<label>Fuente</label>
+
+<select id="bcra-source">
+
+<option value="activos">Activos</option>
+<option value="depositos">Depósitos</option>
+<option value="prestamos">Préstamos</option>
+<option value="patrimonio">Patrimonio Neto</option>
+
+</select>
+
+</div>
+
+<div class="form-group">
+
+<label>Formato</label>
+
+<select id="bcra-format">
+
+<option value="tabla">Tabla</option>
+<option value="ranking">Ranking</option>
+
+</select>
+
+</div>
+
+</div>
+
+
 
 <button class="btn-primary" id="btn-bcra" onclick="runBCRA()">
 ▶ CARGAR DATOS BCRA
 </button>
 
+
+
 <div id="result-bcra"></div>
 
 </div>
-
-
