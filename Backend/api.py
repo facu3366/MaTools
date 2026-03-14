@@ -1,5 +1,5 @@
 """
-🚀 DEALDESK API v2
+🚀 DEALDESK API v3
 Motor financiero universal para M&A: comps, DCF, WACC, búsqueda por sector.
 
 CORRER LOCAL:
@@ -7,8 +7,9 @@ CORRER LOCAL:
 
 ENDPOINTS:
     GET  /                    → health check
+    GET  /api/empresas        → catálogo de empresas para autocomplete
     POST /comps               → genera comps (JSON + Excel)
-    GET  /comps/excel         → descarga Excel
+    POST /comps/excel         → descarga Excel
     POST /financials          → datos DCF + WACC de cualquier empresa
     POST /financials/wacc     → calcula WACC con parámetros custom
     POST /financials/sector   → resumen financiero de un sector completo
@@ -28,9 +29,12 @@ import os
 import sys
 sys.path.append(os.path.dirname(__file__))
 from scrapers.bcra_scraper import get_bcra_bancos
+from comps_automatico import (
+    get_financials, get_dcf_inputs, calcular_wacc,
+    generar_excel, _generar_excel_buffer, UNIVERSE, DEAL_CONFIG
+)
+from financial_engine import get_financials_ttm, calculate_comps_stats, build_comps_response
 
-
-from scrapers.bcra_scraper import get_bcra_bancos
 import pandas as pd
 import time
 from datetime import datetime
@@ -46,7 +50,7 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
 app = FastAPI(
     title="DealDesk — M&A Financial API",
     description="Motor financiero universal: comps, DCF, WACC, búsqueda por sector.",
-    version="2.3.0"
+    version="3.0.0"
 )
 
 app.add_middleware(
@@ -63,34 +67,24 @@ app.add_middleware(
 class CompsRequest(BaseModel):
     mensaje: str
     analista: str = "Analista"
-    # Campos opcionales — si se pasan, sobreescriben la interpretación de Claude
     empresa_override: str = ""
     sector_override: str = ""
-    revenue_override: float = 0      # en la moneda/escala que el usuario elija
-    moneda: str = "USD"              # USD, ARS, BRL, MXN, COP
-    escala: str = "mm"               # mm (millones), k (miles), b (billones)
-    rango_min_pct: float = 30        # % mínimo vs revenue target
-    rango_max_pct: float = 300       # % máximo vs revenue target
-
-class CompsResponse(BaseModel):
-    empresa_target: str
-    sector: str
-    revenue_target: float
-    n_empresas_universe: int
-    n_empresas_filtradas: int
-    archivo: str
-    mensaje: str
+    revenue_override: float = 0
+    moneda: str = "USD"
+    escala: str = "mm"
+    rango_min_pct: float = 30
+    rango_max_pct: float = 300
 
 class FinancialsRequest(BaseModel):
     ticker: str
     incluir_wacc: bool = True
-    risk_free_rate: float = 4.5        # % — US 10Y Treasury
-    equity_risk_premium: float = 5.5   # % — Damodaran ERP
+    risk_free_rate: float = 4.5
+    equity_risk_premium: float = 5.5
 
 class SectorRequest(BaseModel):
     sector: str
     top_n: int = 10
-    metrica: str = "Revenue ($mm)"    # columna para rankear
+    metrica: str = "Revenue ($mm)"
 
 class WACCRequest(BaseModel):
     ticker: str
@@ -101,23 +95,22 @@ class WACCRequest(BaseModel):
     tax_rate_override: Optional[float] = None
 
 class NaturalRequest(BaseModel):
-    """Endpoint universal: el analista escribe lo que necesita en lenguaje natural."""
     mensaje: str
     analista: str = "Analista"
 
 class PrecedentsRequest(BaseModel):
-    sector: str                          # ej: "Health Insurance", "Technology"
-    region: str = "Global"              # ej: "LATAM", "Argentina", "Global"
-    años: int = 5                        # últimos N años
-    min_ev_mm: Optional[float] = None   # filtro mínimo de EV en $mm
-    max_ev_mm: Optional[float] = None   # filtro máximo de EV en $mm
+    sector: str
+    region: str = "Global"
+    años: int = 5
+    min_ev_mm: Optional[float] = None
+    max_ev_mm: Optional[float] = None
 
 # ─────────────────────────────────────────────
 # HELPERS
 # ─────────────────────────────────────────────
 
 def interpretar_pedido(mensaje: str) -> dict:
-    """Usa Claude para extraer empresa, sector y revenue del mensaje — con conocimiento real de empresas."""
+    """Usa Claude para extraer empresa, sector y revenue del mensaje."""
     client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
     prompt = f"""Sos un analista senior de M&A. Extraé los datos del mensaje y devolvé SOLO JSON válido.
@@ -194,34 +187,84 @@ Solo el JSON, nada más."""
 @app.get("/")
 def health_check():
     return {
-        "status": "✅ DealDesk API v2 funcionando",
-        "version": "2.0.0",
+        "status": "✅ DealDesk API v3 funcionando",
+        "version": "3.0.0",
         "endpoints": {
-            "POST /comps":              "Genera tabla de comps (JSON + Excel)",
-            "GET  /comps/excel":        "Descarga Excel del último análisis",
+            "GET  /api/empresas":       "Catálogo de empresas para autocomplete",
+            "POST /comps":              "Genera tabla de comps con TTM real (JSON + Excel)",
+            "POST /comps/excel":        "Descarga Excel del análisis",
             "POST /financials":         "DCF inputs + WACC de cualquier empresa",
             "POST /financials/wacc":    "Calcula WACC con parámetros custom",
             "POST /financials/sector":  "Resumen financiero de un sector",
+            "POST /precedents":         "Precedent transactions por sector/región",
             "POST /ask":                "Lenguaje natural → cualquier análisis",
             "GET  /bcra/bancos":        "Rankings sistema financiero argentino (BCRA)",
         }
     }
 
 
-@app.post("/comps", response_model=CompsResponse)
+# ─────────────────────────────────────────────
+# AUTOCOMPLETE — catálogo de empresas
+# ─────────────────────────────────────────────
+
+@app.get("/api/empresas")
+def get_empresas():
+    """
+    Devuelve el catálogo de empresas para autocomplete del frontend.
+    Busca empresas.json en varias rutas posibles (local, Railway, etc).
+    Si no encuentra el JSON, genera un catálogo desde UNIVERSE.
+    """
+    # Intentar varias rutas donde puede estar el JSON
+    posibles_rutas = [
+        "Data/empresas.json",
+        "FrontEnd/Data/empresas.json",
+        "../FrontEnd/Data/empresas.json",
+        "empresas.json",
+    ]
+
+    for ruta in posibles_rutas:
+        try:
+            path = pathlib.Path(ruta)
+            if path.exists():
+                data = json.loads(path.read_text(encoding="utf-8"))
+                print(f"✅ empresas.json cargado desde: {ruta} ({len(data)} empresas)")
+                return data
+        except Exception:
+            continue
+
+    # Fallback: generar catálogo desde UNIVERSE (350 tickers aprox)
+    print("⚠️ empresas.json no encontrado — generando desde UNIVERSE")
+    data = []
+    for sector, tickers in UNIVERSE.items():
+        for t in tickers:
+            data.append({
+                "name": t,
+                "ticker": t,
+                "sector": sector,
+                "alias": [t.lower()]
+            })
+    return data
+
+
+# ─────────────────────────────────────────────
+# COMPS — con TTM real y stats pre-calculadas
+# ─────────────────────────────────────────────
+
+@app.post("/comps")
 def generar_comps(request: CompsRequest):
-    """Recibe mensaje en lenguaje natural y genera análisis de comps."""
+    """
+    Genera análisis de comps con TTM REAL.
+    Revenue y EBITDA calculados desde quarterly financials (4Q sum).
+    Múltiplos, stats (mean/median) y TTM quality incluidos en JSON.
+    """
     print(f"\n📨 Comps request: {request.mensaje}")
 
-    # Si vienen overrides del frontend, usarlos directamente
+    # ── Determinar parámetros del deal ──
     if request.empresa_override and request.sector_override and request.revenue_override:
         empresa = request.empresa_override
         sector  = request.sector_override
-        # Convertir a USD mm según moneda y escala
         revenue_raw = request.revenue_override
-        # Escala
         escala_mult = {"mm": 1, "k": 0.001, "b": 1000}.get(request.escala, 1)
-        # Moneda → USD (tipos aproximados)
         fx = {"USD": 1, "ARS": 1/1200, "BRL": 1/5, "MXN": 1/17, "COP": 1/4000}
         fx_mult = fx.get(request.moneda, 1)
         revenue = revenue_raw * escala_mult * fx_mult
@@ -236,28 +279,35 @@ def generar_comps(request: CompsRequest):
         revenue = float(params.get("revenue_target", 1000))
 
     tickers = UNIVERSE.get(sector, UNIVERSE["Health Insurance"])
-    print(f"   Descargando {len(tickers)} empresas para {sector}...")
+    print(f"   Descargando {len(tickers)} empresas con TTM real...")
 
+    # ── Fetch con TTM real ──
     resultados = []
     for ticker in tickers:
-        data = get_financials(ticker)
+        data = get_financials_ttm(ticker)
         if data and data.get("Revenue ($mm)"):
             resultados.append(data)
-        time.sleep(0.2)
+        time.sleep(0.15)
 
     if not resultados:
         raise HTTPException(status_code=500, detail="No se pudieron obtener datos financieros.")
 
-    df = pd.DataFrame(resultados)
-
-    # Rango ajustable desde el request
+    # ── Build response con stats pre-calculadas ──
     rango_min = request.rango_min_pct / 100
     rango_max = request.rango_max_pct / 100
-    rev_min  = revenue * rango_min
-    rev_max  = revenue * rango_max
-    df_filt  = df[(df["Revenue ($mm)"] >= rev_min) & (df["Revenue ($mm)"] <= rev_max)]
 
-    config_override = {
+    response = build_comps_response(
+        empresas=resultados,
+        empresa_target=empresa,
+        sector=sector,
+        revenue_target=revenue,
+        rango_min_pct=rango_min,
+        rango_max_pct=rango_max,
+    )
+
+    # ── También preparar Excel ──
+    df = pd.DataFrame(resultados)
+    DEAL_CONFIG.update({
         "empresa_target": empresa,
         "sector":         sector,
         "revenue_target": revenue,
@@ -265,58 +315,75 @@ def generar_comps(request: CompsRequest):
         "rango_max_pct":  rango_max,
         "analista":       request.analista,
         "fecha":          datetime.now().strftime("%d/%m/%Y"),
-    }
-    DEAL_CONFIG.update(config_override)
-    archivo = generar_excel(df)
+    })
 
-    return CompsResponse(
-        empresa_target=empresa,
-        sector=sector,
-        revenue_target=revenue,
-        n_empresas_universe=len(df),
-        n_empresas_filtradas=len(df_filt),
-        archivo=archivo,
-        mensaje=f"✅ Comps de {empresa} listos. {len(df_filt)} empresas comparables encontradas."
+    try:
+        archivo = generar_excel(df)
+        response["archivo"] = archivo
+    except Exception as e:
+        print(f"   ⚠️ Excel generation failed: {e}")
+        response["archivo"] = None
+
+    response["mensaje"] = (
+        f"✅ Comps de {empresa} listos. "
+        f"{response['n_empresas_filtradas']} empresas filtradas de {response['n_empresas_universe']}. "
+        f"TTM real: {response['ttm_quality']['pct_real_ttm']}%"
     )
+
+    return response
 
 
 @app.post("/comps/excel")
 def descargar_excel_post(request: CompsRequest):
-    """Genera comps y devuelve Excel en memoria — funciona en Railway."""
+    """Genera comps con TTM y devuelve Excel en memoria — funciona en Railway."""
     print(f"\n📥 Excel request: {request.mensaje}")
-    try:
-        params = interpretar_pedido(request.mensaje)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"No pude interpretar: {str(e)}")
 
-    empresa = params.get("empresa_target", "Target")
-    sector  = params.get("sector", "Health Insurance")
-    revenue = float(params.get("revenue_target", 1000))
+    # ── Parámetros ──
+    if request.empresa_override and request.sector_override and request.revenue_override:
+        empresa = request.empresa_override
+        sector  = request.sector_override
+        revenue_raw = request.revenue_override
+        escala_mult = {"mm": 1, "k": 0.001, "b": 1000}.get(request.escala, 1)
+        fx = {"USD": 1, "ARS": 1/1200, "BRL": 1/5, "MXN": 1/17, "COP": 1/4000}
+        fx_mult = fx.get(request.moneda, 1)
+        revenue = revenue_raw * escala_mult * fx_mult
+    else:
+        try:
+            params = interpretar_pedido(request.mensaje)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"No pude interpretar: {str(e)}")
+        empresa = params.get("empresa_target", "Target")
+        sector  = params.get("sector", "Health Insurance")
+        revenue = float(params.get("revenue_target", 1000))
+
     tickers = UNIVERSE.get(sector, UNIVERSE["Health Insurance"])
 
+    # ── Fetch TTM ──
     resultados = []
     for ticker in tickers:
-        data = get_financials(ticker)
+        data = get_financials_ttm(ticker)
         if data and data.get("Revenue ($mm)"):
             resultados.append(data)
-        time.sleep(0.2)
+        time.sleep(0.15)
 
     if not resultados:
         raise HTTPException(status_code=500, detail="No se pudieron obtener datos.")
 
     df = pd.DataFrame(resultados)
     DEAL_CONFIG.update({
-        "empresa_target": empresa, "sector": sector, "revenue_target": revenue,
-        "rango_min_pct": 0.3, "rango_max_pct": 3.0,
-        "analista": request.analista, "fecha": datetime.now().strftime("%d/%m/%Y"),
+        "empresa_target": empresa,
+        "sector": sector,
+        "revenue_target": revenue,
+        "rango_min_pct": (request.rango_min_pct / 100) if request.rango_min_pct else 0.3,
+        "rango_max_pct": (request.rango_max_pct / 100) if request.rango_max_pct else 3.0,
+        "analista": request.analista,
+        "fecha": datetime.now().strftime("%d/%m/%Y"),
     })
 
-    # Excel formateado en memoria usando generar_excel_buffer
     fecha_str = datetime.now().strftime("%Y%m%d")
     fname = f"Comps_{empresa.replace(' ', '_')}_{fecha_str}.xlsx"
 
     buffer = io.BytesIO()
-    # Generar el workbook con formato completo y guardarlo en buffer
     _generar_excel_buffer(df, buffer)
     buffer.seek(0)
 
@@ -327,13 +394,13 @@ def descargar_excel_post(request: CompsRequest):
     )
 
 
+# ─────────────────────────────────────────────
+# FINANCIALS / DCF / WACC
+# ─────────────────────────────────────────────
+
 @app.post("/financials")
 def get_financials_endpoint(request: FinancialsRequest):
-    """
-    DCF inputs + WACC de cualquier empresa por ticker.
-    
-    Ejemplo: {"ticker": "AAPL", "incluir_wacc": true}
-    """
+    """DCF inputs + WACC de cualquier empresa por ticker."""
     print(f"\n📊 Financials request: {request.ticker}")
 
     data = get_dcf_inputs(request.ticker.upper())
@@ -356,17 +423,12 @@ def get_financials_endpoint(request: FinancialsRequest):
 
 @app.post("/financials/wacc")
 def calcular_wacc_endpoint(request: WACCRequest):
-    """
-    Calcula WACC con parámetros custom (podés overridear beta, cost of debt, tax rate).
-    
-    Ejemplo: {"ticker": "MSFT", "risk_free_rate": 4.2, "beta_override": 1.1}
-    """
+    """Calcula WACC con parámetros custom."""
     data = get_dcf_inputs(request.ticker.upper())
 
     if "error" in data:
         raise HTTPException(status_code=404, detail=f"No se encontraron datos para {request.ticker}")
 
-    # Aplicar overrides
     if request.beta_override:
         data["beta"] = request.beta_override
     if request.cost_of_debt_override:
@@ -396,12 +458,7 @@ def calcular_wacc_endpoint(request: WACCRequest):
 
 @app.post("/financials/sector")
 def sector_financials(request: SectorRequest):
-    """
-    Resumen financiero de las top N empresas de un sector.
-    Útil para benchmarking rápido de WACC, márgenes, múltiplos.
-    
-    Ejemplo: {"sector": "Technology", "top_n": 5}
-    """
+    """Resumen financiero de las top N empresas de un sector."""
     tickers = UNIVERSE.get(request.sector)
     if not tickers:
         sectores = list(UNIVERSE.keys())
@@ -410,7 +467,7 @@ def sector_financials(request: SectorRequest):
     print(f"\n🏭 Sector request: {request.sector} (top {request.top_n})")
 
     resultados = []
-    for ticker in tickers[:request.top_n * 2]:  # buscar más para asegurar top_n con datos
+    for ticker in tickers[:request.top_n * 2]:
         data = get_dcf_inputs(ticker)
         if "error" not in data and data.get("revenue_mm"):
             resultados.append(data)
@@ -421,11 +478,9 @@ def sector_financials(request: SectorRequest):
     if not resultados:
         raise HTTPException(status_code=500, detail="No se pudieron obtener datos del sector.")
 
-    # Calcular WACC para cada uno
     for r in resultados:
         r["wacc"] = calcular_wacc(r)
 
-    # Stats del sector
     df = pd.DataFrame(resultados)
     numericas = ["ebitda_margin_pct", "net_margin_pct", "ev_ebitda", "ev_revenue", "pe",
                  "beta", "net_debt_ebitda", "rev_growth_pct", "fcf_margin_pct"]
@@ -459,15 +514,13 @@ def sector_financials(request: SectorRequest):
     }
 
 
+# ─────────────────────────────────────────────
+# PRECEDENTS
+# ─────────────────────────────────────────────
 
 @app.post("/precedents")
 def get_precedents(request: PrecedentsRequest):
-    """
-    Precedent transactions por sector y región usando Claude.
-    Devuelve deals históricos estructurados: target, acquirer, año, EV, múltiplos.
-
-    Ejemplo: {"sector": "Health Insurance", "region": "LATAM", "años": 5}
-    """
+    """Precedent transactions por sector y región usando Claude."""
     print(f"\n📋 Precedents: {request.sector} / {request.region}")
     client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
@@ -521,7 +574,7 @@ Incluí 5-15 deals reales. Solo el JSON, nada mas."""
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=3000,
-            messages=[{{"role": "user", "content": prompt}}]
+            messages=[{"role": "user", "content": prompt}]
         )
         text = response.content[0].text.strip()
         text = text.replace("```json", "").replace("```", "").strip()
@@ -549,18 +602,14 @@ Incluí 5-15 deals reales. Solo el JSON, nada mas."""
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
+
+# ─────────────────────────────────────────────
+# NATURAL LANGUAGE
+# ─────────────────────────────────────────────
+
 @app.post("/ask")
 def ask_natural(request: NaturalRequest):
-    """
-    Endpoint universal en lenguaje natural.
-    El analista escribe lo que necesita y la API decide qué traer.
-    
-    Ejemplos:
-    - "Dame el WACC de Apple"
-    - "Quiero los DCF inputs de Microsoft"  
-    - "Benchmark del sector Technology, top 5"
-    - "Comps de Swiss Medical, health insurance, $1B revenue"
-    """
+    """Endpoint universal en lenguaje natural."""
     print(f"\n🤖 Natural request: {request.mensaje}")
 
     try:
@@ -574,7 +623,6 @@ def ask_natural(request: NaturalRequest):
     rfr    = params.get("risk_free_rate") or 4.5
     erp    = params.get("equity_risk_premium") or 5.5
 
-    # Routing según tipo de pedido
     if tipo == "sector" or (not ticker and sector):
         sec = sector or "Technology"
         return sector_financials(SectorRequest(sector=sec, top_n=5))
@@ -598,18 +646,23 @@ def ask_natural(request: NaturalRequest):
     raise HTTPException(status_code=400, detail="No pude identificar empresa ni sector en el mensaje.")
 
 
+# ─────────────────────────────────────────────
+# YAHOO FINANCE PROXY (fallback)
+# ─────────────────────────────────────────────
 
 @app.get("/yf/search")
 async def yf_search(q: str):
-    """
-    Proxy para Yahoo Finance search — evita CORS desde el browser.
-    Ejemplo: GET /yf/search?q=mercado libre
-    """
+    """Proxy para Yahoo Finance search — puede fallar si Yahoo bloquea la IP."""
     import httpx
     url = f"https://query2.finance.yahoo.com/v1/finance/search?q={q}&quotesCount=8&newsCount=0&listsCount=0"
-    async with httpx.AsyncClient() as client:
-        res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        return res.json()
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            return res.json()
+    except Exception as e:
+        # Yahoo blocked — devolver vacío para que el frontend use el JSON local
+        return {"quotes": [], "error": str(e)}
+
 
 @app.get("/yf/{ticker}")
 async def yf_quote(ticker: str):
@@ -617,59 +670,45 @@ async def yf_quote(ticker: str):
 
     async with httpx.AsyncClient() as client:
 
-        # ── PRECIO (chart endpoint)
         chart_url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range=1d&interval=1d"
-
         chart_res = await client.get(
             chart_url,
             headers={"User-Agent": "Mozilla/5.0"}
         )
-
         chart = chart_res.json()
-
         result = chart.get("chart", {}).get("result", [{}])[0]
         meta = result.get("meta", {})
 
-        # ── FUNDAMENTALS
         quote_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={ticker}"
-
         quote_res = await client.get(
             quote_url,
             headers={"User-Agent": "Mozilla/5.0"}
         )
-
         quote = quote_res.json()
-
         q = quote.get("quoteResponse", {}).get("result", [{}])[0]
 
         return {
             "ticker": ticker,
-
-            # precio
             "price": meta.get("regularMarketPrice"),
-
-            # fundamentals
             "marketCap": q.get("marketCap"),
             "enterpriseValue": q.get("enterpriseValue"),
             "revenue": q.get("totalRevenue"),
             "ebitda": q.get("ebitda"),
             "netIncome": q.get("netIncomeToCommon"),
-
-            # metadata
             "currency": meta.get("currency"),
             "exchange": meta.get("exchangeName"),
             "sector": q.get("sector"),
             "industry": q.get("industry")
         }
 
+
+# ─────────────────────────────────────────────
+# BCRA
+# ─────────────────────────────────────────────
+
 @app.get("/bcra/bancos")
 def bcra_bancos(top_n: int = None):
-    """
-    Rankings consolidados del sistema financiero argentino (BCRA).
-    Trae activos, depósitos, patrimonio neto y préstamos de todos los bancos con % sobre el total.
-
-    Ejemplo: GET /bcra/bancos?top_n=20
-    """
+    """Rankings del sistema financiero argentino (BCRA)."""
     print(f"\n🏦 BCRA request — top_n={top_n}")
     resultado = get_bcra_bancos(top_n=top_n)
     if "error" in resultado:
