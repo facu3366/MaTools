@@ -1,53 +1,29 @@
 // ─────────────────────────────────────────────────────────────
 //  HERRAMIENTA DCF & WACC — DealDesk
 //  Autocomplete live via Yahoo Finance (proxied por backend propio)
-//  Patrón idéntico a herramienta-comparables.js
+//
+//  DEPENDENCIAS: utilidades-ui.js (API, fmt, spinner) debe cargarse antes.
+//  NO redefinir fmt(), spinner(), getBancoType() — ya existen en utilidades-ui.js
 // ─────────────────────────────────────────────────────────────
 
-
-
 let dcfSelectedSuggestion = -1;
-let dcfSearchTimeout      = null;
-let dcfSelectedTicker     = null;
-
-
+let dcfSearchTimeout = null;
+let dcfSelectedTicker = null;
 
 // ─────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────
-function fmt(v, d = 1) {
-  return v == null
-    ? "—"
-    : typeof v === "number"
-    ? v.toLocaleString("es-AR", { maximumFractionDigits: d })
-    : v;
-}
-
-function spinner(txt = "CONSULTANDO...") {
-  return `<div class="result-box"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">${txt}</div></div></div>`;
-}
-
-function getBancoType(n) {
-  n = n || "";
-  if (/NACION|PROVINCIA|CIUDAD|PROV /.test(n)) return "PÚBLICO";
-  if (/DIGITAL|NARANJA|UALA/.test(n)) return "DIGITAL";
-  return "PRIVADO";
-}
-
-// ─────────────────────────────────────────────
-// AUTOCOMPLETE — idéntico a Comps
+// AUTOCOMPLETE
 // ─────────────────────────────────────────────
 
 async function dcfSearchEmpresas(query) {
   if (!query || query.length < 2) return [];
   try {
-    const res  = await fetch(`${API}/yf/search?q=${encodeURIComponent(query)}`);
+    const res = await fetch(`${API}/yf/search?q=${encodeURIComponent(query)}`);
     const data = await res.json();
     return (data.quotes || [])
-      .filter(q => ["EQUITY", "ETF"].includes(q.quoteType))
-      .map(q => ({
-        ticker:   q.symbol,
-        name:     q.longname || q.shortname || q.symbol,
+      .filter((q) => ["EQUITY", "ETF"].includes(q.quoteType))
+      .map((q) => ({
+        ticker: q.symbol,
+        name: q.longname || q.shortname || q.symbol,
         exchange: q.exchDisp || q.exchange || "",
       }));
   } catch (err) {
@@ -77,7 +53,9 @@ function dcfShowSuggestions(val) {
       return;
     }
 
-    box.innerHTML = results.map((e, i) => `
+    box.innerHTML = results
+      .map(
+        (e, i) => `
       <div class="suggestion-item" data-index="${i}"
            onmousedown="dcfSelectSuggestion('${e.ticker}', '${e.name.replace(/'/g, "\\'")}')"
            onmouseover="dcfHighlightSuggestion(${i})">
@@ -85,16 +63,20 @@ function dcfShowSuggestions(val) {
         <span class="sug-name">${e.name}</span>
         <span class="sug-exchange">${e.exchange}</span>
       </div>
-    `).join("");
+    `,
+      )
+      .join("");
 
     box.style.display = "block";
   }, 300);
 }
 
 function dcfHighlightSuggestion(index) {
-  document.querySelectorAll("#dcf-suggestions .suggestion-item").forEach((el, i) => {
-    el.classList.toggle("active", i === index);
-  });
+  document
+    .querySelectorAll("#dcf-suggestions .suggestion-item")
+    .forEach((el, i) => {
+      el.classList.toggle("active", i === index);
+    });
   dcfSelectedSuggestion = index;
 }
 
@@ -104,7 +86,10 @@ function dcfHandleKey(e) {
 
   if (e.key === "ArrowDown") {
     e.preventDefault();
-    dcfSelectedSuggestion = Math.min(dcfSelectedSuggestion + 1, items.length - 1);
+    dcfSelectedSuggestion = Math.min(
+      dcfSelectedSuggestion + 1,
+      items.length - 1,
+    );
     dcfHighlightSuggestion(dcfSelectedSuggestion);
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
@@ -113,7 +98,9 @@ function dcfHandleKey(e) {
   } else if (e.key === "Enter") {
     e.preventDefault();
     if (dcfSelectedSuggestion >= 0) {
-      const items2 = document.querySelectorAll("#dcf-suggestions .suggestion-item");
+      const items2 = document.querySelectorAll(
+        "#dcf-suggestions .suggestion-item",
+      );
       if (items2[dcfSelectedSuggestion]) {
         items2[dcfSelectedSuggestion].dispatchEvent(new Event("mousedown"));
       }
@@ -124,7 +111,10 @@ function dcfHandleKey(e) {
 }
 
 document.addEventListener("click", (e) => {
-  if (!e.target.closest("#dcf-empresa") && !e.target.closest("#dcf-suggestions")) {
+  if (
+    !e.target.closest("#dcf-empresa") &&
+    !e.target.closest("#dcf-suggestions")
+  ) {
     const box = document.getElementById("dcf-suggestions");
     if (box) box.style.display = "none";
   }
@@ -138,12 +128,12 @@ async function dcfSelectSuggestion(ticker, name) {
   dcfSelectedTicker = ticker;
   document.getElementById("dcf-empresa").value = `${name} (${ticker})`;
   document.getElementById("dcf-suggestions").style.display = "none";
-
   await dcfFetchRevenueCard(ticker, name);
 }
 
 // ─────────────────────────────────────────────
-// REVENUE CARD — idéntica a Comps
+// REVENUE CARD — usa /yf/{ticker} que devuelve campos planos:
+//   { revenue, ebitda, marketCap, enterpriseValue, price, ... }
 // ─────────────────────────────────────────────
 
 async function dcfFetchRevenueCard(ticker, name) {
@@ -154,29 +144,27 @@ async function dcfFetchRevenueCard(ticker, name) {
   container.style.display = "block";
 
   try {
-    const res   = await fetch(`${API}/yf/${ticker}`);
-    const data  = await res.json();
-    const fin   = data?.quoteSummary?.result?.[0]?.financialData;
-    const stats = data?.quoteSummary?.result?.[0]?.defaultKeyStatistics;
+    const res = await fetch(`${API}/yf/${ticker}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
 
-    if (!fin) {
-      container.innerHTML = `<div class="rev-error">No se encontraron datos financieros para <strong>${ticker}</strong>.</div>`;
-      return;
-    }
-
-    const revenue   = fin.totalRevenue?.raw;
-    const ebitda    = fin.ebitda?.raw;
-    const netIncome = fin.netIncomeToCommon?.raw;
-    const ebitdaMgn = fin.ebitdaMargins?.raw;
-    const profitMgn = fin.profitMargins?.raw;
-    const ev        = stats?.enterpriseValue?.raw;
+    // /yf/{ticker} devuelve campos planos — NO quoteSummary
+    const revenue = data.revenue;
+    const ebitda = data.ebitda;
+    const ev = data.enterpriseValue;
+    const marketCap = data.marketCap;
+    const price = data.price;
 
     const fmtVal = (val) => {
       if (val == null) return "—";
       const mm = val / 1e6;
-      return Math.abs(mm) >= 1000 ? `${(mm / 1000).toFixed(1)}B` : `${mm.toFixed(0)}M`;
+      return Math.abs(mm) >= 1000
+        ? `$${(mm / 1000).toFixed(1)}B`
+        : `$${mm.toFixed(0)}M`;
     };
-    const pct = (val) => val != null ? `${(val * 100).toFixed(1)}%` : "—";
+
+    const ebitdaMargin =
+      revenue && ebitda ? ((ebitda / revenue) * 100).toFixed(1) + "%" : "—";
 
     container.innerHTML = `
       <div class="rev-card">
@@ -199,17 +187,21 @@ async function dcfFetchRevenueCard(ticker, name) {
           <div class="rev-metric">
             <div class="rev-metric-label">EBITDA</div>
             <div class="rev-metric-value">${fmtVal(ebitda)}</div>
-            <div class="rev-metric-sub">${pct(ebitdaMgn)} margen</div>
-          </div>
-          <div class="rev-metric">
-            <div class="rev-metric-label">Net Income</div>
-            <div class="rev-metric-value">${fmtVal(netIncome)}</div>
-            <div class="rev-metric-sub">${pct(profitMgn)} margen</div>
+            <div class="rev-metric-sub">${ebitdaMargin} margen</div>
           </div>
           <div class="rev-metric">
             <div class="rev-metric-label">Enterprise Value</div>
             <div class="rev-metric-value">${fmtVal(ev)}</div>
             <div class="rev-metric-sub">USD</div>
+          </div>
+          <div class="rev-metric">
+            <div class="rev-metric-label">Market Cap</div>
+            <div class="rev-metric-value">${fmtVal(marketCap)}</div>
+            <div class="rev-metric-sub">USD</div>
+          </div>
+          <div class="rev-metric">
+            <div class="rev-metric-label">Price</div>
+            <div class="rev-metric-value">$${price ?? "—"}</div>
           </div>
         </div>
         <div class="rev-auto-note">
@@ -228,8 +220,15 @@ async function dcfFetchRevenueCard(ticker, name) {
 // ─────────────────────────────────────────────
 
 async function runDCF() {
-  const ticker = dcfSelectedTicker
-    || document.getElementById("dcf-empresa").value.split("(").pop().replace(")", "").trim().toUpperCase();
+  const ticker =
+    dcfSelectedTicker ||
+    document
+      .getElementById("dcf-empresa")
+      .value.split("(")
+      .pop()
+      .replace(")", "")
+      .trim()
+      .toUpperCase();
 
   if (!ticker) {
     alert("Ingresá o seleccioná una empresa");
@@ -237,22 +236,28 @@ async function runDCF() {
   }
 
   const btn = document.getElementById("btn-dcf");
-  document.getElementById("result-dcf").innerHTML = spinner("DESCARGANDO FINANCIALS...");
+  document.getElementById("result-dcf").innerHTML = spinner(
+    "DESCARGANDO FINANCIALS...",
+  );
   btn.disabled = true;
 
   try {
     const res = await fetch(`${API}/financials`, {
-      method:  "POST",
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ticker,
-        incluir_wacc:        document.getElementById("dcf-wacc").value === "true",
-        risk_free_rate:      parseFloat(document.getElementById("dcf-rfr").value)  || 4.5,
-        equity_risk_premium: parseFloat(document.getElementById("dcf-erp").value)  || 5.5,
+        incluir_wacc: document.getElementById("dcf-wacc").value === "true",
+        risk_free_rate:
+          parseFloat(document.getElementById("dcf-rfr").value) || 4.5,
+        equity_risk_premium:
+          parseFloat(document.getElementById("dcf-erp").value) || 5.5,
       }),
     });
 
     const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
     const f = data.financials || {};
     const w = data.wacc || {};
 
@@ -295,86 +300,6 @@ async function runDCF() {
       </div>`;
   } catch (e) {
     document.getElementById("result-dcf").innerHTML =
-      `<div class="error-msg">Error: ${e.message}</div>`;
-  }
-
-  btn.disabled = false;
-}
-
-// ─────────────────────────────────────────────
-// PRECEDENTS
-// ─────────────────────────────────────────────
-async function runPrecedents() {
-  const btn = document.getElementById("btn-prec");
-  document.getElementById("result-prec").innerHTML = spinner("BUSCANDO DEALS...");
-  btn.disabled = true;
-
-  try {
-    const evMin = document.getElementById("prec-ev-min").value;
-    const body = {
-      sector: document.getElementById("prec-sector").value,
-      region: document.getElementById("prec-region").value,
-      años:   parseInt(document.getElementById("prec-years").value),
-    };
-    if (evMin) body.min_ev_mm = parseFloat(evMin);
-
-    const res = await fetch(`${API}/precedents`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(body),
-    });
-
-    const d     = await res.json();
-    const deals = d.deals || [];
-    const s     = d.estadisticas || {};
-
-    document.getElementById("result-prec").innerHTML = `
-      <div class="result-box">
-        <div class="result-header">
-          <div class="result-title">Precedentes — ${body.sector} · ${body.region}</div>
-          <div class="result-date">${d.periodo || ""}</div>
-        </div>
-        <div class="result-body">
-          <div class="fin-grid">
-            <div class="fin-card">
-              <div class="fin-card-label">Deals</div>
-              <div class="fin-card-value">${s.n_deals || deals.length}</div>
-            </div>
-            <div class="fin-card">
-              <div class="fin-card-label">EV Mediana</div>
-              <div class="fin-card-value">${s.ev_mediana_mm ? "$" + fmt(s.ev_mediana_mm) + "mm" : "—"}</div>
-            </div>
-            <div class="fin-card">
-              <div class="fin-card-label">EV/EBITDA Med.</div>
-              <div class="fin-card-value">${s.ev_ebitda_mediana ? fmt(s.ev_ebitda_mediana) + "x" : "—"}</div>
-            </div>
-          </div>
-        </div>
-      </div>`;
-  } catch (e) {
-    document.getElementById("result-prec").innerHTML =
-      `<div class="error-msg">Error: ${e.message}</div>`;
-  }
-
-  btn.disabled = false;
-}
-
-// ─────────────────────────────────────────────
-// BCRA
-// ─────────────────────────────────────────────
-let bcraData = null;
-
-async function runBCRA() {
-  const btn = document.getElementById("btn-bcra");
-  document.getElementById("result-bcra").innerHTML = spinner("SCRAPEANDO BCRA...");
-  btn.disabled = true;
-
-  try {
-    const res = await fetch(`${API}/bcra/bancos`);
-    bcraData = await res.json();
-    renderBCRA(bcraData, "Activos");
-  } catch (e) {
-    document.getElementById("result-bcra").innerHTML =
       `<div class="error-msg">Error: ${e.message}</div>`;
   }
 
