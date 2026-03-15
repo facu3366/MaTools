@@ -63,7 +63,12 @@ app.add_middleware(
 @app.options("/{full_path:path}")
 async def options_handler(request: Request, full_path: str):
     return Response(status_code=200)
+from fastapi import Request
+from fastapi.responses import Response
 
+@app.options("/comps")
+async def options_comps(request: Request):
+    return Response(status_code=200)
 # ─────────────────────────────────────────────
 # REGISTRAR ROUTERS
 # ─────────────────────────────────────────────
