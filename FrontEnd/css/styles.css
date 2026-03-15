@@ -715,3 +715,165 @@ font-size:13px;
 color:var(--muted);
 max-width:420px;
 }
+/* ───────── BCRA STATS ───────── */
+
+.bcra-stats{
+display:grid;
+grid-template-columns:repeat(4,1fr);
+gap:16px;
+margin-bottom:24px;
+}
+
+.bcra-stat{
+background:var(--paper);
+border:1px solid var(--line);
+padding:14px 16px;
+}
+
+.bcra-stat-label{
+font-family:'DM Mono', monospace;
+font-size:10px;
+letter-spacing:0.12em;
+text-transform:uppercase;
+color:var(--muted);
+margin-bottom:6px;
+}
+
+.bcra-stat-value{
+font-family:'DM Mono', monospace;
+font-size:20px;
+font-weight:500;
+color:var(--ink);
+}
+
+.bcra-stat-unit{
+font-size:11px;
+color:var(--muted);
+margin-top:2px;
+}
+
+
+/* ───────── METRIC TABS ───────── */
+
+.metric-tabs{
+display:flex;
+gap:6px;
+margin-bottom:18px;
+}
+
+.metric-tab{
+font-family:'DM Mono', monospace;
+font-size:11px;
+letter-spacing:0.08em;
+padding:6px 10px;
+background:var(--paper);
+border:1px solid var(--line);
+cursor:pointer;
+color:var(--muted);
+transition:all 0.15s;
+}
+
+.metric-tab:hover{
+background:var(--cream);
+border-color:var(--gold);
+color:var(--ink);
+}
+
+.metric-tab.active{
+background:var(--ink);
+color:var(--paper);
+border-color:var(--ink);
+}
+
+
+/* ───────── BCRA TABLE ───────── */
+
+.data-table{
+width:100%;
+border-collapse:collapse;
+font-size:13px;
+}
+
+.data-table thead{
+background:var(--cream);
+border-bottom:1px solid var(--line);
+}
+
+.data-table th{
+text-align:left;
+padding:10px 8px;
+font-weight:600;
+}
+
+.data-table td{
+padding:10px 8px;
+border-bottom:1px solid #eee5d8;
+}
+
+.data-table tbody tr:hover{
+background:#faf7f2;
+}
+
+.num-cell{
+text-align:right;
+font-variant-numeric:tabular-nums;
+}
+
+
+/* ───────── RANK NUM ───────── */
+
+.rank-num{
+font-family:'DM Mono', monospace;
+font-size:12px;
+color:var(--muted);
+}
+
+.rank-top{
+color:var(--gold);
+font-weight:600;
+}
+
+
+/* ───────── BANK NAME ───────── */
+
+.banco-name-cell{
+font-weight:600;
+font-size:13px;
+}
+
+.banco-type-cell{
+font-size:11px;
+color:var(--muted);
+margin-top:2px;
+}
+
+
+/* ───────── PERCENT BAR ───────── */
+
+.pct-row{
+display:flex;
+align-items:center;
+gap:8px;
+}
+
+.pct-bar-bg{
+flex:1;
+height:8px;
+background:var(--paper);
+border-radius:6px;
+overflow:hidden;
+border:1px solid var(--line);
+}
+
+.pct-bar-fill{
+height:100%;
+background:linear-gradient(90deg,#4f83d1,#7fa7e6);
+}
+
+.pct-label{
+font-size:11px;
+color:var(--muted);
+min-width:36px;
+text-align:right;
+font-family:'DM Mono', monospace;
+}
