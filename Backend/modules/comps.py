@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 import io
 from fastapi.responses import StreamingResponse
+import traceback
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -51,20 +52,17 @@ class CompsRequest(BaseModel):
 
 def load_empresas():
 
+    base = pathlib.Path(__file__).resolve().parents[2]
+
     posibles_rutas = [
-
-        "FrontEnd/Data/empresas.json",
-        "../FrontEnd/Data/empresas.json",
-        "Data/empresas.json",
-        "empresas.json"
-
+        base / "FrontEnd" / "Data" / "empresas.json",
+        base / "Data" / "empresas.json",
+        base / "empresas.json"
     ]
 
-    for ruta in posibles_rutas:
+    for path in posibles_rutas:
 
         try:
-
-            path = pathlib.Path(ruta)
 
             if path.exists():
 
@@ -80,8 +78,6 @@ def load_empresas():
     print("⚠️ empresas.json no encontrado")
 
     return []
-
-
 # ─────────────────────────────────────────────
 # UNIVERSO POR SECTOR
 # ─────────────────────────────────────────────
@@ -96,7 +92,7 @@ def get_universe_by_sector(sector: str):
 
         for e in empresas
 
-        if e.get("sector") == sector
+        if e.get("sector", "").lower() == sector.lower()
 
     ]
 
@@ -106,10 +102,16 @@ def get_universe_by_sector(sector: str):
 # ─────────────────────────────────────────────
 # COMPS
 # ─────────────────────────────────────────────
-
 @router.post("/comps")
 def generar_comps(request: CompsRequest):
 
+    print("\n==============================")
+    print("REQUEST /comps RECIBIDO")
+    print(request)
+    print("empresa_override:", request.empresa_override)
+    print("sector_override:", request.sector_override)
+    print("revenue_override:", request.revenue_override)
+    print("==============================")
     print(f"\n📨 Comps request: {request.mensaje}")
 
     try:
@@ -220,11 +222,12 @@ def generar_comps(request: CompsRequest):
     except HTTPException:
         raise
 
-    except Exception as e:
+    except Exception:
 
-        print("ERROR /comps:", e)
+        print("ERROR /comps:")
+        traceback.print_exc()
 
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Comps crash")
 
 
 # ─────────────────────────────────────────────

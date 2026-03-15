@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import pathlib
 import httpx
+from fastapi import Request, Response
 
 # ─────────────────────────────────────────────
 # IMPORTAR ROUTERS
@@ -46,14 +47,9 @@ except Exception:
 
 app = FastAPI(
     title="DealDesk — M&A Financial API",
-    description="Motor financiero universal: comps, DCF, WACC, precedents, BCRA.",
+    description="Motor financiero universal",
     version="3.0.0"
 )
-
-
-# ─────────────────────────────────────────────
-# CORS
-# ─────────────────────────────────────────────
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,6 +59,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.options("/{full_path:path}")
+async def options_handler(request: Request, full_path: str):
+    return Response(status_code=200)
 
 # ─────────────────────────────────────────────
 # REGISTRAR ROUTERS

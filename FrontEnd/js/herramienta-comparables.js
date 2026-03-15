@@ -32,7 +32,7 @@ async function loadEmpresas() {
   // Intento 2: archivo local (solo si abrís index.html directo)
   try {
     const resBack = await fetch("Data/empresas.json");
-    if (res.ok) {
+    if (resBack.ok) {
       EMPRESA_LIST = await resBack.json();
       empresasLoaded = true;
       console.log(
@@ -369,7 +369,8 @@ async function fetchRevenueCard(ticker, name) {
 
 async function runComps() {
   const rawEmpresa = document.getElementById("comps-empresa").value || "Target";
-  const empresa = selectedTicker || rawEmpresa;
+  const empresa =
+    selectedTicker || rawEmpresa.match(/\((.*?)\)/)?.[1] || rawEmpresa;
   const revenue =
     parseFloat(document.getElementById("comps-revenue").value) || 1000;
   const sector = document.getElementById("comps-sector").value;
@@ -400,7 +401,7 @@ async function runComps() {
       rango_min_pct: rangoMin,
       rango_max_pct: rangoMax,
     };
-
+    console.log("BODY /comps →", body);
     const res = await fetch(`${API}/comps`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
