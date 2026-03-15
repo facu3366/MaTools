@@ -102,138 +102,209 @@ def get_universe_by_sector(sector: str):
 # ─────────────────────────────────────────────
 # COMPS
 # ─────────────────────────────────────────────
-@router.post("/comps")
-def generar_comps(request: CompsRequest):
+"""
+🚀 DEALDESK API v3
 
-    print("\n==============================")
-    print("REQUEST /comps RECIBIDO")
-    print(request)
-    print("empresa_override:", request.empresa_override)
-    print("sector_override:", request.sector_override)
-    print("revenue_override:", request.revenue_override)
-    print("==============================")
-    print(f"\n📨 Comps request: {request.mensaje}")
+Backend principal del motor financiero DealDesk.
 
-    try:
+Arquitectura modular:
+    modules/
+        bcra.py
+        comps.py
+        empresas.py
+        financials.py
+        precedents.py
+        ask_ai.py
 
-        # parámetros del deal
+Run local:
+    uvicorn Backend.api:app --reload --port 8000
+"""
 
-        if request.empresa_override and request.sector_override and request.revenue_override:
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+import pathlib
+import httpx
 
-            empresa = request.empresa_override
-            sector = request.sector_override
-            revenue = request.revenue_override
+# ─────────────────────────────────────────────
+# IMPORTAR ROUTERS
+# ─────────────────────────────────────────────
 
-        else:
+from Backend.modules.bcra import router as bcra_router
+from Backend.modules.comps import router as comps_router
+from Backend.modules.empresas import router as empresas_router
+from Backend.modules.financials import router as financials_router
+from Backend.modules.precedents import router as precedents_router
 
-            raise HTTPException(
-                status_code=400,
-                detail="Debe enviar empresa_override, sector_override y revenue_override"
-            )
+# opcional si usás ask_ai
+try:
+    from Backend.modules.ask_ai import router as ask_router
+    HAS_ASK = True
+except Exception:
+    HAS_ASK = False
 
-        tickers = get_universe_by_sector(sector)
 
-        if not tickers:
+# ─────────────────────────────────────────────
+# APP
+# ─────────────────────────────────────────────
 
-            raise HTTPException(
-                status_code=400,
-                detail=f"No hay empresas cargadas para el sector {sector}"
-            )
+app = FastAPI(
+    title="DealDesk — M&A Financial API",
+    description="Motor financiero universal",
+    version="3.0.0"
+)
 
-        tickers = tickers[:25]
 
-        resultados = []
+# ─────────────────────────────────────────────
+# CORS
+# ─────────────────────────────────────────────
 
-        for i, ticker in enumerate(tickers, 1):
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # permite cualquier frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-            try:
 
-                print(f"[{i}/{len(tickers)}] {ticker}")
+# ─────────────────────────────────────────────
+# PRE-FLIGHT HANDLER (OPTIONS)
+# ─────────────────────────────────────────────
 
-                data = get_financials_ttm(ticker)
+@app.options("/{full_path:path}")
+async def options_handler(request: Request, full_path: str):
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        },
+    )
+# ─────────────────────────────────────────────
+# REGISTRAR ROUTERS
+# ─────────────────────────────────────────────
 
-                if not data:
-                    continue
+app.include_router(empresas_router)
+app.include_router(comps_router)
+app.include_router(financials_router)
+app.include_router(precedents_router)
+app.include_router(bcra_router)
 
-                if data.get("Revenue ($mm)") is None:
-                    continue
+if HAS_ASK:
+    app.include_router(ask_router)
 
-                resultados.append(data)
 
-            except Exception:
-                continue
+# ─────────────────────────────────────────────
+# YAHOO SEARCH PROXY
+# ─────────────────────────────────────────────
 
-            time.sleep(0.03)
+@app.get("/yf/search")
+async def yf_search(q: str):
 
-        if not resultados:
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={q}&quotesCount=8&newsCount=0"
 
-            raise HTTPException(
-                status_code=500,
-                detail="No se pudieron obtener datos financieros"
-            )
-
-        rango_min = request.rango_min_pct / 100
-        rango_max = request.rango_max_pct / 100
-
-        response = build_comps_response(
-
-            empresas=resultados,
-            empresa_target=empresa,
-            sector=sector,
-            revenue_target=revenue,
-            rango_min_pct=rango_min,
-            rango_max_pct=rango_max
-
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"}
         )
 
-        df = pd.DataFrame(resultados)
+    return res.json()
 
-        DEAL_CONFIG.update({
 
-            "empresa_target": empresa,
-            "sector": sector,
-            "revenue_target": revenue,
-            "rango_min_pct": rango_min,
-            "rango_max_pct": rango_max,
-            "analista": request.analista,
-            "fecha": datetime.now().strftime("%d/%m/%Y"),
+# ─────────────────────────────────────────────
+# HEALTH CHECK
+# ─────────────────────────────────────────────
 
-        })
+@app.get("/")
+def health_check():
 
-        try:
+    return {
+        "status": "✅ DealDesk API funcionando",
+        "version": "3.0.0",
+        "endpoints": {
 
-            archivo = generar_excel(df)
+            "GET  /api/empresas": "Catálogo de empresas",
+            "GET  /yf/search": "Buscar empresas (Yahoo proxy)",
 
-            response["archivo"] = archivo
+            "POST /comps": "Comparable Companies",
+            "POST /comps/excel": "Descargar Excel",
 
-        except Exception:
+            "POST /financials": "Financial data",
+            "POST /financials/wacc": "Calcular WACC",
+            "POST /financials/sector": "Sector analysis",
 
-            response["archivo"] = None
+            "POST /precedents": "Precedent transactions",
 
-        response["mensaje"] = (
+            "GET /bcra/bancos": "Sistema financiero argentino"
+        }
+    }
 
-            f"✅ Comps de {empresa} listos. "
-            f"{response['n_empresas_filtradas']} empresas filtradas."
 
-        )
+# ─────────────────────────────────────────────
+# SERVIR FRONTEND
+# ─────────────────────────────────────────────
 
-        return response
+@app.get("/app", response_class=HTMLResponse)
+def serve_app():
 
-    except HTTPException:
-        raise
+    html = pathlib.Path("index.html").read_text(encoding="utf-8")
 
-    except Exception:
-
-        print("ERROR /comps:")
-        traceback.print_exc()
-
-        raise HTTPException(status_code=500, detail="Comps crash")
-
+    return HTMLResponse(content=html)
 
 # ─────────────────────────────────────────────
 # EXCEL DOWNLOAD
 # ─────────────────────────────────────────────
+@router.post("/comps")
+def generar_comps(request: CompsRequest):
 
+    try:
+
+        empresa = request.empresa_override
+        sector = request.sector_override
+        revenue = request.revenue_override
+
+        tickers = get_universe_by_sector(sector)[:50]
+
+        empresas = []
+
+        for ticker in tickers:
+
+            data = get_financials_ttm(ticker)
+
+            if not data:
+                continue
+
+            empresas.append(data)
+
+        if not empresas:
+
+            raise HTTPException(
+                status_code=500,
+                detail="No se pudieron obtener empresas"
+            )
+
+        result = build_comps_response(
+            empresas,
+            empresa,
+            sector,
+            revenue,
+            request.rango_min_pct / 100,
+            request.rango_max_pct / 100
+        )
+
+        return result
+
+    except Exception as e:
+
+        traceback.print_exc()
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 @router.post("/comps/excel")
 def descargar_excel(request: CompsRequest):
 
