@@ -16,11 +16,12 @@ Run local:
     uvicorn Backend.api:app --reload --port 8000
 """
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import pathlib
 import httpx
+from fastapi import Request, Response
 
 # ─────────────────────────────────────────────
 # IMPORTAR ROUTERS
@@ -50,36 +51,24 @@ app = FastAPI(
     version="3.0.0"
 )
 
-
-# ─────────────────────────────────────────────
-# CORS
-# ─────────────────────────────────────────────
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # permite cualquier frontend
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# ─────────────────────────────────────────────
-# PRE-FLIGHT HANDLER (OPTIONS)
-# ─────────────────────────────────────────────
-
 @app.options("/{full_path:path}")
 async def options_handler(request: Request, full_path: str):
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        },
-    )
+    return Response(status_code=200)
+from fastapi import Request
+from fastapi.responses import Response
 
-
+@app.options("/comps")
+async def options_comps(request: Request):
+    return Response(status_code=200)
 # ─────────────────────────────────────────────
 # REGISTRAR ROUTERS
 # ─────────────────────────────────────────────
@@ -96,7 +85,9 @@ if HAS_ASK:
 
 # ─────────────────────────────────────────────
 # YAHOO SEARCH PROXY
+# (usado por el buscador de empresas)
 # ─────────────────────────────────────────────
+import httpx
 
 @app.get("/yf/search")
 async def yf_search(q: str):
