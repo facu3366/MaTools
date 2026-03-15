@@ -3,11 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import pathlib
 
-from modules.bcra import router as bcra_router
-from modules.comps import router as comps_router
-from modules.empresas import router as empresas_router
-from modules.financials import router as financials_router
-from modules.precedents import router as precedents_router
+from Backend.modules.bcra import router as bcra_router
+from Backend.modules.comps import router as comps_router
+from Backend.modules.empresas import router as empresas_router
+from Backend.modules.financials import router as financials_router
+from Backend.modules.precedents import router as precedents_router
 
 app = FastAPI(
     title="DealDesk — M&A Financial API",
