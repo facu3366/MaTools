@@ -12,17 +12,16 @@ from fastapi.responses import StreamingResponse
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from financial_engine import (
+from Backend.financial_engine import (
     get_financials_ttm,
     build_comps_response
 )
 
-from comps_automatico import (
+from Backend.comps_automatico import (
     generar_excel,
     _generar_excel_buffer,
     DEAL_CONFIG
 )
-
 router = APIRouter()
 
 # ─────────────────────────────────────────────
