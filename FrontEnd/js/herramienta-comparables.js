@@ -19,7 +19,7 @@ async function loadEmpresas() {
   // Intento 1: endpoint del backend (funciona siempre en Railway)
   try {
     const resAPI = await fetch(`${API}/api/empresas`);
-    if (res.ok) {
+    if (resAPI.ok) {
       EMPRESA_LIST = await resAPI.json();
       empresasLoaded = true;
       console.log(`✅ Empresas cargadas desde API: ${EMPRESA_LIST.length}`);
