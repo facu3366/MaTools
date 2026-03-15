@@ -7,32 +7,46 @@
 
 <div class="nav-label">Herramientas</div>
 
-<div class="nav-item active" onclick="showView('home','Inicio')">
+<div class="nav-item active"
+onclick="showView('home','Inicio')">
 <span class="nav-icon">⊞</span>
 Inicio
 </div>
 
-<div class="nav-item" onclick="showView('comps','Comparable Companies')">
+<div class="nav-item"
+onclick="showView('comps','Comparable Companies')">
 <span class="nav-icon">◈</span>
 Comps
 <span class="nav-badge live">LIVE</span>
 </div>
 
-<div class="nav-item" onclick="showView('dcf','DCF & WACC')">
+<div class="nav-item"
+onclick="showView('dcf','DCF & WACC')">
 <span class="nav-icon">◇</span>
 DCF / WACC
 <span class="nav-badge live">LIVE</span>
 </div>
 
-<div class="nav-item" onclick="showView('precedents','Precedent Transactions')">
+<div class="nav-item"
+onclick="showView('precedents','Precedent Transactions')">
 <span class="nav-icon">◉</span>
 Precedentes
 <span class="nav-badge live">LIVE</span>
 </div>
 
-<div class="nav-item" onclick="showView('bcra','BCRA Rankings')">
+<div class="nav-item"
+onclick="showView('bcra','BCRA Rankings')">
 <span class="nav-icon">▦</span>
 BCRA Rankings
+<span class="nav-badge live">LIVE</span>
+</div>
+
+<!-- NUEVO DASHBOARD -->
+
+<div class="nav-item"
+onclick="showView('bcra-intel','BCRA Intelligence'); setTimeout(initBCRADashboard,50)">
+<span class="nav-icon">⬢</span>
+BCRA Intelligence
 <span class="nav-badge live">LIVE</span>
 </div>
 

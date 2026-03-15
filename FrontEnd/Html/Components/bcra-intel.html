@@ -1,0 +1,193 @@
+<div id="view-bcra-intel" class="tool-view">
+
+<!-- CONTROLS -->
+<div class="bcra-controls">
+
+<select class="bcra-select" id="bcra-currency">
+<option value="ARS">ARS</option>
+<option value="USD_OFF">USD Oficial</option>
+<option value="USD_MEP">USD MEP</option>
+<option value="USD_BLUE">USD Blue</option>
+</select>
+
+<select class="bcra-select" id="bcra-scale">
+<option value="millions">Millones</option>
+<option value="billions">Billones</option>
+</select>
+
+
+<!-- SELECTOR BANCOS -->
+<div class="bcra-bsel" id="bcra-bsel">
+
+<div class="bcra-bsel-trigger" id="bcra-bsel-trigger">
+<span id="bcra-bsel-label">Cargando...</span>
+<span class="bcra-bsel-arrow" id="bcra-bsel-arrow">▼</span>
+</div>
+
+<div class="bcra-bsel-dd" id="bcra-bsel-dd">
+
+<div style="padding:8px 12px;border-bottom:1px solid var(--line)">
+<input
+class="bcra-bsel-search"
+id="bcra-bsel-search"
+placeholder="Buscar banco..."
+/>
+</div>
+
+<div class="bcra-bsel-actions">
+<button class="a-all" id="bcra-btn-all">Seleccionar todo</button>
+<button class="a-clr" id="bcra-btn-clr">Limpiar</button>
+<span class="a-cnt" id="bcra-bsel-cnt"></span>
+</div>
+
+<div class="bcra-bsel-list" id="bcra-bsel-list"></div>
+
+</div>
+
+</div>
+
+
+<!-- TOP N -->
+<div class="bcra-topn" id="bcra-topn-group">
+<span>Top:</span>
+<button data-n="10" class="on">10</button>
+<button data-n="20">20</button>
+<button data-n="50">50</button>
+</div>
+
+
+<!-- STATUS HEADER -->
+<div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+
+<span class="nav-badge live" id="bcra-badge-count"></span>
+
+<span
+style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"
+id="bcra-hdr-mes">
+</span>
+
+<!-- FX -->
+<span
+style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"
+id="bcra-fx">
+</span>
+
+</div>
+
+</div>
+
+
+<!-- KPIs -->
+<div class="bcra-kpis" id="bcra-kpis"></div>
+
+
+<!-- GRID -->
+<div class="bcra-grid">
+
+<div class="bcra-card">
+
+<h3 id="bcra-rank-title">Top 10 por Activos</h3>
+<div class="sub">Clic en barra para aislar banco</div>
+
+<div class="bcra-chart-wrap h-bar">
+<canvas id="bcra-chart-bar"></canvas>
+</div>
+
+</div>
+
+
+<div class="bcra-card">
+
+<h3 id="bcra-pie-title">Composición — Activos</h3>
+<div class="sub">Top 5 + Otros</div>
+
+<div class="bcra-pie-row">
+
+<div class="bcra-chart-wrap h220" style="width:55%">
+<canvas id="bcra-chart-pie"></canvas>
+</div>
+
+<div class="bcra-pie-legend" id="bcra-pie-legend"></div>
+
+</div>
+
+</div>
+
+</div>
+
+
+<!-- TIME SERIES -->
+<div class="bcra-card" style="margin-bottom:18px">
+
+<div class="bcra-ts-head">
+
+<div>
+<h3 id="bcra-ts-title">Evolución histórica</h3>
+<div class="sub">Requiere persistencia de datos</div>
+</div>
+
+<button class="bcra-ts-btn" id="bcra-ts-toggle">
+OCULTAR
+</button>
+
+</div>
+
+<div class="bcra-chart-wrap h260" id="bcra-ts-wrap"></div>
+
+</div>
+
+
+<!-- RATIOS + TABLE -->
+<div class="bcra-grid">
+
+
+<div class="bcra-card">
+
+<h3>Ratios M&A</h3>
+<div class="sub">Préstamos/Depósitos · Leverage</div>
+
+<div id="bcra-ratios-list"></div>
+
+</div>
+
+
+<div class="bcra-card">
+
+<h3 id="bcra-tbl-title">Ranking completo</h3>
+<div class="sub" id="bcra-tbl-sub"></div>
+
+<div style="overflow:auto;max-height:420px">
+
+<table class="bcra-tbl">
+
+<thead>
+<tr>
+<th>#</th>
+<th>Entidad</th>
+<th class="r">Activo</th>
+<th class="r">Dep.</th>
+<th class="r">Prést.</th>
+<th class="r">P.N.</th>
+</tr>
+</thead>
+
+<tbody id="bcra-tbl-body"></tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+
+<!-- FOOTER -->
+<div class="bcra-footer">
+
+<p>BCRA · bcra.gob.ar</p>
+<p class="brand">DealDesk · M&A Automation Platform</p>
+
+</div>
+
+</div>

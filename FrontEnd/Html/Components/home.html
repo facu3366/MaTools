@@ -18,7 +18,9 @@ Seleccioná una herramienta para comenzar.
 <div class="tools-grid">
 
 
-<div class="tool-card" onclick="showView('comps','Comparable Companies')">
+<!-- COMPS -->
+<div class="tool-card"
+onclick="showView('comps','Comparable Companies')">
 
 <span class="tool-icon">◈</span>
 
@@ -35,7 +37,9 @@ Múltiplos, márgenes y benchmarks en segundos.
 
 
 
-<div class="tool-card" onclick="showView('dcf','DCF & WACC')">
+<!-- DCF -->
+<div class="tool-card"
+onclick="showView('dcf','DCF & WACC')">
 
 <span class="tool-icon">◇</span>
 
@@ -52,7 +56,9 @@ Beta, cost of debt, tax rate y ponderaciones automáticas.
 
 
 
-<div class="tool-card" onclick="showView('precedents','Precedent Transactions')">
+<!-- PRECEDENTS -->
+<div class="tool-card"
+onclick="showView('precedents','Precedent Transactions')">
 
 <span class="tool-icon">◉</span>
 
@@ -69,7 +75,9 @@ múltiplos de entrada y estadísticas para justificar valuación.
 
 
 
-<div class="tool-card" onclick="showView('bcra','BCRA Rankings')">
+<!-- BCRA SIMPLE -->
+<div class="tool-card"
+onclick="showView('bcra','BCRA Rankings')">
 
 <span class="tool-icon">▦</span>
 
@@ -86,6 +94,26 @@ de todas las entidades del sistema financiero argentino.
 
 
 
+<!-- BCRA INTELLIGENCE -->
+<div class="tool-card"
+onclick="showView('bcra-intel','BCRA Intelligence'); setTimeout(initBCRADashboard,50)">
+
+<span class="tool-icon">⬢</span>
+
+<div class="tool-name">
+BCRA Intelligence
+</div>
+
+<div class="tool-desc">
+Dashboard interactivo del sistema financiero argentino.
+Rankings, composición, ratios bancarios y análisis visual.
+</div>
+
+</div>
+
+
+
+<!-- INFLATION -->
 <div class="tool-card disabled">
 
 <span class="tool-icon">⬡</span>
@@ -103,6 +131,7 @@ según normas RT 6/17 con índices INDEC.
 
 
 
+<!-- FX -->
 <div class="tool-card disabled">
 
 <span class="tool-icon">⬡</span>

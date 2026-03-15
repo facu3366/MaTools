@@ -877,3 +877,89 @@ min-width:36px;
 text-align:right;
 font-family:'DM Mono', monospace;
 }
+/* ══════════════════════════════════════════════════════════════
+   BCRA INTELLIGENCE — Dashboard Styles
+   Uses same CSS vars as DealDesk: --ink, --paper, --cream, --gold, etc.
+   ══════════════════════════════════════════════════════════════ */
+
+   .bcra-kpis { display:flex; gap:14px; margin-bottom:24px; flex-wrap:wrap }
+   .bcra-kpi { background:var(--white); border:1px solid var(--line); padding:16px 20px; cursor:pointer; transition:all .2s; flex:1 1 0; min-width:150px }
+   .bcra-kpi:hover { border-color:var(--gold-lt); transform:translateY(-1px); box-shadow:0 4px 16px rgba(0,0,0,.05) }
+   .bcra-kpi.active { border-color:var(--gold); border-top:2px solid var(--gold); background:var(--cream) }
+   .bcra-kpi-label { font-family:'DM Mono',monospace; font-size:9px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-bottom:6px }
+   .bcra-kpi-value { font-family:'DM Mono',monospace; font-size:22px; font-weight:500; color:var(--ink); line-height:1 }
+   .bcra-kpi.active .bcra-kpi-value { color:var(--gold) }
+   
+   .bcra-controls { display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; margin-bottom:24px }
+   .bcra-select { background:var(--white); border:1px solid var(--line); color:var(--ink); padding:9px 14px; font-family:'DM Sans',sans-serif; font-size:13px; cursor:pointer }
+   .bcra-select:focus { border-color:var(--gold); outline:none }
+   
+   .bcra-bsel { position:relative; width:100%; max-width:360px }
+   .bcra-bsel-trigger { background:var(--white); border:1px solid var(--line); padding:9px 14px; cursor:pointer; display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink); min-height:38px; user-select:none; transition:border-color .15s }
+   .bcra-bsel-trigger:hover { border-color:var(--gold-lt) }
+   .bcra-bsel-trigger span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+   .bcra-bsel-arrow { font-size:9px; color:var(--muted); transition:transform .15s }
+   .bcra-bsel-dd { position:absolute; top:100%; left:0; right:0; z-index:50; background:var(--white); border:1px solid var(--line); border-top:2px solid var(--gold); margin-top:2px; box-shadow:0 8px 32px rgba(0,0,0,.1); max-height:310px; display:none; flex-direction:column }
+   .bcra-bsel-dd.open { display:flex }
+   .bcra-bsel-search { width:100%; background:var(--paper); border:1px solid var(--line); padding:7px 12px; font-size:12px; color:var(--ink); outline:none; font-family:'DM Sans',sans-serif }
+   .bcra-bsel-search:focus { border-color:var(--gold) }
+   .bcra-bsel-actions { padding:6px 12px; display:flex; gap:12px; border-bottom:1px solid var(--line); align-items:center }
+   .bcra-bsel-actions button { font-size:11px; background:none; border:none; cursor:pointer; font-weight:600; font-family:'DM Mono',monospace; padding:0; letter-spacing:.5px }
+   .bcra-bsel-actions .a-all { color:var(--gold) }
+   .bcra-bsel-actions .a-clr { color:var(--error) }
+   .bcra-bsel-actions .a-cnt { margin-left:auto; color:var(--muted); cursor:default; font-size:10px }
+   .bcra-bsel-list { overflow:auto; flex:1 }
+   .bcra-bsel-item { padding:6px 14px; display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12px; color:var(--muted); transition:background .1s }
+   .bcra-bsel-item:hover { background:var(--cream) }
+   .bcra-bsel-item.on { color:var(--ink); background:rgba(184,134,11,.06) }
+   .bcra-bsel-chk { width:14px; height:14px; border-radius:2px; border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all .12s; font-size:9px; font-weight:700; color:var(--white) }
+   .bcra-bsel-item.on .bcra-bsel-chk { border-color:var(--gold); background:var(--gold) }
+   
+   .bcra-topn { display:flex; gap:4px; align-items:center }
+   .bcra-topn span { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1px; margin-right:4px; text-transform:uppercase }
+   .bcra-topn button { padding:5px 12px; font-family:'DM Mono',monospace; font-size:11px; font-weight:500; border:1px solid var(--line); background:var(--white); color:var(--muted); cursor:pointer; transition:all .12s; letter-spacing:.5px }
+   .bcra-topn button:hover { border-color:var(--gold-lt); color:var(--ink) }
+   .bcra-topn button.on { border-color:var(--gold); background:var(--ink); color:var(--paper) }
+   
+   .bcra-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px }
+   @media(max-width:860px){ .bcra-grid{grid-template-columns:1fr} }
+   
+   .bcra-card { background:var(--white); border:1px solid var(--line); padding:20px }
+   .bcra-card h3 { font-family:'Playfair Display',serif; font-size:14px; font-weight:600; color:var(--ink); margin-bottom:2px }
+   .bcra-card .sub { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:.5px; margin-bottom:14px }
+   
+   .bcra-chart-wrap { position:relative; width:100% }
+   .bcra-chart-wrap.h260 { height:260px }
+   .bcra-chart-wrap.h220 { height:220px }
+   .bcra-chart-wrap.h-bar { min-height:200px }
+   
+   .bcra-pie-row { display:flex; align-items:center; gap:16px }
+   .bcra-pie-legend { flex:1 }
+   .bcra-pie-item { display:flex; align-items:center; gap:7px; margin-bottom:6px }
+   .bcra-pie-item .sq { width:8px; height:8px; flex-shrink:0 }
+   .bcra-pie-item .nm { font-size:11px; color:var(--ink); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+   .bcra-pie-item .pc { font-family:'DM Mono',monospace; font-size:11px; font-weight:500; color:var(--muted) }
+   
+   .bcra-ts-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
+   .bcra-ts-btn { font-family:'DM Mono',monospace; font-size:10px; letter-spacing:1px; text-transform:uppercase; color:var(--gold); background:none; border:1px solid var(--line); padding:5px 14px; cursor:pointer; transition:all .15s }
+   .bcra-ts-btn:hover { background:var(--cream); border-color:var(--gold) }
+   
+   .bcra-ratio { display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--paper); border:1px solid var(--line); margin-bottom:6px; transition:background .1s }
+   .bcra-ratio:hover { background:var(--cream) }
+   .bcra-ratio .dot { width:8px; height:8px; flex-shrink:0 }
+   .bcra-ratio .nm { font-size:12px; font-weight:500; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+   .bcra-ratio .ld { font-family:'DM Mono',monospace; font-size:12px; font-weight:500 }
+   .bcra-ratio .lv { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted) }
+   
+   .bcra-tbl { width:100%; border-collapse:collapse; font-size:11px }
+   .bcra-tbl thead th { text-align:left; padding:7px 8px; color:var(--muted); font-family:'DM Mono',monospace; font-weight:500; font-size:9px; letter-spacing:1.5px; text-transform:uppercase; border-bottom:2px solid var(--line); position:sticky; top:0; background:var(--white) }
+   .bcra-tbl thead th.r { text-align:right }
+   .bcra-tbl tbody tr { border-bottom:1px solid var(--line); cursor:pointer; transition:background .1s }
+   .bcra-tbl tbody tr:hover { background:var(--cream) }
+   .bcra-tbl td { padding:7px 8px }
+   .bcra-tbl td.r { text-align:right; font-family:'DM Mono',monospace; font-weight:400 }
+   .bcra-tbl .dot { display:inline-block; width:6px; height:6px; margin-right:6px; vertical-align:middle }
+   
+   .bcra-footer { text-align:center; margin-top:28px; padding:16px 0; border-top:1px solid var(--line) }
+   .bcra-footer p { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:.5px }
+   .bcra-footer .brand { font-size:9px; color:#b0a890; margin-top:3px }
