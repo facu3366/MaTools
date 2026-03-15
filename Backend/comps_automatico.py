@@ -31,61 +31,34 @@ DEAL_CONFIG = {
 # ─────────────────────────────────────────────
 # 2. UNIVERSE DE EMPRESAS POR SECTOR
 # ─────────────────────────────────────────────
+def load_empresas():
 
-UNIVERSE = {
-    "Health Insurance": [
-        "UNH", "CVS", "CI", "ELV", "CNC", "HUM", "MOH", "OSCR", "CLOV", "ALHC",
-        "MMC", "AON", "WTW", "ACGL", "THG", "HIG", "PRU", "MET", "AFL", "UNM",
-        "HCA", "THC", "UHS", "CYH", "ENSG",
-        "HQY", "SGRY", "NHC", "PINC", "DVA",
-        "JNJ", "ABT", "MDT", "BMY", "AMGN",
-        "IQV", "DGX", "LH", "MDRX", "DOCS",
-        "HIMS", "ACAD", "NVCR", "RDDT", "NHI",
-        "WELL", "VTR", "PEAK", "MPW", "SBRA",
-    ],
-    "Technology": [
-        "AAPL", "MSFT", "GOOGL", "META", "AMZN", "NVDA", "CRM", "ORCL", "SAP", "IBM",
-        "ADBE", "INTU", "NOW", "SNOW", "PLTR", "DDOG", "MDB", "TWLO", "ZS", "CRWD",
-        "NET", "OKTA", "HUBS", "BILL", "SMAR", "APPF", "PCTY", "PAYC", "VEEV", "DOCU",
-        "ZM", "WDAY", "CDNS", "ANSS", "PTC", "EPAM", "GLOB", "MELI", "SE", "GRAB",
-        "BIDU", "JD", "PDD", "TCEHY", "NTES", "SHOP", "SPOT", "UBER", "LYFT", "DASH",
-    ],
-    "Financials": [
-        "JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "BLK", "SCHW", "USB",
-        "PNC", "TFC", "COF", "DFS", "SYF", "ALLY", "NDAQ", "ICE", "CME", "CBOE",
-        "BX", "KKR", "APO", "CG", "ARES", "OWL", "IVZ", "BEN", "AMG", "TROW",
-        "BK", "STT", "NTRS", "FNF", "FAF", "RJF", "SF", "LPLA", "MORN", "FDS",
-        "MSCI", "SPGI", "MCO", "VRSK", "BR", "FIS", "FI", "GPN", "MA", "V",
-    ],
-    "Energy": [
-        "XOM", "CVX", "COP", "EOG", "SLB", "MPC", "PSX", "VLO", "OXY", "DVN",
-        "HAL", "BKR", "FANG", "PR", "CTRA", "APA", "MRO", "HES", "MTDR", "SM",
-        "RIG", "VAL", "DO", "NE", "HP", "PTEN", "WES", "TRGP", "KMI", "OKE",
-        "WMB", "ET", "EPD", "MMP", "MPLX", "PAA", "LNG", "RRC", "EQT", "AR",
-        "CHK", "SWN", "GPOR", "CNX", "CDEV", "ESTE", "NOG", "VTLE", "SBOW", "PDCE",
-    ],
-    "Consumer": [
-        "AMZN", "WMT", "COST", "TGT", "HD", "LOW", "MCD", "SBUX", "NKE", "LULU",
-        "TJX", "ROST", "DG", "DLTR", "KR", "ACI", "SFM", "WINN", "GO", "CASY",
-        "YUM", "QSR", "DPZ", "CMG", "DRI", "TXRH", "SHAK", "JACK", "WEN", "BJ",
-        "EL", "PG", "CL", "KMB", "CHD", "SPB", "HRL", "SJM", "MKC", "GIS",
-        "K", "CPB", "CAG", "MDLZ", "HSY", "MNST", "KO", "PEP", "STZ", "BUD",
-    ],
-    "Real Estate": [
-        "PLD", "AMT", "CCI", "EQIX", "SPG", "O", "VICI", "WELL", "DLR", "PSA",
-        "EXR", "AVB", "EQR", "MAA", "UDR", "CPT", "NNN", "WPC", "STAG", "COLD",
-        "IRM", "SBAC", "SBA", "AMH", "INVH", "SUI", "ELS", "UE", "KIM", "REG",
-        "BXP", "VNO", "SL", "HIW", "CUZ", "PDM", "OFC", "DEI", "PGRE", "ESRT",
-        "HST", "RHP", "PK", "SHO", "APLE", "CLDT", "NCLH", "RLJ", "AHT", "BHR",
-    ],
-    "Industrials": [
-        "GE", "HON", "MMM", "CAT", "DE", "EMR", "ETN", "PH", "ROK", "ITW",
-        "GD", "LMT", "RTX", "NOC", "BA", "HII", "L3H", "LDOS", "SAIC", "CACI",
-        "UPS", "FDX", "XPO", "JBHT", "CHRW", "EXPD", "GXO", "ODFL", "SAIA", "RXO",
-        "WM", "RSG", "CWST", "CLH", "US", "SRCL", "ACCO", "CTAS", "ABM", "SCI",
-        "AME", "DHR", "ROP", "VRTS", "IDEX", "IEX", "FTV", "GNRC", "AXON", "TDY",
-    ],
-}
+    posibles_rutas = [
+        "FrontEnd/Data/empresas.json",
+        "Data/empresas.json",
+        "../FrontEnd/Data/empresas.json"
+    ]
+
+    for ruta in posibles_rutas:
+
+        path = pathlib.Path(ruta)
+
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+
+    return []
+
+def get_universe_by_sector(sector):
+
+    empresas = load_empresas()
+
+    tickers = [
+        e["ticker"]
+        for e in empresas
+        if e.get("sector") == sector
+    ]
+
+    return tickers
 
 # ─────────────────────────────────────────────
 # 3. FETCH DE DATOS — COMPS BÁSICOS
@@ -807,7 +780,7 @@ def run():
     print(f"  Sector: {DEAL_CONFIG['sector']}  |  Revenue target: ${DEAL_CONFIG['revenue_target']:,}mm")
     print("="*60)
 
-    tickers = UNIVERSE.get(DEAL_CONFIG["sector"], UNIVERSE["Health Insurance"])
+    tickers = get_universe_by_sector(sector)
     print(f"\n  Descargando datos de {len(tickers)} empresas...\n")
 
     resultados = []
