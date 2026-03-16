@@ -21,6 +21,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import pathlib
 import httpx
+import io
+import pandas as pd
+from fastapi.responses import StreamingResponse
+
+from Backend.comps_automatico import (
+    get_universe_by_sector,
+    get_financials,
+    _generar_excel_buffer,
+)
 from fastapi import Request, Response
 
 # ─────────────────────────────────────────────
@@ -102,7 +111,41 @@ async def yf_search(q: str):
 
     return res.json()
 
+# ─────────────────────────────────────────────
+# EXPORT COMPS EXCEL PROFESIONAL
+# ─────────────────────────────────────────────
 
+@app.get("/comps/export-excel")
+def export_comps_excel(sector: str = "Health Insurance"):
+
+    tickers = get_universe_by_sector(sector)
+
+    resultados = []
+
+    for ticker in tickers:
+        data = get_financials(ticker)
+
+        if data and data.get("Revenue ($mm)"):
+            resultados.append(data)
+
+    if not resultados:
+        return {"error": "Sin datos"}
+
+    df = pd.DataFrame(resultados)
+
+    buffer = io.BytesIO()
+
+    _generar_excel_buffer(df, buffer)
+
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": "attachment; filename=comps.xlsx"
+        }
+    )
 # ─────────────────────────────────────────────
 # HEALTH CHECK
 # ─────────────────────────────────────────────

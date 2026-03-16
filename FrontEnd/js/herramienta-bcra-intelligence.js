@@ -836,5 +836,91 @@ function bcraRenderScatter() {
     },
   });
 }
+async function exportCompsExcel() {
+  const res = await fetch("http://localhost:8000/comps/export-excel");
 
+  const blob = await res.blob();
+
+  const url = window.URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = "comps.xlsx";
+
+  document.body.appendChild(a);
+
+  a.click();
+
+  a.remove();
+}
+function bcraExportPPT() {
+  try {
+    if (typeof PptxGenJS === "undefined") {
+      alert("Librería PowerPoint no cargada");
+      return;
+    }
+
+    const pptx = new PptxGenJS();
+
+    pptx.layout = "LAYOUT_WIDE";
+
+    const slide = pptx.addSlide();
+
+    /* ---------- TITULO ---------- */
+
+    slide.addText("BCRA Intelligence", {
+      x: 0.5,
+      y: 0.4,
+      fontSize: 28,
+      bold: true,
+    });
+
+    slide.addText("Sistema Financiero Argentino", {
+      x: 0.5,
+      y: 0.9,
+      fontSize: 16,
+    });
+
+    /* ---------- CHARTS ---------- */
+
+    const charts = [
+      bcraBarChart,
+      bcraPieChart,
+      bcraConcentrationChart,
+      window.bcraScatterChart,
+    ];
+
+    let posY = 1.5;
+
+    charts.forEach((chart) => {
+      if (!chart) return;
+
+      try {
+        const img = chart.toBase64Image();
+
+        slide.addImage({
+          data: img,
+          x: 0.5,
+          y: posY,
+          w: 9,
+          h: 3,
+        });
+
+        posY += 3.1;
+      } catch (err) {
+        console.warn("No se pudo exportar gráfico", err);
+      }
+    });
+
+    /* ---------- EXPORT ---------- */
+
+    pptx.writeFile({
+      fileName: "BCRA_Intelligence_Report.pptx",
+    });
+  } catch (err) {
+    console.error("Error exportando PPT:", err);
+    alert("Error generando PowerPoint");
+  }
+}
 document.getElementById("bcra-loading-screen").style.display = "none";
