@@ -1,6 +1,26 @@
 <div id="view-bcra-intel" class="tool-view">
 
-<!-- CONTROLS -->
+<!-- CONTENEDOR GENERAL -->
+<div class="bcra-container">
+
+
+
+<!-- HEADER -->
+<div class="dd-eyebrow">
+M&A INTELLIGENCE · SISTEMA FINANCIERO ARGENTINO
+</div>
+
+<h1 class="dd-title">
+BCRA <em>Intelligence</em>
+</h1>
+
+<p class="dd-sub">
+Ranking del sistema financiero argentino · Datos del Banco Central
+</p>
+
+
+
+<!-- CONTROLES -->
 <div class="bcra-controls">
 
 <select class="bcra-select" id="bcra-currency">
@@ -12,51 +32,19 @@
 
 <select class="bcra-select" id="bcra-scale">
 <option value="millions">Millones</option>
-<option value="billions">Billones</option>
+<option value="billions">Miles de millones</option>
 </select>
 
-
-<!-- SELECTOR BANCOS -->
-<div class="bcra-bsel" id="bcra-bsel">
-
-<div class="bcra-bsel-trigger" id="bcra-bsel-trigger">
-<span id="bcra-bsel-label">Cargando...</span>
-<span class="bcra-bsel-arrow" id="bcra-bsel-arrow">▼</span>
-</div>
-
-<div class="bcra-bsel-dd" id="bcra-bsel-dd">
-
-<div style="padding:8px 12px;border-bottom:1px solid var(--line)">
-<input
-class="bcra-bsel-search"
-id="bcra-bsel-search"
-placeholder="Buscar banco..."
-/>
-</div>
-
-<div class="bcra-bsel-actions">
-<button class="a-all" id="bcra-btn-all">Seleccionar todo</button>
-<button class="a-clr" id="bcra-btn-clr">Limpiar</button>
-<span class="a-cnt" id="bcra-bsel-cnt"></span>
-</div>
-
-<div class="bcra-bsel-list" id="bcra-bsel-list"></div>
-
-</div>
-
-</div>
-
-
-<!-- TOP N -->
 <div class="bcra-topn" id="bcra-topn-group">
+
 <span>Top:</span>
+
 <button data-n="10" class="on">10</button>
 <button data-n="20">20</button>
 <button data-n="50">50</button>
+
 </div>
 
-
-<!-- STATUS HEADER -->
 <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
 
 <span class="nav-badge live" id="bcra-badge-count"></span>
@@ -66,7 +54,6 @@ style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"
 id="bcra-hdr-mes">
 </span>
 
-<!-- FX -->
 <span
 style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)"
 id="bcra-fx">
@@ -77,17 +64,78 @@ id="bcra-fx">
 </div>
 
 
-<!-- KPIs -->
+
+<!-- SELECTOR BANCOS -->
+<div class="bcra-bank-selector">
+
+<div class="bcra-bank-header">
+
+<input
+id="bcra-bank-search"
+placeholder="Buscar banco..."
+class="bcra-bank-search"
+/>
+
+<div class="bcra-bank-actions">
+
+<button id="bcra-select-all" class="bcra-bank-btn">
+Todos
+</button>
+
+<button id="bcra-clear-all" class="bcra-bank-btn">
+Limpiar
+</button>
+
+</div>
+
+</div>
+
+<div id="bcra-chip-row" class="chip-row"></div>
+
+</div>
+
+
+
+<!-- KPIS -->
 <div class="bcra-kpis" id="bcra-kpis"></div>
 
 
-<!-- GRID -->
-<div class="bcra-grid">
+
+<!-- TABS -->
+<div class="bcra-tabs">
+
+<button class="bcra-tab on" data-view="ranking">
+Rankings
+</button>
+
+<button class="bcra-tab" data-view="market">
+Market share
+</button>
+
+<button class="bcra-tab" data-view="scatter">
+Scatter
+</button>
+
+<button class="bcra-tab" data-view="ratios">
+Ratios M&A
+</button>
+
+</div>
+
+
+
+<!-- RANKING -->
+<div class="bcra-grid bcra-view" id="bcra-view-ranking">
 
 <div class="bcra-card">
 
-<h3 id="bcra-rank-title">Top 10 por Activos</h3>
-<div class="sub">Clic en barra para aislar banco</div>
+<h3 id="bcra-rank-title">
+Top 10 por Activos
+</h3>
+
+<div class="sub">
+Click en barra para aislar banco
+</div>
 
 <div class="bcra-chart-wrap h-bar">
 <canvas id="bcra-chart-bar"></canvas>
@@ -95,11 +143,25 @@ id="bcra-fx">
 
 </div>
 
+</div>
+
+
+
+<!-- MARKET SHARE -->
+<div
+class="bcra-grid bcra-view"
+id="bcra-view-market"
+style="display:none">
 
 <div class="bcra-card">
 
-<h3 id="bcra-pie-title">Composición — Activos</h3>
-<div class="sub">Top 5 + Otros</div>
+<h3 id="bcra-pie-title">
+Composición — Activos
+</h3>
+
+<div class="sub">
+Top 5 + Otros
+</div>
 
 <div class="bcra-pie-row">
 
@@ -116,44 +178,76 @@ id="bcra-fx">
 </div>
 
 
-<!-- TIME SERIES -->
-<div class="bcra-card" style="margin-bottom:18px">
 
-<div class="bcra-ts-head">
+<!-- SCATTER -->
+<div
+class="bcra-view"
+id="bcra-view-scatter"
+style="display:none">
 
-<div>
-<h3 id="bcra-ts-title">Evolución histórica</h3>
-<div class="sub">Requiere persistencia de datos</div>
+<div class="bcra-card">
+
+<h3>Eficiencia bancaria</h3>
+
+<div class="sub">
+X = Activos · Y = Préstamos / Depósitos · Tamaño = Patrimonio
 </div>
 
-<button class="bcra-ts-btn" id="bcra-ts-toggle">
-OCULTAR
-</button>
+<div class="bcra-chart-wrap h260">
+<canvas id="bcra-chart-scatter"></canvas>
+</div>
 
 </div>
 
-<div class="bcra-chart-wrap h260" id="bcra-ts-wrap"></div>
-
 </div>
 
 
-<!-- RATIOS + TABLE -->
+
+<!-- RATIOS -->
+<div
+class="bcra-view"
+id="bcra-view-ratios"
+style="display:none">
+
 <div class="bcra-grid">
-
 
 <div class="bcra-card">
 
 <h3>Ratios M&A</h3>
-<div class="sub">Préstamos/Depósitos · Leverage</div>
+
+<div class="sub">
+Préstamos/Depósitos · Leverage
+</div>
 
 <div id="bcra-ratios-list"></div>
 
 </div>
 
-
 <div class="bcra-card">
 
-<h3 id="bcra-tbl-title">Ranking completo</h3>
+<h3>Concentración del sistema</h3>
+
+<div class="sub">% acumulado del mercado</div>
+
+<div class="bcra-chart-wrap h260">
+<canvas id="bcra-chart-concentration"></canvas>
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+
+<!-- TABLA -->
+<div class="bcra-card">
+
+<h3 id="bcra-tbl-title">
+Ranking completo
+</h3>
+
 <div class="sub" id="bcra-tbl-sub"></div>
 
 <div style="overflow:auto;max-height:420px">
@@ -179,15 +273,33 @@ OCULTAR
 
 </div>
 
-</div>
 
 
 <!-- FOOTER -->
 <div class="bcra-footer">
 
 <p>BCRA · bcra.gob.ar</p>
-<p class="brand">DealDesk · M&A Automation Platform</p>
+
+<p class="brand">
+DealDesk · M&A Automation Platform
+</p>
 
 </div>
 
 </div>
+
+</div>
+
+
+
+<script>
+
+document.addEventListener("DOMContentLoaded", function(){
+
+if(typeof initBCRADashboard === "function"){
+initBCRADashboard()
+}
+
+});
+
+</script>

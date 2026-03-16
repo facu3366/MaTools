@@ -35,7 +35,8 @@ const BCRA_METRICS = [
 
 let BCRA_BANKS = [];
 let bcraBarChart = null,
-  bcraPieChart = null;
+  bcraPieChart = null,
+  bcraConcentrationChart = null;
 
 const bcraState = {
   metric: "activos",
@@ -73,6 +74,13 @@ function bcraFmtB(n) {
 
   return n.toLocaleString("es-AR");
 }
+function bcraFmtN(n) {
+  if (n == null || isNaN(n)) return "—";
+
+  return n.toLocaleString("es-AR", {
+    maximumFractionDigits: 1,
+  });
+}
 function bcraML() {
   return BCRA_METRICS.find((m) => m.k === bcraState.metric).l;
 }
@@ -96,15 +104,54 @@ async function bcraFetchData() {
   const el = document.getElementById("bcra-kpis");
   if (el)
     el.innerHTML = `
-  <div style="width:100%;text-align:center;padding:32px;color:var(--muted)">
-    <div class="spinner"></div>
-    <p style="margin-top:12px;font-family:'DM Mono',monospace;font-size:11px">
-      SCRAPEANDO BCRA...
-    </p>
-    <p style="font-size:11px;margin-top:4px">
-      Puede tardar 10-15 seg
-    </p>
+<div style="
+width:100%;
+display:flex;
+justify-content:center;
+align-items:center;
+padding:70px 0;
+">
+
+  <div style="
+  background:var(--cream);
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:40px 60px;
+  text-align:center;
+  box-shadow:0 6px 18px rgba(0,0,0,0.06);
+  min-width:340px;
+  ">
+
+    <div class="spinner" style="margin:auto"></div>
+
+    <div style="
+    margin-top:14px;
+    font-weight:600;
+    font-size:15px;
+    ">
+      Consultando datos del Banco Central
+    </div>
+
+    <div style="
+    margin-top:6px;
+    font-size:13px;
+    color:var(--muted);
+    ">
+      Scrapeando rankings del sistema financiero argentino
+    </div>
+
+    <div style="
+    margin-top:10px;
+    font-size:12px;
+    color:var(--muted);
+    font-family:'DM Mono',monospace;
+    ">
+      Esto puede tardar entre 10 y 15 segundos
+    </div>
+
   </div>
+
+</div>
 `;
   try {
     const res = await fetch(`${API}/bcra/bancos`);
@@ -349,7 +396,7 @@ function bcraRenderBar() {
           borderWidth: 1,
           titleColor: "#7a7060",
           bodyColor: "#0e0e0e",
-          callbacks: { label: (ctx) => bcraFmtN(ctx.raw) + " miles de pesos" },
+          callbacks: { label: (ctx) => bcraFmtB(ctx.raw) },
         },
       },
       scales: {
@@ -369,7 +416,9 @@ function bcraRenderBar() {
 function bcraRenderPie() {
   const a = bcraActive(),
     mk = bcraState.metric,
-    sorted = [...a].sort((x, y) => (y[mk] || 0) - (x[mk] || 0)),
+    sorted = [...a]
+      .sort((x, y) => (y[mk] || 0) - (x[mk] || 0))
+      .slice(0, bcraState.topN),
     total = sorted.reduce((s, b) => s + (b[mk] || 0), 0),
     top5 = sorted.slice(0, 5),
     rest = sorted.slice(5);
@@ -425,7 +474,7 @@ function bcraRenderPie() {
           bodyColor: "#0e0e0e",
           callbacks: {
             label: (ctx) =>
-              bcraFmtN(ctx.raw) + " (" + items[ctx.dataIndex].pct + "%)",
+              bcraFmtB(ctx.raw) + " (" + items[ctx.dataIndex].pct + "%)",
           },
         },
       },
@@ -475,10 +524,10 @@ function bcraRenderTable() {
   <td style="font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
     <span class="dot" style="background:${b.color}"></span>${b.short}
   </td>
-  <td class="r">${bcraFmtN(bcraConvert(b.activos))}</td>
-  <td class="r">${bcraFmtN(bcraConvert(b.depositos))}</td>
-  <td class="r">${bcraFmtN(bcraConvert(b.prestamos))}</td>
-  <td class="r">${bcraFmtN(bcraConvert(b.patrimonio))}</td>
+<td class="r">${bcraFmtB(bcraConvert(b.activos))}</td>
+<td class="r">${bcraFmtB(bcraConvert(b.depositos))}</td>
+<td class="r">${bcraFmtB(bcraConvert(b.prestamos))}</td>
+<td class="r">${bcraFmtB(bcraConvert(b.patrimonio))}</td>
 </tr>`,
     )
     .join("");
@@ -494,14 +543,54 @@ function bcraRenderTable() {
 function bcraRenderAll() {
   bcraRenderBadge();
   bcraRenderKPIs();
+  bcraRenderConcentration();
+  bcraRenderChips();
   bcraRenderBar();
   bcraRenderPie();
   bcraRenderLine();
+  bcraRenderScatter();
   bcraRenderRatios();
   bcraRenderTable();
   bcraInitTopN();
 }
+function bcraInitBankQuickActions() {
+  const search = document.getElementById("bcra-bank-search");
+  const btnAll = document.getElementById("bcra-select-all");
+  const btnClr = document.getElementById("bcra-clear-all");
 
+  if (search) {
+    search.oninput = () => {
+      bcraRenderChips(search.value || "");
+    };
+  }
+
+  if (btnAll) {
+    btnAll.onclick = () => {
+      bcraState.selected = new Set(BCRA_BANKS.map((b) => b.id));
+      bcraRenderAll();
+
+      if (search) {
+        bcraRenderChips(search.value || "");
+      }
+    };
+  }
+
+  if (btnClr) {
+    btnClr.onclick = () => {
+      if (BCRA_BANKS.length) {
+        bcraState.selected = new Set([BCRA_BANKS[0].id]);
+      } else {
+        bcraState.selected = new Set();
+      }
+
+      bcraRenderAll();
+
+      if (search) {
+        bcraRenderChips(search.value || "");
+      }
+    };
+  }
+}
 async function initBCRADashboard() {
   Chart.defaults.color = "#7a7060";
   Chart.defaults.borderColor = "#d4cfc4";
@@ -512,16 +601,16 @@ async function initBCRADashboard() {
   await bcraFetchData();
 
   bcraInitBankSelector();
+  bcraInitBankQuickActions();
   bcraInitTopN();
+  bcraInitTabs();
   bcraRenderAll();
 
-  // eventos de moneda
   document.getElementById("bcra-currency").onchange = (e) => {
     bcraState.currency = e.target.value;
     bcraRenderAll();
   };
 
-  // eventos de escala
   document.getElementById("bcra-scale").onchange = (e) => {
     bcraState.scale = e.target.value;
     bcraRenderAll();
@@ -564,11 +653,188 @@ function bcraConvert(v) {
 
   return value;
 }
+function bcraRenderConcentration() {
+  const a = bcraActive()
+    .sort((x, y) => (y[bcraState.metric] || 0) - (x[bcraState.metric] || 0))
+    .slice(0, bcraState.topN);
 
-function bcraFmtN(n) {
-  if (n == null || isNaN(n)) return "—";
+  const total = a.reduce((s, b) => s + (b[bcraState.metric] || 0), 0);
 
-  return n.toLocaleString("es-AR", {
-    maximumFractionDigits: 1,
+  let cum = 0;
+
+  const data = a.map((b) => {
+    cum += ((b[bcraState.metric] || 0) / total) * 100;
+    return Math.round(cum * 10) / 10;
+  });
+
+  const ctx = document.getElementById("bcra-chart-concentration");
+
+  if (!ctx) return;
+
+  if (bcraConcentrationChart) bcraConcentrationChart.destroy();
+
+  bcraConcentrationChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: a.map((b) => b.short),
+      datasets: [
+        {
+          data: data,
+          borderColor: "#b8860b",
+          backgroundColor: "#b8860b33",
+          tension: 0.3,
+          pointRadius: 3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: {
+          min: 0,
+          max: 100,
+          ticks: { callback: (v) => v + "%" },
+        },
+      },
+    },
   });
 }
+function bcraInitTabs() {
+  const tabs = document.querySelectorAll(".bcra-tab");
+
+  tabs.forEach((tab) => {
+    tab.onclick = () => {
+      // activar botón
+      tabs.forEach((t) => t.classList.remove("on"));
+      tab.classList.add("on");
+
+      // ocultar vistas
+      document.querySelectorAll(".bcra-view").forEach((v) => {
+        v.style.display = "none";
+      });
+
+      const view = tab.dataset.view;
+
+      const map = {
+        ranking: "bcra-view-ranking",
+        market: "bcra-view-market",
+        scatter: "bcra-view-scatter",
+        ratios: "bcra-view-ratios",
+      };
+
+      const target = document.getElementById(map[view]);
+
+      if (target) {
+        target.style.display = "";
+
+        if (view === "scatter") bcraRenderScatter();
+        if (view === "ratios") bcraRenderConcentration();
+      }
+    };
+  });
+}
+function bcraRenderChips(query = "") {
+  const row = document.getElementById("bcra-chip-row");
+  if (!row) return;
+
+  const q = (query || "").toLowerCase().trim();
+
+  const banksToShow = BCRA_BANKS.filter(
+    (b) =>
+      !q ||
+      (b.name || "").toLowerCase().includes(q) ||
+      (b.short || "").toLowerCase().includes(q),
+  );
+
+  row.innerHTML = banksToShow
+    .map((b) => {
+      const on = bcraState.selected.has(b.id);
+
+      return `
+        <div class="chip ${on ? "on" : ""}" data-id="${b.id}">
+          <div class="dot" style="background:${b.color}"></div>
+          ${b.short}
+        </div>
+      `;
+    })
+    .join("");
+
+  row.querySelectorAll(".chip").forEach((el) => {
+    el.onclick = () => {
+      const id = +el.dataset.id;
+
+      if (bcraState.selected.has(id)) {
+        if (bcraState.selected.size > 1) {
+          bcraState.selected.delete(id);
+        }
+      } else {
+        bcraState.selected.add(id);
+      }
+
+      bcraRenderAll();
+
+      const search = document.getElementById("bcra-bank-search");
+      bcraRenderChips(search ? search.value : "");
+    };
+  });
+}
+function bcraRenderScatter() {
+  const a = bcraActive()
+    .sort((x, y) => (y[bcraState.metric] || 0) - (x[bcraState.metric] || 0))
+    .slice(0, bcraState.topN);
+
+  const maxPat = Math.max(...a.map((b) => b.patrimonio || 1));
+
+  const ctx = document.getElementById("bcra-chart-scatter");
+
+  if (!ctx) return;
+
+  if (window.bcraScatterChart) window.bcraScatterChart.destroy();
+
+  window.bcraScatterChart = new Chart(ctx, {
+    type: "bubble",
+    data: {
+      datasets: a.map((b) => {
+        const ratio = b.depositos > 0 ? (b.prestamos / b.depositos) * 100 : 0;
+
+        const r = Math.max(
+          6,
+          Math.min(24, Math.sqrt((b.patrimonio || 100) / maxPat) * 24),
+        );
+
+        return {
+          label: b.short,
+          data: [{ x: bcraConvert(b[bcraState.metric]), y: ratio, r }],
+          backgroundColor: b.color + "99",
+          borderColor: b.color,
+          borderWidth: 1.5,
+        };
+      }),
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: bcraML(),
+          },
+        },
+        y: {
+          title: {
+            display: true,
+            text: "Préstamos / Depósitos %",
+          },
+        },
+      },
+    },
+  });
+}
+
+document.getElementById("bcra-loading-screen").style.display = "none";

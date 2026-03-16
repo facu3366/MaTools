@@ -963,3 +963,221 @@ font-family:'DM Mono', monospace;
    .bcra-footer { text-align:center; margin-top:28px; padding:16px 0; border-top:1px solid var(--line) }
    .bcra-footer p { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:.5px }
    .bcra-footer .brand { font-size:9px; color:#b0a890; margin-top:3px }
+   .dd-eyebrow{
+font-family:'DM Mono',monospace;
+font-size:10px;
+letter-spacing:3px;
+color:var(--gold);
+text-transform:uppercase;
+margin-bottom:6px
+}
+
+.dd-title{
+font-family:'Playfair Display',serif;
+font-size:24px;
+font-weight:700;
+line-height:1.2;
+margin-bottom:4px
+}
+
+.dd-title em{
+font-style:italic;
+color:var(--gold)
+}
+
+.dd-sub{
+font-size:12px;
+color:var(--muted);
+margin-bottom:20px
+}
+
+.kpi-row{
+display:flex;
+gap:10px;
+margin-bottom:18px;
+flex-wrap:wrap
+}
+
+.kpi{
+flex:1;
+background:var(--white);
+border:1px solid var(--line);
+padding:12px 14px;
+cursor:pointer;
+transition:all .15s
+}
+
+.kpi:hover{
+border-color:var(--gold-lt);
+transform:translateY(-1px)
+}
+
+.kpi.active{
+border-color:var(--gold);
+border-top:2px solid var(--gold);
+background:var(--cream)
+}
+
+.kpi-label{
+font-family:'DM Mono',monospace;
+font-size:9px;
+letter-spacing:1.5px;
+color:var(--muted);
+text-transform:uppercase
+}
+
+.kpi-value{
+font-family:'DM Mono',monospace;
+font-size:18px;
+font-weight:500
+}
+/* ─────────────────────────────
+   TABS DE VISUALIZACIÓN
+───────────────────────────── */
+
+.bcra-tabs{
+display:flex;
+gap:6px;
+margin:14px 0 18px 0;
+flex-wrap:wrap;
+}
+
+.bcra-tab{
+font-family:'DM Mono',monospace;
+font-size:10px;
+letter-spacing:.6px;
+padding:6px 12px;
+background:var(--paper);
+border:1px solid var(--line);
+cursor:pointer;
+transition:all .12s;
+text-transform:uppercase;
+color:var(--muted);
+}
+
+.bcra-tab:hover{
+border-color:var(--gold-lt);
+color:var(--ink);
+}
+
+.bcra-tab.on{
+background:var(--ink);
+color:var(--paper);
+border-color:var(--ink);
+}
+
+/* ─────────────────────────────
+   CONTENEDOR DE VISTAS
+───────────────────────────── */
+
+.bcra-view{
+width:100%;
+}
+
+/* ─────────────────────────────
+   AJUSTE GRÁFICOS
+───────────────────────────── */
+
+.bcra-chart-wrap{
+position:relative;
+width:100%;
+}
+
+.bcra-chart-wrap canvas{
+width:100% !important;
+height:100% !important;
+}
+.chip-row{
+display:flex;
+flex-wrap:wrap;
+gap:5px;
+margin-bottom:14px;
+}
+
+.chip{
+font-family:'DM Mono',monospace;
+font-size:10px;
+padding:3px 9px;
+border:1px solid var(--line);
+background:transparent;
+color:var(--muted);
+cursor:pointer;
+transition:all .12s;
+display:flex;
+align-items:center;
+gap:4px;
+}
+
+.chip.on{
+background:var(--cream);
+border-color:var(--gold);
+color:var(--ink);
+}
+
+.chip .dot{
+width:6px;
+height:6px;
+border-radius:50%;
+flex-shrink:0;
+}
+.bcra-bank-selector{
+margin-bottom:16px;
+padding:12px 14px;
+background:var(--wht);
+border:1px solid var(--line);
+}
+
+.bcra-bank-header{
+display:flex;
+gap:10px;
+align-items:center;
+justify-content:space-between;
+margin-bottom:10px;
+flex-wrap:wrap;
+}
+
+.bcra-bank-search{
+flex:1 1 260px;
+min-width:220px;
+height:34px;
+padding:0 10px;
+border:1px solid var(--line);
+background:var(--wht);
+color:var(--ink);
+font-family:'DM Sans',sans-serif;
+font-size:12px;
+outline:none;
+}
+
+.bcra-bank-search:focus{
+border-color:var(--gold);
+}
+
+.bcra-bank-actions{
+display:flex;
+gap:8px;
+align-items:center;
+}
+
+.bcra-bank-btn{
+height:34px;
+padding:0 12px;
+border:1px solid var(--line);
+background:var(--paper);
+color:var(--ink);
+font-family:'DM Mono',monospace;
+font-size:10px;
+letter-spacing:.5px;
+text-transform:uppercase;
+cursor:pointer;
+transition:all .12s;
+}
+
+.bcra-bank-btn:hover{
+border-color:var(--gold);
+background:var(--cream);
+}
+
+.bcra-bank-btn:active{
+transform:translateY(1px);
+}
