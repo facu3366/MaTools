@@ -78,6 +78,7 @@ def scrape_ranking(nombre: str, url: str) -> pd.DataFrame | None:
         fecha_texto = soup.find(string=lambda t: t and "actualizada" in t.lower())
         fecha = fecha_texto.strip() if fecha_texto else "N/A"
         rows = []
+        fecha_reporte = None
         for tr in table.find_all("tr")[1:]:
             tds = tr.find_all("td")
             if len(tds) >= 3:
@@ -90,6 +91,7 @@ def scrape_ranking(nombre: str, url: str) -> pd.DataFrame | None:
         if not rows:
             return None
         df = pd.DataFrame(rows)
+        df.attrs["fecha_reporte"] = fecha
         total = df[nombre].sum()
         df[f"{nombre} %"] = (df[nombre] / total * 100).round(2)
         print(f"  ✅ {nombre}: {len(df)} bancos | Total: {total/1e9:.1f}B ARS | {fecha}")
@@ -103,10 +105,15 @@ def get_bcra_bancos(top_n: int = None) -> dict:
     """Trae todos los rankings del BCRA y los consolida."""
     print("\n🏦 Scrapeando BCRA...")
     dfs = {}
+    fecha_reporte = None
     for nombre, url in URLS.items():
         df = scrape_ranking(nombre, url)
         if df is not None:
             dfs[nombre] = df
+            if not fecha_reporte:
+                fecha_texto = df.attrs.get("fecha_reporte")
+            if fecha_texto:
+                fecha_reporte = fecha_texto
         time.sleep(0.5)
     if not dfs:
         return {"error": "No se pudieron obtener datos del BCRA"}
@@ -131,6 +138,7 @@ def get_bcra_bancos(top_n: int = None) -> dict:
             df_display[f"{col} (B ARS)"] = (df_display[col] / 1e9).round(1)
     df_display = df_display.fillna(0)
     return {
+         "fecha_reporte": fecha_reporte,
         "fecha_scraping": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "fuente": "Banco Central de la República Argentina — bcra.gob.ar",
         "n_bancos": len(df_base),

@@ -1,0 +1,276 @@
+from io import BytesIO
+from datetime import datetime
+
+import pandas as pd
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
+from Backend.modules.bcra import scrape_bcra_bancos
+
+router = APIRouter()
+
+GREEN = "86BC25"
+LBLUE = "DCE6F1"
+GRAY = "F5F5F5"
+WHITE = "FFFFFF"
+
+thin = Border(
+    left=Side(style="thin"),
+    right=Side(style="thin"),
+    top=Side(style="thin"),
+    bottom=Side(style="thin"),
+)
+
+AL = Alignment(horizontal="left", vertical="center")
+AR = Alignment(horizontal="right", vertical="center")
+AC = Alignment(horizontal="center", vertical="center")
+
+
+def hdr_font():
+    return Font(name="Arial", bold=True, color="FFFFFF", size=9)
+
+
+def dat_font():
+    return Font(name="Arial", size=9)
+
+
+def bold_font():
+    return Font(name="Arial", bold=True, size=9)
+
+
+def title_font():
+    return Font(name="Arial", bold=True, size=13, color=GREEN)
+
+
+def sub_font():
+    return Font(name="Arial", size=9, italic=True, color="666666")
+
+
+def hdr_fill():
+    return PatternFill("solid", start_color=GREEN)
+
+
+def sum_fill():
+    return PatternFill("solid", start_color=LBLUE)
+
+
+def alt_fill(i):
+    return PatternFill("solid", start_color=GRAY if i % 2 == 0 else WHITE)
+
+
+def num(v):
+    if v is None or v == "":
+        return None
+    try:
+        return float(v)
+    except:
+        return None
+
+
+def build_bcra_dataframe():
+
+    data = scrape_bcra_bancos()
+
+    bancos = data.get("bancos", [])
+
+    fecha_reporte = data.get("fecha_reporte", "N/D")
+    fecha_export = datetime.now().strftime("%d/%m/%Y")
+
+    rows = []
+
+    for b in bancos:
+
+        activos = num(b.get("Activos"))
+        depositos = num(b.get("Depositos"))
+        prestamos = num(b.get("Prestamos"))
+        patrimonio = num(b.get("Patrimonio Neto"))
+
+        rows.append(
+            {
+                "Banco": b.get("Banco", "N/A"),
+                "Activos": activos,
+                "Depósitos": depositos,
+                "Préstamos": prestamos,
+                "Patrimonio Neto": patrimonio,
+            }
+        )
+
+    df = pd.DataFrame(rows)
+
+    if df.empty:
+        return df, fecha_reporte, fecha_export
+
+    df = df.sort_values("Activos", ascending=False).reset_index(drop=True)
+
+    return df, fecha_reporte, fecha_export
+
+
+def write_header_row(ws, row, cols):
+
+    for ci, (name, width) in enumerate(cols, 1):
+
+        cell = ws.cell(row=row, column=ci, value=name)
+
+        cell.font = hdr_font()
+        cell.fill = hdr_fill()
+        cell.alignment = AC
+        cell.border = thin
+
+        ws.column_dimensions[get_column_letter(ci)].width = width
+
+
+def write_data_row(ws, row_data, cols, excel_row):
+
+    fill = alt_fill(excel_row)
+
+    for ci, key in enumerate(cols, 1):
+
+        val = row_data.get(key)
+
+        cell = ws.cell(row=excel_row, column=ci, value=val)
+
+        cell.font = dat_font()
+        cell.fill = fill
+        cell.border = thin
+
+        if ci > 1:
+            cell.alignment = AR
+            cell.number_format = '#,##0.0'
+        else:
+            cell.alignment = AL
+
+
+def add_summary_rows(ws, data_start, last_row):
+
+    summary_start = last_row + 2
+
+    ws.cell(summary_start, 1, "Mediana").font = bold_font()
+    ws.cell(summary_start + 1, 1, "Promedio").font = bold_font()
+
+    ws.cell(summary_start, 1).fill = sum_fill()
+    ws.cell(summary_start + 1, 1).fill = sum_fill()
+
+    for col in range(2, 6):
+
+        col_letter = get_column_letter(col)
+
+        med = ws.cell(
+            summary_start,
+            col,
+            f"=MEDIAN({col_letter}{data_start}:{col_letter}{last_row})",
+        )
+
+        avg = ws.cell(
+            summary_start + 1,
+            col,
+            f"=AVERAGE({col_letter}{data_start}:{col_letter}{last_row})",
+        )
+
+        for c in [med, avg]:
+            c.font = bold_font()
+            c.fill = sum_fill()
+            c.border = thin
+            c.alignment = AR
+            c.number_format = '#,##0.0'
+
+
+def generate_excel(df, fecha_reporte, fecha_export):
+
+    wb = Workbook()
+
+    cols = [
+        ("Banco", 34),
+        ("Activos", 18),
+        ("Depósitos", 18),
+        ("Préstamos", 18),
+        ("Patrimonio Neto", 20),
+    ]
+
+    # Hoja 1
+    ws = wb.active
+    ws.title = "BCRA Ranking"
+
+    ws.merge_cells("A1:E1")
+    ws["A1"] = "BCRA Intelligence — Sistema Financiero Argentino"
+    ws["A1"].font = title_font()
+
+    ws.merge_cells("A2:E2")
+    ws["A2"] = f"Reporte BCRA: {fecha_reporte} | Exportado: {fecha_export}"
+    ws["A2"].font = sub_font()
+
+    write_header_row(ws, 4, cols)
+
+    start = 5
+
+    for i, (_, r) in enumerate(df.iterrows(), start):
+
+        write_data_row(
+            ws,
+            r.to_dict(),
+            [c[0] for c in cols],
+            i,
+        )
+
+    last_row = start + len(df) - 1
+
+    add_summary_rows(ws, start, last_row)
+
+    # Hoja 2
+    ws2 = wb.create_sheet("Top 10")
+
+    ws2.merge_cells("A1:E1")
+    ws2["A1"] = "Top 10 por Activos"
+    ws2["A1"].font = title_font()
+
+    ws2.merge_cells("A2:E2")
+    ws2["A2"] = f"Reporte BCRA: {fecha_reporte}"
+    ws2["A2"].font = sub_font()
+
+    write_header_row(ws2, 4, cols)
+
+    df10 = df.head(10)
+
+    start = 5
+
+    for i, (_, r) in enumerate(df10.iterrows(), start):
+
+        write_data_row(
+            ws2,
+            r.to_dict(),
+            [c[0] for c in cols],
+            i,
+        )
+
+    last_row = start + len(df10) - 1
+
+    add_summary_rows(ws2, start, last_row)
+
+    buffer = BytesIO()
+
+    wb.save(buffer)
+
+    buffer.seek(0)
+
+    return buffer
+
+
+@router.get("/bcra/export-excel")
+def export_bcra_excel():
+
+    df, fecha_reporte, fecha_export = build_bcra_dataframe()
+
+    if df.empty:
+        return {"error": "Sin datos para exportar"}
+
+    buffer = generate_excel(df, fecha_reporte, fecha_export)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": "attachment; filename=bcra_ranking.xlsx"
+        },
+    )

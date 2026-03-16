@@ -41,7 +41,7 @@ from Backend.modules.comps import router as comps_router
 from Backend.modules.empresas import router as empresas_router
 from Backend.modules.financials import router as financials_router
 from Backend.modules.precedents import router as precedents_router
-
+from Backend.modules.bcra_export import router as bcra_export_router
 # opcional si usás ask_ai
 try:
     from Backend.modules.ask_ai import router as ask_router
@@ -87,7 +87,7 @@ app.include_router(comps_router)
 app.include_router(financials_router)
 app.include_router(precedents_router)
 app.include_router(bcra_router)
-
+app.include_router(bcra_export_router)
 if HAS_ASK:
     app.include_router(ask_router)
 
@@ -111,41 +111,7 @@ async def yf_search(q: str):
 
     return res.json()
 
-# ─────────────────────────────────────────────
-# EXPORT COMPS EXCEL PROFESIONAL
-# ─────────────────────────────────────────────
 
-@app.get("/comps/export-excel")
-def export_comps_excel(sector: str = "Health Insurance"):
-
-    tickers = get_universe_by_sector(sector)
-
-    resultados = []
-
-    for ticker in tickers:
-        data = get_financials(ticker)
-
-        if data and data.get("Revenue ($mm)"):
-            resultados.append(data)
-
-    if not resultados:
-        return {"error": "Sin datos"}
-
-    df = pd.DataFrame(resultados)
-
-    buffer = io.BytesIO()
-
-    _generar_excel_buffer(df, buffer)
-
-    buffer.seek(0)
-
-    return StreamingResponse(
-        buffer,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": "attachment; filename=comps.xlsx"
-        }
-    )
 # ─────────────────────────────────────────────
 # HEALTH CHECK
 # ─────────────────────────────────────────────
@@ -172,7 +138,7 @@ def health_check():
 
             "GET /bcra/bancos": "Sistema financiero argentino"
         }
-    }
+    } 
 
 
 # ─────────────────────────────────────────────

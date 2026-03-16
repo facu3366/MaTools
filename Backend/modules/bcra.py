@@ -1,5 +1,5 @@
 """
-🏦 BCRA MODULE
+BCRA MODULE
 
 Endpoints relacionados con el sistema financiero argentino
 usando datos del Banco Central de la República Argentina.
@@ -25,13 +25,12 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from scrapers.bcra_scraper import get_bcra_bancos
 
 
-# Router de FastAPI
 router = APIRouter()
 
 
-# ─────────────────────────────────────────────
-# ENDPOINT
-# ─────────────────────────────────────────────
+def scrape_bcra_bancos(top_n: Optional[int] = None):
+    return get_bcra_bancos(top_n=top_n)
+
 
 @router.get("/bcra/bancos")
 def bcra_bancos(top_n: Optional[int] = None):
@@ -47,11 +46,10 @@ def bcra_bancos(top_n: Optional[int] = None):
         /bcra/bancos?top_n=10
     """
 
-    print(f"\n🏦 BCRA request — top_n={top_n}")
+    print(f"\nBCRA request — top_n={top_n}")
 
     try:
-
-        resultado = get_bcra_bancos(top_n=top_n)
+        resultado = scrape_bcra_bancos(top_n=top_n)
 
         if "error" in resultado:
             raise HTTPException(
@@ -62,7 +60,6 @@ def bcra_bancos(top_n: Optional[int] = None):
         return resultado
 
     except Exception as e:
-
         raise HTTPException(
             status_code=500,
             detail=f"Error obteniendo datos del BCRA: {str(e)}"
