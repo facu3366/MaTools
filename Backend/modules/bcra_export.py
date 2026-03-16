@@ -274,3 +274,102 @@ def export_bcra_excel():
             "Content-Disposition": "attachment; filename=bcra_ranking.xlsx"
         },
     )
+
+from pptx import Presentation
+from pptx.util import Inches, Pt
+
+
+def generate_powerpoint(df, fecha_reporte, fecha_export):
+
+    prs = Presentation()
+
+    # Slide 1 - Título
+    slide_layout = prs.slide_layouts[0]
+    slide = prs.slides.add_slide(slide_layout)
+
+    slide.shapes.title.text = "BCRA Intelligence"
+    slide.placeholders[1].text = f"Sistema Financiero Argentino\nReporte: {fecha_reporte}"
+
+    # Slide 2 - Tabla ranking
+    slide_layout = prs.slide_layouts[5]
+    slide = prs.slides.add_slide(slide_layout)
+
+    title = slide.shapes.title
+    title.text = "Ranking Bancos por Activos"
+
+    rows = len(df) + 1
+    cols = 5
+
+    table = slide.shapes.add_table(
+        rows,
+        cols,
+        Inches(0.5),
+        Inches(1.5),
+        Inches(9),
+        Inches(5),
+    ).table
+
+    headers = ["Banco", "Activos", "Depósitos", "Préstamos", "Patrimonio"]
+
+    for i, h in enumerate(headers):
+        table.cell(0, i).text = h
+
+    for r, (_, row) in enumerate(df.iterrows(), 1):
+
+        table.cell(r, 0).text = str(row["Banco"])
+        table.cell(r, 1).text = f'{row["Activos"]:,.1f}'
+        table.cell(r, 2).text = f'{row["Depósitos"]:,.1f}'
+        table.cell(r, 3).text = f'{row["Préstamos"]:,.1f}'
+        table.cell(r, 4).text = f'{row["Patrimonio Neto"]:,.1f}'
+
+    # Slide 3 - Top 10
+    slide = prs.slides.add_slide(prs.slide_layouts[5])
+    slide.shapes.title.text = "Top 10 Bancos"
+
+    df10 = df.head(10)
+
+    rows = len(df10) + 1
+
+    table = slide.shapes.add_table(
+        rows,
+        cols,
+        Inches(0.5),
+        Inches(1.5),
+        Inches(9),
+        Inches(5),
+    ).table
+
+    for i, h in enumerate(headers):
+        table.cell(0, i).text = h
+
+    for r, (_, row) in enumerate(df10.iterrows(), 1):
+
+        table.cell(r, 0).text = str(row["Banco"])
+        table.cell(r, 1).text = f'{row["Activos"]:,.1f}'
+        table.cell(r, 2).text = f'{row["Depósitos"]:,.1f}'
+        table.cell(r, 3).text = f'{row["Préstamos"]:,.1f}'
+        table.cell(r, 4).text = f'{row["Patrimonio Neto"]:,.1f}'
+
+    buffer = BytesIO()
+    prs.save(buffer)
+    buffer.seek(0)
+
+    return buffer
+
+@router.get("/bcra/export-ppt")
+def export_bcra_ppt():
+
+    df, fecha_reporte, fecha_export = build_bcra_dataframe()
+
+    if df.empty:
+        return {"error": "Sin datos"}
+
+    buffer = generate_powerpoint(df, fecha_reporte, fecha_export)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={
+            "Content-Disposition": "attachment; filename=bcra_ranking.pptx"
+        },
+    )
