@@ -1,66 +1,41 @@
-"""
-BCRA MODULE
-
-Endpoints relacionados con el sistema financiero argentino
-usando datos del Banco Central de la República Argentina.
-
-Endpoint disponible:
-
-GET /bcra/bancos
-    → Ranking de bancos por:
-        - Activos
-        - Depósitos
-        - Patrimonio Neto
-        - Préstamos
-"""
-
-from fastapi import APIRouter, HTTPException
-from typing import Optional
-import os
-import sys
-
-# permitir importar desde carpeta raíz del proyecto
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
-from scrapers.bcra_scraper import get_bcra_bancos
-
+from fastapi import APIRouter
+from Backend.scrapers.bcra_scraper import get_bcra_bancos
+from Backend.db import get_bcra_data, save_bcra_data
 
 router = APIRouter()
 
 
-def scrape_bcra_bancos(top_n: Optional[int] = None):
-    return get_bcra_bancos(top_n=top_n)
-
-
 @router.get("/bcra/bancos")
-def bcra_bancos(top_n: Optional[int] = None):
-    """
-    Devuelve ranking del sistema financiero argentino
-    usando datos públicos del BCRA.
+def bcra_bancos():
 
-    Parámetros:
-        top_n → limita cantidad de bancos
+    data = get_bcra_data()
 
-    Ejemplo:
-        /bcra/bancos
-        /bcra/bancos?top_n=10
-    """
+    # Si hay data → devolver DB
+    if data:
+        return {
+            "source": "db",
+            "bancos": data
+        }
 
-    print(f"\nBCRA request — top_n={top_n}")
+    # Si no hay → scrapea + guarda
+    result = get_bcra_bancos()
 
-    try:
-        resultado = scrape_bcra_bancos(top_n=top_n)
+    if "error" not in result:
+        save_bcra_data(result)
 
-        if "error" in resultado:
-            raise HTTPException(
-                status_code=500,
-                detail=resultado["error"]
-            )
+    return result
 
-        return resultado
+@router.post("/bcra/refresh")
+def refresh_bcra():
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error obteniendo datos del BCRA: {str(e)}"
-        )
+    result = get_bcra_bancos()
+
+    if "error" in result:
+        return result
+
+    save_bcra_data(result)
+
+    return {
+        "status": "ok",
+        "msg": "Datos actualizados"
+    }

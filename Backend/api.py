@@ -9,6 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
+import pathlib
+
+from Backend.db import init_db
 
 # ─────────────────────────────────────────────
 # IMPORTAR ROUTERS
@@ -29,6 +32,20 @@ except Exception:
 
 
 # ─────────────────────────────────────────────
+# PATHS ROBUSTOS (CLAVE)
+# ─────────────────────────────────────────────
+
+BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
+
+FRONT_DIR = BASE_DIR / "FrontEnd"
+HTML_DIR = FRONT_DIR / "Html"
+CSS_DIR = FRONT_DIR / "css"
+JS_DIR = FRONT_DIR / "js"
+COMP_DIR = HTML_DIR / "Components"
+DATA_DIR = FRONT_DIR / "Data"
+
+
+# ─────────────────────────────────────────────
 # APP
 # ─────────────────────────────────────────────
 
@@ -37,6 +54,13 @@ app = FastAPI(
     description="Motor financiero universal",
     version="3.0.0"
 )
+
+
+# ─────────────────────────────────────────────
+# INIT DB (AL ARRANCAR)
+# ─────────────────────────────────────────────
+
+init_db()
 
 
 # ─────────────────────────────────────────────
@@ -53,7 +77,7 @@ app.add_middleware(
 
 
 # ─────────────────────────────────────────────
-# OPTIONS (CORS)
+# OPTIONS (CORS FIX)
 # ─────────────────────────────────────────────
 
 @app.options("/{full_path:path}")
@@ -67,7 +91,7 @@ async def options_comps(request: Request):
 
 
 # ─────────────────────────────────────────────
-# REGISTRAR ROUTERS API
+# ROUTERS
 # ─────────────────────────────────────────────
 
 app.include_router(empresas_router)
@@ -82,7 +106,7 @@ if HAS_ASK:
 
 
 # ─────────────────────────────────────────────
-# YAHOO SEARCH PROXY
+# YAHOO FINANCE PROXY
 # ─────────────────────────────────────────────
 
 @app.get("/yf/search")
@@ -117,11 +141,33 @@ def health_check():
 
 @app.get("/")
 def root():
-    return FileResponse("FrontEnd/Html/index.html")
+    return FileResponse(HTML_DIR / "index.html")
 
 
-# ESTÁTICOS (AL FINAL)
-app.mount("/css", StaticFiles(directory="FrontEnd/css"), name="css")
-app.mount("/js", StaticFiles(directory="FrontEnd/js"), name="js")
-app.mount("/components", StaticFiles(directory="FrontEnd/Html/Components"), name="components")
-app.mount("/data", StaticFiles(directory="FrontEnd/Data"), name="data")
+# favicon opcional (evita warning)
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status_code=204)
+
+
+# ─────────────────────────────────────────────
+# STATIC FILES
+# ─────────────────────────────────────────────
+
+app.mount("/css", StaticFiles(directory=CSS_DIR), name="css")
+app.mount("/js", StaticFiles(directory=JS_DIR), name="js")
+app.mount("/components", StaticFiles(directory=COMP_DIR), name="components")
+app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
+
+
+# ─────────────────────────────────────────────
+# (OPCIONAL) SCHEDULER BCRA
+# ─────────────────────────────────────────────
+"""
+from apscheduler.schedulers.background import BackgroundScheduler
+from Backend.modules.bcra import scrape_and_store
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(scrape_and_store, "interval", hours=6)
+scheduler.start()
+"""

@@ -838,7 +838,7 @@ function bcraRenderScatter() {
 }
 async function exportBcraExcel() {
   try {
-    const res = await fetch("http://localhost:8000/bcra/export-excel");
+    const res = await fetch(`${API}/bcra/export-excel`);
 
     if (!res.ok) {
       const text = await res.text();
