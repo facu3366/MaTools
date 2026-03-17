@@ -61,7 +61,6 @@ app = FastAPI(
     description="Motor financiero universal",
     version="3.0.0"
 )
-app.mount("/", StaticFiles(directory="FrontEnd", html=True), name="frontend")
 
 
 app.add_middleware(
@@ -94,6 +93,7 @@ app.include_router(bcra_router)
 app.include_router(bcra_export_router)
 if HAS_ASK:
     app.include_router(ask_router)
+app.mount("/", StaticFiles(directory="FrontEnd", html=True), name="frontend")
 
 
 # ─────────────────────────────────────────────
@@ -138,13 +138,3 @@ def health_check():
         }
     }
 
-# ─────────────────────────────────────────────
-# SERVIR FRONTEND
-# ─────────────────────────────────────────────
-
-@app.get("/app", response_class=HTMLResponse)
-def serve_app():
-
-    html = pathlib.Path("index.html").read_text(encoding="utf-8")
-
-    return HTMLResponse(content=html)
