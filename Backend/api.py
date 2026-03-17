@@ -61,10 +61,9 @@ app = FastAPI(
     description="Motor financiero universal",
     version="3.0.0"
 )
-app.mount("/static", StaticFiles(directory="FrontEnd"), name="static")
-@app.get("/")
-def home():
-    return FileResponse("FrontEnd/Html/index.html")
+app.mount("/", StaticFiles(directory="FrontEnd", html=True), name="frontend")
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -121,30 +120,23 @@ async def yf_search(q: str):
 # HEALTH CHECK
 # ─────────────────────────────────────────────
 
-@app.get("/")
+@app.get("/api")
 def health_check():
-
     return {
         "status": "✅ DealDesk API funcionando",
         "version": "3.0.0",
         "endpoints": {
-
             "GET  /api/empresas": "Catálogo de empresas",
             "GET  /yf/search": "Buscar empresas (Yahoo proxy)",
-
             "POST /comps": "Comparable Companies",
             "POST /comps/excel": "Descargar Excel",
-
             "POST /financials": "Financial data",
             "POST /financials/wacc": "Calcular WACC",
             "POST /financials/sector": "Sector analysis",
-
             "POST /precedents": "Precedent transactions",
-
             "GET /bcra/bancos": "Sistema financiero argentino"
         }
-    } 
-
+    }
 
 # ─────────────────────────────────────────────
 # SERVIR FRONTEND
