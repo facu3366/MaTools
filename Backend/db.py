@@ -1,11 +1,11 @@
-import sqlite3
+import psycopg2
+import os
 from datetime import datetime
 
-DB_PATH = "dealdesk.db"
 
-
+# conexión a postgres usando variable de railway
 def get_connection():
-    return sqlite3.connect(DB_PATH)
+    return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 
 def init_db():
@@ -15,7 +15,7 @@ def init_db():
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS bcra_bancos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         banco TEXT,
         activos REAL,
         depositos REAL,
@@ -39,6 +39,7 @@ def save_bcra_data(data):
     conn = get_connection()
     cursor = conn.cursor()
 
+    # limpio tabla antes de insertar (como ya hacías)
     cursor.execute("DELETE FROM bcra_bancos")
 
     for b in data["bancos"]:
@@ -53,7 +54,7 @@ def save_bcra_data(data):
             fecha_reporte,
             fecha_scraping
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             b.get("Banco"),
             b.get("Activos"),
