@@ -93,8 +93,7 @@ app.include_router(bcra_router)
 app.include_router(bcra_export_router)
 if HAS_ASK:
     app.include_router(ask_router)
-app.mount("/", StaticFiles(directory="FrontEnd", html=True), name="frontend")
-
+app.mount("/", StaticFiles(directory="FrontEnd/Html", html=True), name="frontend")
 
 # ─────────────────────────────────────────────
 # YAHOO SEARCH PROXY
