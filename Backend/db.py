@@ -83,15 +83,15 @@ def get_bcra_data():
 
     conn.close()
 
-return [
-    {
-        "Banco": r[1],
-        "Activos": r[2],
-        "Depositos": r[3],
-        "Patrimonio Neto": r[4],
-        "Prestamos": r[5],
-        "fecha_reporte": r[6],
-        "fecha_scraping": r[7]
-    }
-    for r in rows
-]
+    return [
+        {
+            "Banco": r[1],
+            "Activos": r[2],
+            "Depositos": r[3],
+            "Patrimonio Neto": r[4],
+            "Prestamos": r[5],
+            "fecha_reporte": r[6],
+            "fecha_scraping": r[7]
+        }
+        for r in rows
+    ]
