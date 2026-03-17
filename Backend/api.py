@@ -93,8 +93,14 @@ app.include_router(bcra_router)
 app.include_router(bcra_export_router)
 if HAS_ASK:
     app.include_router(ask_router)
-app.mount("/", StaticFiles(directory="FrontEnd/Html", html=True), name="frontend")
+app.mount("/css", StaticFiles(directory="FrontEnd/css"), name="css")
+app.mount("/js", StaticFiles(directory="FrontEnd/js"), name="js")
+app.mount("/components", StaticFiles(directory="FrontEnd/Components"), name="components")
+app.mount("/data", StaticFiles(directory="FrontEnd/Data"), name="data")
 
+@app.get("/")
+def root():
+    return FileResponse("FrontEnd/Html/index.html")
 # ─────────────────────────────────────────────
 # YAHOO SEARCH PROXY
 # (usado por el buscador de empresas)
