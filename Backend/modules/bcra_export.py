@@ -8,7 +8,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-from Backend.modules.bcra import scrape_bcra_bancos
+from Backend.scrapers.bcra_scraper import get_bcra_bancos
 
 router = APIRouter()
 
@@ -72,7 +72,7 @@ def num(v):
 
 def build_bcra_dataframe():
 
-    data = scrape_bcra_bancos()
+    data = get_bcra_bancos()
 
     bancos = data.get("bancos", [])
 
