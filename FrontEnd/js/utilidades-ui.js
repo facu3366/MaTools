@@ -1,5 +1,4 @@
-const API = "https://web-production-f0fe2.up.railway.app";
-
+const API = "https://dealdesk.up.railway.app";
 // helpers visuales
 function fmt(v, d = 1) {
   return v == null
