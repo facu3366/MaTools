@@ -2,37 +2,13 @@
 🚀 DEALDESK API v3
 
 Backend principal del motor financiero DealDesk.
-
-Arquitectura modular:
-    modules/
-        bcra.py
-        comps.py
-        empresas.py
-        financials.py
-        precedents.py
-        ask_ai.py
-
-Run local:
-    uvicorn Backend.api:app --reload --port 8000
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-import pathlib
-import httpx
-import io
-import pandas as pd
-from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import os
-from Backend.comps_automatico import (
-    get_universe_by_sector,
-    get_financials,
-    _generar_excel_buffer,
-)
-from fastapi import Request, Response
+from fastapi.staticfiles import StaticFiles
+import httpx
 
 # ─────────────────────────────────────────────
 # IMPORTAR ROUTERS
@@ -44,7 +20,7 @@ from Backend.modules.empresas import router as empresas_router
 from Backend.modules.financials import router as financials_router
 from Backend.modules.precedents import router as precedents_router
 from Backend.modules.bcra_export import router as bcra_export_router
-# opcional si usás ask_ai
+
 try:
     from Backend.modules.ask_ai import router as ask_router
     HAS_ASK = True
@@ -63,6 +39,10 @@ app = FastAPI(
 )
 
 
+# ─────────────────────────────────────────────
+# CORS
+# ─────────────────────────────────────────────
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -72,17 +52,22 @@ app.add_middleware(
 )
 
 
+# ─────────────────────────────────────────────
+# OPTIONS (CORS)
+# ─────────────────────────────────────────────
+
 @app.options("/{full_path:path}")
 async def options_handler(request: Request, full_path: str):
     return Response(status_code=200)
-from fastapi import Request
-from fastapi.responses import Response
+
 
 @app.options("/comps")
 async def options_comps(request: Request):
     return Response(status_code=200)
+
+
 # ─────────────────────────────────────────────
-# REGISTRAR ROUTERS
+# REGISTRAR ROUTERS API
 # ─────────────────────────────────────────────
 
 app.include_router(empresas_router)
@@ -91,19 +76,14 @@ app.include_router(financials_router)
 app.include_router(precedents_router)
 app.include_router(bcra_router)
 app.include_router(bcra_export_router)
+
 if HAS_ASK:
     app.include_router(ask_router)
-app.mount("/css", StaticFiles(directory="FrontEnd/css"), name="css")
-app.mount("/js", StaticFiles(directory="FrontEnd/js"), name="js")
-app.mount("/components", StaticFiles(directory="FrontEnd/Html/Components"), name="components")
-app.mount("/data", StaticFiles(directory="FrontEnd/Data"), name="data")
 
 
 # ─────────────────────────────────────────────
 # YAHOO SEARCH PROXY
-# (usado por el buscador de empresas)
 # ─────────────────────────────────────────────
-import httpx
 
 @app.get("/yf/search")
 async def yf_search(q: str):
@@ -127,17 +107,21 @@ async def yf_search(q: str):
 def health_check():
     return {
         "status": "✅ DealDesk API funcionando",
-        "version": "3.0.0",
-        "endpoints": {
-            "GET  /api/empresas": "Catálogo de empresas",
-            "GET  /yf/search": "Buscar empresas (Yahoo proxy)",
-            "POST /comps": "Comparable Companies",
-            "POST /comps/excel": "Descargar Excel",
-            "POST /financials": "Financial data",
-            "POST /financials/wacc": "Calcular WACC",
-            "POST /financials/sector": "Sector analysis",
-            "POST /precedents": "Precedent transactions",
-            "GET /bcra/bancos": "Sistema financiero argentino"
-        }
+        "version": "3.0.0"
     }
 
+
+# ─────────────────────────────────────────────
+# SERVIR FRONTEND
+# ─────────────────────────────────────────────
+
+@app.get("/")
+def root():
+    return FileResponse("FrontEnd/Html/index.html")
+
+
+# ESTÁTICOS (AL FINAL)
+app.mount("/css", StaticFiles(directory="FrontEnd/css"), name="css")
+app.mount("/js", StaticFiles(directory="FrontEnd/js"), name="js")
+app.mount("/components", StaticFiles(directory="FrontEnd/Html/Components"), name="components")
+app.mount("/data", StaticFiles(directory="FrontEnd/Data"), name="data")
