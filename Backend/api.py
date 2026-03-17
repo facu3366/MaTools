@@ -24,7 +24,9 @@ import httpx
 import io
 import pandas as pd
 from fastapi.responses import StreamingResponse
-
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
 from Backend.comps_automatico import (
     get_universe_by_sector,
     get_financials,
@@ -59,7 +61,10 @@ app = FastAPI(
     description="Motor financiero universal",
     version="3.0.0"
 )
-
+app.mount("/static", StaticFiles(directory="FrontEnd"), name="static")
+@app.get("/")
+def home():
+    return FileResponse("FrontEnd/Html/index.html")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
