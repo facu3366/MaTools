@@ -1,6 +1,5 @@
 """
 🚀 DEALDESK API v3
-
 Backend principal del motor financiero DealDesk.
 """
 
@@ -24,6 +23,7 @@ from Backend.modules.financials import router as financials_router
 from Backend.modules.precedents import router as precedents_router
 from Backend.modules.bcra_export import router as bcra_export_router
 from Backend.modules.research import router as research_router
+
 try:
     from Backend.modules.ask_ai import router as ask_router
     HAS_ASK = True
@@ -32,7 +32,7 @@ except Exception:
 
 
 # ─────────────────────────────────────────────
-# PATHS ROBUSTOS (CLAVE)
+# PATHS ROBUSTOS
 # ─────────────────────────────────────────────
 
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
@@ -57,7 +57,7 @@ app = FastAPI(
 
 
 # ─────────────────────────────────────────────
-# INIT DB (AL ARRANCAR)
+# INIT DB
 # ─────────────────────────────────────────────
 
 init_db()
@@ -85,11 +85,6 @@ async def options_handler(request: Request, full_path: str):
     return Response(status_code=200)
 
 
-@app.options("/comps")
-async def options_comps(request: Request):
-    return Response(status_code=200)
-
-
 # ─────────────────────────────────────────────
 # ROUTERS
 # ─────────────────────────────────────────────
@@ -101,6 +96,7 @@ app.include_router(precedents_router)
 app.include_router(bcra_router)
 app.include_router(bcra_export_router)
 app.include_router(research_router)
+
 if HAS_ASK:
     app.include_router(ask_router)
 
@@ -144,7 +140,6 @@ def root():
     return FileResponse(HTML_DIR / "index.html")
 
 
-# favicon opcional (evita warning)
 @app.get("/favicon.ico")
 def favicon():
     return Response(status_code=204)
@@ -158,16 +153,3 @@ app.mount("/css", StaticFiles(directory=CSS_DIR), name="css")
 app.mount("/js", StaticFiles(directory=JS_DIR), name="js")
 app.mount("/components", StaticFiles(directory=COMP_DIR), name="components")
 app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
-
-
-# ─────────────────────────────────────────────
-# (OPCIONAL) SCHEDULER BCRA
-# ─────────────────────────────────────────────
-"""
-from apscheduler.schedulers.background import BackgroundScheduler
-from Backend.modules.bcra import scrape_and_store
-
-scheduler = BackgroundScheduler()
-scheduler.add_job(scrape_and_store, "interval", hours=6)
-scheduler.start()
-"""

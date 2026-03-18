@@ -1,15 +1,9 @@
 """
-🔬 EQUITY RESEARCH — Standalone API v2
-Prompts institucionales + Export PDF profesional.
-
-Correr:
-    $env:ANTHROPIC_API_KEY = "sk-ant-..."
-    uvicorn api:app --reload --port 8000
+🔬 EQUITY RESEARCH — Module (DealDesk)
 """
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import anthropic
 import json
@@ -24,18 +18,11 @@ from datetime import datetime
 
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
-app = FastAPI(title="DealDesk — Equity Research v2")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ESTE ES EL CAMBIO CLAVE
+router = APIRouter()
 
 # Store last research results for PDF export
 research_cache = {}
-
 
 # ─────────────────────────────────────────────
 # MODELS
@@ -460,7 +447,7 @@ def run_research_phase(request: ResearchRequest):
 # PDF EXPORT
 # ─────────────────────────────────────────────
 
-@app.post("/research/pdf")
+@router.post("/research/pdf")
 def export_research_pdf(request: PDFRequest):
     """Genera PDF profesional del research completo."""
     ticker = request.ticker.upper()
@@ -685,10 +672,10 @@ def export_research_pdf(request: PDFRequest):
 # EXCEL DCF EXPORT
 # ─────────────────────────────────────────────
 
-@app.post("/research/excel")
+@router.post("/research/excel")
 def export_dcf_excel(request: PDFRequest):
     """Genera Excel DCF con fórmulas vivas."""
-    from dcf_excel import generate_dcf_excel
+    from Backend.modules.dcf_excel import generate_dcf_excel
 
     ticker = request.ticker.upper()
     print(f"\n📊 Excel DCF export → {ticker}")
@@ -707,15 +694,3 @@ def export_dcf_excel(request: PDFRequest):
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
-
-# ─────────────────────────────────────────────
-# SERVE FRONTEND
-# ─────────────────────────────────────────────
-
-@app.get("/")
-def serve_index():
-    return FileResponse("index.html")
-
-@app.get("/health")
-def health():
-    return {"status": "✅ Equity Research API v2", "key_set": bool(ANTHROPIC_KEY)}
