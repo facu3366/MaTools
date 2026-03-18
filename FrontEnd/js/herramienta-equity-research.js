@@ -318,7 +318,11 @@ async function runResearch() {
     badge.textContent = "COMPLETADO";
     badge.classList.add("complete");
   }
-
+  const pdfContainer = document.getElementById("pdf-export-container");
+  if (pdfContainer) {
+    pdfContainer.style.display = "flex";
+    pdfContainer.dataset.ticker = ticker;
+  }
   btn.disabled = false;
 }
 
@@ -329,6 +333,138 @@ function updateTime() {
       minute: "2-digit",
     });
 }
+// ─────────────────────────────────────────────
+// CLOSE AUTOCOMPLETE ON OUTSIDE CLICK
+// ─────────────────────────────────────────────
+
+document.addEventListener("click", (e) => {
+  if (
+    !e.target.closest("#research-empresa") &&
+    !e.target.closest("#research-suggestions")
+  ) {
+    const box = document.getElementById("research-suggestions");
+    if (box) box.style.display = "none";
+  }
+});
+
+// ─────────────────────────────────────────────
+// EXPORT PDF
+// ─────────────────────────────────────────────
+
+async function exportPDF() {
+  const container = document.getElementById("pdf-export-container");
+  const ticker = container?.dataset?.ticker;
+
+  if (!ticker) {
+    alert("Corré el análisis primero");
+    return;
+  }
+
+  const btn = document.getElementById("btn-pdf");
+  const originalText = btn.textContent;
+
+  btn.textContent = "GENERANDO PDF...";
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${RESEARCH_API}/research/pdf`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ticker }),
+    });
+
+    if (!res.ok) {
+      const err = await res
+        .json()
+        .catch(() => ({ detail: "Error generando PDF" }));
+      throw new Error(err.detail || "Error generando PDF");
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Research_${ticker}_${new Date()
+      .toISOString()
+      .slice(0, 10)}.pdf`;
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    alert(`Error: ${err.message}`);
+  }
+
+  btn.textContent = originalText;
+  btn.disabled = false;
+}
+
+// ─────────────────────────────────────────────
+// EXPORT EXCEL
+// ─────────────────────────────────────────────
+
+async function exportExcel() {
+  const container = document.getElementById("pdf-export-container");
+  const ticker = container?.dataset?.ticker;
+
+  if (!ticker) {
+    alert("Corré el análisis primero");
+    return;
+  }
+
+  const btn = document.getElementById("btn-excel");
+  const originalText = btn.textContent;
+
+  btn.textContent = "GENERANDO EXCEL...";
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${RESEARCH_API}/research/excel`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ticker }),
+    });
+
+    if (!res.ok) {
+      const err = await res
+        .json()
+        .catch(() => ({ detail: "Error generando Excel" }));
+      throw new Error(err.detail || "Error generando Excel");
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `DCF_${ticker}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    alert(`Error: ${err.message}`);
+  }
+
+  btn.textContent = originalText;
+  btn.disabled = false;
+}
+
+// ─────────────────────────────────────────────
+// EXPONER FUNCIONES AL HTML
+// ─────────────────────────────────────────────
+
+window.exportPDF = exportPDF;
+window.exportExcel = exportExcel;
 updateTime();
 setInterval(updateTime, 60000);
 window.researchShowSuggestions = researchShowSuggestions;
