@@ -1181,3 +1181,559 @@ background:var(--cream);
 .bcra-bank-btn:active{
 transform:translateY(1px);
 }
+   /* ─── RESET & VARIABLES ─── */
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --ink:     #111;
+      --paper:   #f8f7f4;
+      --white:   #fff;
+      --cream:   #faf8f0;
+      --line:    #e5e2dc;
+      --muted:   #888;
+      --gold:    #8b7535;
+      --gold-lt: #b89a2a;
+      --error:   #c1121f;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ─── LAYOUT ─── */
+    .shell {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ─── SIDEBAR ─── */
+    .sidebar {
+      width: 240px;
+      background: #111;
+      color: #ccc;
+      padding: 28px 20px;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 36px;
+    }
+
+    .logo-gem {
+      width: 20px;
+      height: 20px;
+      background: var(--gold);
+      transform: rotate(45deg);
+    }
+
+    .logo-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .logo-name span { color: var(--gold); }
+
+    .nav-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: #555;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-radius: 2px;
+      margin-bottom: 2px;
+    }
+
+    .nav-item:hover { background: #1a1a1a; color: #fff; }
+    .nav-item.active { background: #1a1a1a; color: var(--gold); }
+
+    .nav-icon { font-size: 14px; width: 18px; text-align: center; }
+
+    .nav-badge {
+      margin-left: auto;
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      padding: 2px 6px;
+      border-radius: 2px;
+      letter-spacing: 1px;
+    }
+    .nav-badge.live { background: rgba(45,106,79,0.3); color: #4caf50; }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding-top: 24px;
+      border-top: 1px solid #2a2a2a;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: #444;
+      line-height: 1.8;
+    }
+
+    /* ─── MAIN ─── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--line);
+      background: var(--paper);
+    }
+
+    .topbar-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .topbar-meta {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      text-align: right;
+      line-height: 1.8;
+    }
+
+    .content { padding: 36px 40px; }
+
+    /* ─── TOOL HEADER ─── */
+    .tool-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+
+    .tool-header-icon {
+      font-size: 22px;
+      margin-bottom: 6px;
+      color: var(--gold);
+    }
+
+    .tool-header-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .tool-header-desc {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ─── FORM ─── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+      max-width: 680px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    label {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    input {
+      background: var(--white);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      padding: 10px 14px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      outline: none;
+    }
+
+    input:focus { border-color: var(--gold); }
+
+    /* ─── BUTTON ─── */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--ink);
+      color: var(--paper);
+      border: none;
+      padding: 12px 28px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+
+    .btn-primary:hover { background: #222; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-pdf {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--gold);
+      color: var(--white);
+      border: none;
+      padding: 12px 28px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+
+    .btn-pdf:hover { background: var(--gold-lt); }
+    .btn-pdf:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-excel {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #1F3864;
+      color: #fff;
+      border: none;
+      padding: 12px 28px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+
+    .btn-excel:hover { background: #2B4F8C; }
+    .btn-excel:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      padding: 10px 18px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+
+    .btn-back:hover {
+      background: var(--cream);
+      border-color: var(--gold);
+      color: var(--ink);
+    }
+
+    /* ─── AUTOCOMPLETE ─── */
+    #research-suggestions {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-top: none;
+      z-index: 100;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    .suggestion-item {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s;
+    }
+
+    .suggestion-item:hover,
+    .suggestion-item.active {
+      background: var(--cream);
+    }
+
+    .sugg-ticker {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--gold);
+      min-width: 60px;
+    }
+
+    .sugg-name {
+      flex: 1;
+      color: var(--ink);
+    }
+
+    .sugg-exchange {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .suggestion-loading {
+      padding: 12px 14px;
+      font-size: 12px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ─── RESEARCH REPORT ─── */
+    .research-report {
+      margin-top: 28px;
+      border: 1px solid var(--line);
+      background: var(--white);
+    }
+
+    .research-report-header {
+      padding: 24px 28px;
+      border-bottom: 2px solid var(--gold);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      background: var(--cream);
+    }
+
+    .research-report-eyebrow {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .research-report-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .research-report-date {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .research-report-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      padding: 6px 14px;
+      background: rgba(184,134,11,0.15);
+      color: var(--gold);
+      border: 1px solid var(--gold);
+      white-space: nowrap;
+    }
+
+    .research-report-badge.complete {
+      background: rgba(45,106,79,0.15);
+      color: #2d6a4f;
+      border-color: #2d6a4f;
+    }
+
+    /* ─── PHASES ─── */
+    .research-phase { border-bottom: 1px solid var(--line); }
+    .research-phase:last-child { border-bottom: none; }
+
+    .phase-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 28px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .phase-header:hover { background: var(--paper); }
+
+    .phase-num {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--line);
+      min-width: 40px;
+      transition: color 0.3s;
+    }
+
+    .phase-num.active-num { color: var(--gold); }
+
+    .phase-meta { flex: 1; }
+
+    .phase-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .phase-subtitle {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+
+    .phase-status {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .phase-status.active { color: var(--gold); }
+    .phase-status.done { color: #2d6a4f; }
+    .phase-status.error { color: #c1121f; }
+
+    .phase-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .phase-dot.pending { background: var(--line); }
+    .phase-dot.loading { background: var(--gold); animation: pulseDot 1.2s ease-in-out infinite; }
+    .phase-dot.done { background: #2d6a4f; }
+    .phase-dot.error { background: #c1121f; }
+
+    @keyframes pulseDot {
+      0%, 100% { opacity:1; transform:scale(1); }
+      50% { opacity:0.4; transform:scale(0.7); }
+    }
+
+    .phase-body {
+      display: none;
+      padding: 0 28px 24px 84px;
+    }
+
+    .phase-loading {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 0;
+    }
+
+    .phase-spinner {
+      width: 18px; height: 18px;
+      border: 2px solid var(--line);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .phase-loading-text {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ─── PHASE CONTENT ─── */
+    .phase-content {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      line-height: 1.75;
+      color: var(--ink);
+    }
+
+    .phase-content p { margin-bottom: 12px; }
+
+    .phase-content .rc-h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 16px;
+      font-weight: 600;
+      margin: 20px 0 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .phase-content .rc-h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gold);
+      margin: 16px 0 6px;
+    }
+
+    .phase-content .rc-h4 {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin: 14px 0 6px;
+    }
+
+    .phase-content .rc-list {
+      list-style: none;
+      padding: 0;
+      margin: 8px 0 16px;
+    }
+
+    .phase-content .rc-list li {
+      position: relative;
+      padding-left: 16px;
+      margin-bottom: 6px;
+      font-size: 12.5px;
+      line-height: 1.6;
+    }
+
+    .phase-content .rc-list li::before {
+      content: "▸";
+      position: absolute;
+      left: 0;
+      color: var(--gold);
+    }
+
+    .phase-content strong { font-weight: 600; }
+
+    .phase-error {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #c1121f;
+      padding: 12px 0;
+    }

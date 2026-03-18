@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DealDesk — Equity Research</title>
+  <link rel="stylesheet" href="../css/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+</head>
+
+<body>
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-gem"></div>
+      <div class="logo-name">Deal<span>Desk</span></div>
+    </div>
+
+    <div class="nav-label">Herramientas</div>
+    <div class="nav-item active">
+      <span class="nav-icon">◆</span>
+      Equity Research
+      <span class="nav-badge live">LIVE</span>
+    </div>
+
+    <div class="sidebar-footer">
+      DealDesk v2.3 · Equity Research Module<br>
+      © 2026
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <div class="topbar">
+      <div class="topbar-title">Equity Research</div>
+      <div class="topbar-meta">
+        <span id="current-time"></span><br>
+        Buenos Aires, Argentina
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="tool-header">
+        <div>
+          <div class="tool-header-icon">◆</div>
+          <div class="tool-header-name">Equity Research</div>
+          <div class="tool-header-desc">
+            Análisis profundo en 4 fases — Fundamentos, Earnings, DCF y Tesis de Inversión
+          </div>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group" style="position:relative; grid-column: 1 / -1;">
+          <label>Empresa a Analizar</label>
+          <input type="text"
+            id="research-empresa"
+            placeholder="Ej: Apple, MSFT, Mercado Libre..."
+            oninput="researchShowSuggestions(this.value)"
+            onkeydown="researchHandleKey(event)"
+            autocomplete="off">
+          <div id="research-suggestions"></div>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btn-research" onclick="runResearch()">
+        ▶ INICIAR ANÁLISIS COMPLETO
+      </button>
+
+      <div id="pdf-export-container" style="display:none; margin-top:16px; align-items:center; gap:12px; flex-wrap:wrap;">
+        <button class="btn-pdf" id="btn-pdf" onclick="exportPDF()">
+          ⬇ EXPORTAR PDF
+        </button>
+        <button class="btn-excel" id="btn-excel" onclick="exportExcel()">
+          ⬇ EXPORTAR DCF EXCEL
+        </button>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">
+          PDF: research completo · Excel: modelo DCF con fórmulas vivas
+        </span>
+      </div>
+
+      <div id="result-research"></div>
+
+    </div>
+  </main>
+</div>
+<script src="../js/herramienta-equity-research.js"></script>
+
+</body>
+</html>
