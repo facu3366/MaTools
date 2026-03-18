@@ -7,7 +7,7 @@
 const RESEARCH_API =
   window.location.hostname === "localhost"
     ? "http://127.0.0.1:8000"
-    : "https://web-production-f0fe2.up.railway.app";
+    : window.location.origin;
 
 let researchSelectedTicker = null;
 let researchSearchTimeout = null;
