@@ -331,3 +331,7 @@ function updateTime() {
 }
 updateTime();
 setInterval(updateTime, 60000);
+window.researchShowSuggestions = researchShowSuggestions;
+window.researchHandleKey = researchHandleKey;
+window.researchSelectEmpresa = researchSelectEmpresa;
+window.runResearch = runResearch;
