@@ -449,224 +449,222 @@ def run_research_phase(request: ResearchRequest):
 
 @router.post("/research/pdf")
 def export_research_pdf(request: PDFRequest):
-    """Genera PDF profesional del research completo."""
-    ticker = request.ticker.upper()
+    import traceback
 
-    if ticker not in research_cache:
-        raise HTTPException(404, "No hay research en cache para este ticker. Corré el análisis primero.")
+    try:
+        ticker = request.ticker.upper()
 
-    cached = research_cache[ticker]
-    empresa = cached.get("empresa", ticker)
+        if ticker not in research_cache:
+            raise HTTPException(404, "No hay research en cache para este ticker. Corré el análisis primero.")
 
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.units import mm, cm
-    from reportlab.lib.colors import HexColor, black, white
-    from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-        PageBreak, HRFlowable
-    )
-    from reportlab.lib.fonts import addMapping
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
+        cached = research_cache[ticker]
+        empresa = cached.get("empresa", ticker)
 
-    # Colors
-    GOLD = HexColor("#8b7535")
-    GOLD_LIGHT = HexColor("#d4c48a")
-    INK = HexColor("#111111")
-    MUTED = HexColor("#666666")
-    LINE = HexColor("#e5e2dc")
-    CREAM = HexColor("#faf8f0")
-    GREEN = HexColor("#2d6a4f")
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm, cm
+        from reportlab.lib.colors import HexColor, black, white
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+            PageBreak, HRFlowable
+        )
+        from reportlab.lib.fonts import addMapping
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
 
-    buffer = io.BytesIO()
+        GOLD = HexColor("#8b7535")
+        GOLD_LIGHT = HexColor("#d4c48a")
+        INK = HexColor("#111111")
+        MUTED = HexColor("#666666")
+        LINE = HexColor("#e5e2dc")
+        CREAM = HexColor("#faf8f0")
+        GREEN = HexColor("#2d6a4f")
 
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=2.2*cm,
-        rightMargin=2.2*cm,
-        topMargin=2.5*cm,
-        bottomMargin=2*cm,
-    )
+        buffer = io.BytesIO()
 
-    # Styles
-    styles = {
-        "cover_eyebrow": ParagraphStyle(
-            "cover_eyebrow", fontName="Helvetica", fontSize=8,
-            leading=10, textColor=GOLD, spaceAfter=6,
-            tracking=3,
-        ),
-        "cover_title": ParagraphStyle(
-            "cover_title", fontName="Helvetica-Bold", fontSize=28,
-            leading=34, textColor=INK, spaceAfter=8,
-        ),
-        "cover_sub": ParagraphStyle(
-            "cover_sub", fontName="Helvetica", fontSize=10,
-            leading=14, textColor=MUTED, spaceAfter=4,
-        ),
-        "phase_title": ParagraphStyle(
-            "phase_title", fontName="Helvetica-Bold", fontSize=14,
-            leading=18, textColor=INK, spaceBefore=16, spaceAfter=8,
-        ),
-        "phase_subtitle": ParagraphStyle(
-            "phase_subtitle", fontName="Helvetica", fontSize=8,
-            leading=10, textColor=GOLD, spaceAfter=12,
-            tracking=2,
-        ),
-        "h2": ParagraphStyle(
-            "h2", fontName="Helvetica-Bold", fontSize=11,
-            leading=14, textColor=INK, spaceBefore=12, spaceAfter=6,
-        ),
-        "h3": ParagraphStyle(
-            "h3", fontName="Helvetica-Bold", fontSize=10,
-            leading=13, textColor=GOLD, spaceBefore=10, spaceAfter=4,
-        ),
-        "body": ParagraphStyle(
-            "body", fontName="Helvetica", fontSize=9,
-            leading=13, textColor=INK, spaceAfter=6,
-            alignment=TA_JUSTIFY,
-        ),
-        "bullet": ParagraphStyle(
-            "bullet", fontName="Helvetica", fontSize=9,
-            leading=13, textColor=INK, spaceAfter=3,
-            leftIndent=12, bulletIndent=0,
-        ),
-        "footer": ParagraphStyle(
-            "footer", fontName="Helvetica", fontSize=7,
-            leading=9, textColor=MUTED, alignment=TA_CENTER,
-        ),
-    }
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            leftMargin=2.2*cm,
+            rightMargin=2.2*cm,
+            topMargin=2.5*cm,
+            bottomMargin=2*cm,
+        )
 
-    story = []
+        styles = {
+            "cover_eyebrow": ParagraphStyle(
+                "cover_eyebrow", fontName="Helvetica", fontSize=8,
+                leading=10, textColor=GOLD, spaceAfter=6,
+            ),
+            "cover_title": ParagraphStyle(
+                "cover_title", fontName="Helvetica-Bold", fontSize=28,
+                leading=34, textColor=INK, spaceAfter=8,
+            ),
+            "cover_sub": ParagraphStyle(
+                "cover_sub", fontName="Helvetica", fontSize=10,
+                leading=14, textColor=MUTED, spaceAfter=4,
+            ),
+            "phase_title": ParagraphStyle(
+                "phase_title", fontName="Helvetica-Bold", fontSize=14,
+                leading=18, textColor=INK, spaceBefore=16, spaceAfter=8,
+            ),
+            "phase_subtitle": ParagraphStyle(
+                "phase_subtitle", fontName="Helvetica", fontSize=8,
+                leading=10, textColor=GOLD, spaceAfter=12,
+            ),
+            "h2": ParagraphStyle(
+                "h2", fontName="Helvetica-Bold", fontSize=11,
+                leading=14, textColor=INK, spaceBefore=12, spaceAfter=6,
+            ),
+            "h3": ParagraphStyle(
+                "h3", fontName="Helvetica-Bold", fontSize=10,
+                leading=13, textColor=GOLD, spaceBefore=10, spaceAfter=4,
+            ),
+            "body": ParagraphStyle(
+                "body", fontName="Helvetica", fontSize=9,
+                leading=13, textColor=INK, spaceAfter=6,
+                alignment=TA_JUSTIFY,
+            ),
+            "bullet": ParagraphStyle(
+                "bullet", fontName="Helvetica", fontSize=9,
+                leading=13, textColor=INK, spaceAfter=3,
+                leftIndent=12, bulletIndent=0,
+            ),
+            "footer": ParagraphStyle(
+                "footer", fontName="Helvetica", fontSize=7,
+                leading=9, textColor=MUTED, alignment=TA_CENTER,
+            ),
+        }
 
-    # ─── COVER PAGE ───
-    story.append(Spacer(1, 3*cm))
-    story.append(Paragraph("EQUITY RESEARCH  ·  DEEP ANALYSIS", styles["cover_eyebrow"]))
-    story.append(Paragraph(f"{empresa}", styles["cover_title"]))
-    story.append(Paragraph(f"Ticker: {ticker}", styles["cover_sub"]))
-    story.append(Paragraph(f"Fecha: {datetime.now().strftime('%d de %B de %Y')}", styles["cover_sub"]))
-    story.append(Paragraph("Analista: DealDesk M&A Intelligence", styles["cover_sub"]))
-    story.append(Spacer(1, 1*cm))
-    story.append(HRFlowable(width="100%", thickness=2, color=GOLD, spaceAfter=12))
-    story.append(Spacer(1, 0.5*cm))
+        story = []
 
-    # Key metrics summary box
-    data = cached.get("data", {})
-    metrics_data = [
-        ["Market Cap", "EV", "Revenue", "EBITDA", "P/E", "EV/EBITDA"],
-        [
-            f"${data.get('market_cap', 0) / 1e9:.1f}B" if data.get('market_cap') else "N/D",
-            f"${data.get('enterprise_value', 0) / 1e9:.1f}B" if data.get('enterprise_value') else "N/D",
-            f"${data.get('revenue', 0) / 1e6:,.0f}M" if data.get('revenue') else "N/D",
-            f"${data.get('ebitda', 0) / 1e6:,.0f}M" if data.get('ebitda') else "N/D",
-            f"{data.get('pe_trailing', 0):.1f}x" if data.get('pe_trailing') else "N/D",
-            f"{data.get('ev_ebitda', 0):.1f}x" if data.get('ev_ebitda') else "N/D",
-        ],
-    ]
+        story.append(Spacer(1, 3*cm))
+        story.append(Paragraph("EQUITY RESEARCH  ·  DEEP ANALYSIS", styles["cover_eyebrow"]))
+        story.append(Paragraph(f"{empresa}", styles["cover_title"]))
+        story.append(Paragraph(f"Ticker: {ticker}", styles["cover_sub"]))
+        story.append(Paragraph(f"Fecha: {datetime.now().strftime('%d de %B de %Y')}", styles["cover_sub"]))
+        story.append(Paragraph("Analista: DealDesk M&A Intelligence", styles["cover_sub"]))
+        story.append(Spacer(1, 1*cm))
+        story.append(HRFlowable(width="100%", thickness=2, color=GOLD, spaceAfter=12))
+        story.append(Spacer(1, 0.5*cm))
 
-    metrics_table = Table(metrics_data, colWidths=[doc.width/6]*6)
-    metrics_table.setStyle(TableStyle([
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica'),
-        ('FONTSIZE', (0,0), (-1,0), 7),
-        ('TEXTCOLOR', (0,0), (-1,0), MUTED),
-        ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,1), (-1,1), 10),
-        ('TEXTCOLOR', (0,1), (-1,1), INK),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('BOTTOMPADDING', (0,0), (-1,0), 4),
-        ('TOPPADDING', (0,1), (-1,1), 4),
-        ('LINEBELOW', (0,0), (-1,0), 0.5, GOLD),
-        ('LINEBELOW', (0,1), (-1,1), 0.5, LINE),
-    ]))
-    story.append(metrics_table)
-    story.append(PageBreak())
+        data = cached.get("data", {})
+        metrics_data = [
+            ["Market Cap", "EV", "Revenue", "EBITDA", "P/E", "EV/EBITDA"],
+            [
+                f"${data.get('market_cap', 0) / 1e9:.1f}B" if data.get('market_cap') else "N/D",
+                f"${data.get('enterprise_value', 0) / 1e9:.1f}B" if data.get('enterprise_value') else "N/D",
+                f"${data.get('revenue', 0) / 1e6:,.0f}M" if data.get('revenue') else "N/D",
+                f"${data.get('ebitda', 0) / 1e6:,.0f}M" if data.get('ebitda') else "N/D",
+                f"{data.get('pe_trailing', 0):.1f}x" if data.get('pe_trailing') else "N/D",
+                f"{data.get('ev_ebitda', 0):.1f}x" if data.get('ev_ebitda') else "N/D",
+            ],
+        ]
 
-    # ─── PHASES ───
-    phase_names = {
-        "fundamentals": ("01", "Análisis de Fundamentos", "10-K DEEP DIVE"),
-        "earnings": ("02", "Análisis de Tendencias", "EARNINGS HISTORY"),
-        "dcf": ("03", "Proyección Financiera", "DCF FRAMEWORK"),
-        "thesis": ("04", "Tesis de Inversión", "EQUITY RESEARCH NOTE"),
-    }
-
-    for fase_id in ["fundamentals", "earnings", "dcf", "thesis"]:
-        content = cached.get(fase_id)
-        if not content:
-            continue
-
-        num, title, subtitle = phase_names[fase_id]
-
-        story.append(Paragraph(f"FASE {num}  ·  {subtitle}", styles["phase_subtitle"]))
-        story.append(Paragraph(title, styles["phase_title"]))
-        story.append(HRFlowable(width="100%", thickness=1, color=GOLD, spaceAfter=12))
-
-        # Parse markdown content into reportlab elements
-        lines = content.split("\n")
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-
-            # Clean markdown bold
-            clean = line.replace("**", "").replace("*", "")
-
-            if line.startswith("## "):
-                story.append(Paragraph(clean[3:], styles["h2"]))
-            elif line.startswith("### "):
-                story.append(Paragraph(clean[4:], styles["h3"]))
-            elif line.startswith("# "):
-                story.append(Paragraph(clean[2:], styles["h2"]))
-            elif line.startswith("- ") or line.startswith("• "):
-                bullet_text = clean[2:]
-                story.append(Paragraph(f"▸ {bullet_text}", styles["bullet"]))
-            elif line.startswith("|") and "|" in line[1:]:
-                # Skip table rows for now (complex parsing)
-                # Render as monospace text
-                cells = [c.strip() for c in line.split("|") if c.strip() and c.strip() != "---" and not all(ch in "-:" for ch in c.strip())]
-                if cells and not all(c.startswith("-") for c in cells):
-                    row_text = "  |  ".join(cells)
-                    story.append(Paragraph(row_text, ParagraphStyle(
-                        "table_row", fontName="Courier", fontSize=7.5,
-                        leading=11, textColor=INK, spaceAfter=1,
-                    )))
-            else:
-                # Bold handling in paragraph
-                formatted = line.replace("**", "<b>").replace("**", "</b>")
-                story.append(Paragraph(clean, styles["body"]))
-
+        metrics_table = Table(metrics_data, colWidths=[doc.width/6]*6)
+        metrics_table.setStyle(TableStyle([
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica'),
+            ('FONTSIZE', (0,0), (-1,0), 7),
+            ('TEXTCOLOR', (0,0), (-1,0), MUTED),
+            ('FONTNAME', (0,1), (-1,1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,1), (-1,1), 10),
+            ('TEXTCOLOR', (0,1), (-1,1), INK),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('BOTTOMPADDING', (0,0), (-1,0), 4),
+            ('TOPPADDING', (0,1), (-1,1), 4),
+            ('LINEBELOW', (0,0), (-1,0), 0.5, GOLD),
+            ('LINEBELOW', (0,1), (-1,1), 0.5, LINE),
+        ]))
+        story.append(metrics_table)
         story.append(PageBreak())
 
-    # ─── DISCLAIMER ───
-    story.append(Spacer(1, 2*cm))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=LINE, spaceAfter=8))
-    disclaimer = (
-        "DISCLAIMER: Este documento fue generado por DealDesk, una herramienta de análisis automatizado. "
-        "Los datos provienen de fuentes públicas (Yahoo Finance) y el análisis es generado por inteligencia artificial. "
-        "No constituye asesoramiento financiero ni recomendación de inversión. Los usuarios deben realizar su propia "
-        "due diligence antes de tomar decisiones de inversión."
-    )
-    story.append(Paragraph(disclaimer, styles["footer"]))
-    story.append(Spacer(1, 0.5*cm))
-    story.append(Paragraph(
-        f"DealDesk — M&A Intelligence · {datetime.now().strftime('%d/%m/%Y %H:%M')} · Buenos Aires, Argentina",
-        styles["footer"]
-    ))
+        phase_names = {
+            "fundamentals": ("01", "Análisis de Fundamentos", "10-K DEEP DIVE"),
+            "earnings": ("02", "Análisis de Tendencias", "EARNINGS HISTORY"),
+            "dcf": ("03", "Proyección Financiera", "DCF FRAMEWORK"),
+            "thesis": ("04", "Tesis de Inversión", "EQUITY RESEARCH NOTE"),
+        }
 
-    # Build
-    doc.build(story)
-    buffer.seek(0)
+        for fase_id in ["fundamentals", "earnings", "dcf", "thesis"]:
+            content = cached.get(fase_id)
+            if not content:
+                content = "Sin datos disponibles"
 
-    fecha_str = datetime.now().strftime("%Y%m%d")
-    filename = f"Research_{ticker}_{fecha_str}.pdf"
+            num, title, subtitle = phase_names[fase_id]
 
-    return StreamingResponse(
-        buffer,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
+            story.append(Paragraph(f"FASE {num}  ·  {subtitle}", styles["phase_subtitle"]))
+            story.append(Paragraph(title, styles["phase_title"]))
+            story.append(HRFlowable(width="100%", thickness=1, color=GOLD, spaceAfter=12))
 
+            lines = content.split("\n")
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                clean = line.replace("**", "").replace("*", "")
+
+                if line.startswith("## "):
+                    story.append(Paragraph(clean[3:], styles["h2"]))
+                elif line.startswith("### "):
+                    story.append(Paragraph(clean[4:], styles["h3"]))
+                elif line.startswith("# "):
+                    story.append(Paragraph(clean[2:], styles["h2"]))
+                elif line.startswith("- ") or line.startswith("• "):
+                    bullet_text = clean[2:]
+                    story.append(Paragraph(f"▸ {bullet_text}", styles["bullet"]))
+                elif line.startswith("|") and "|" in line[1:]:
+                    cells = [c.strip() for c in line.split("|") if c.strip() and c.strip() != "---" and not all(ch in "-:" for ch in c.strip())]
+                    if cells and not all(c.startswith("-") for c in cells):
+                        row_text = "  |  ".join(cells)
+                        story.append(Paragraph(
+                            row_text,
+                            ParagraphStyle(
+                                "table_row",
+                                fontName="Courier",
+                                fontSize=7.5,
+                                leading=11,
+                                textColor=INK,
+                                spaceAfter=1,
+                            )
+                        ))
+                else:
+                    story.append(Paragraph(clean, styles["body"]))
+
+            story.append(PageBreak())
+
+        story.append(Spacer(1, 2*cm))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=LINE, spaceAfter=8))
+        disclaimer = (
+            "DISCLAIMER: Este documento fue generado por DealDesk, una herramienta de análisis automatizado. "
+            "Los datos provienen de fuentes públicas (Yahoo Finance) y el análisis es generado por inteligencia artificial. "
+            "No constituye asesoramiento financiero ni recomendación de inversión. Los usuarios deben realizar su propia "
+            "due diligence antes de tomar decisiones de inversión."
+        )
+        story.append(Paragraph(disclaimer, styles["footer"]))
+        story.append(Spacer(1, 0.5*cm))
+        story.append(Paragraph(
+            f"DealDesk — M&A Intelligence · {datetime.now().strftime('%d/%m/%Y %H:%M')} · Buenos Aires, Argentina",
+            styles["footer"]
+        ))
+
+        doc.build(story)
+        buffer.seek(0)
+
+        fecha_str = datetime.now().strftime("%Y%m%d")
+        filename = f"Research_{ticker}_{fecha_str}.pdf"
+
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    except Exception as e:
+        print("🔥 ERROR PDF:", str(e))
+        print(traceback.format_exc())
+        raise HTTPException(500, f"PDF error: {str(e)}")
 
 # ─────────────────────────────────────────────
 # EXCEL DCF EXPORT
