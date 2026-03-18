@@ -675,7 +675,7 @@ import traceback
 def export_dcf_excel(request: PDFRequest):
 
     try:
-        from .dcf_excel import generate_dcf_excel
+        from .dcf_Excel import generate_dcf_excel
 
         ticker = request.ticker.upper()
 
