@@ -671,26 +671,28 @@ def export_research_pdf(request: PDFRequest):
 # ─────────────────────────────────────────────
 # EXCEL DCF EXPORT
 # ─────────────────────────────────────────────
+import traceback
 
 @router.post("/research/excel")
 def export_dcf_excel(request: PDFRequest):
-    """Genera Excel DCF con fórmulas vivas."""
-    from Backend.modules.dcf_excel import generate_dcf_excel
-
-    ticker = request.ticker.upper()
-    print(f"\n📊 Excel DCF export → {ticker}")
 
     try:
+        from Backend.modules.dcf_excel import generate_dcf_excel
+
+        ticker = request.ticker.upper()
+
         buffer = generate_dcf_excel(ticker)
+
+        if not buffer:
+            raise Exception("Excel vacío")
+
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=DCF_{ticker}.xlsx"},
+        )
+
     except Exception as e:
-        raise HTTPException(500, f"Error generando Excel: {str(e)}")
-
-    fecha_str = datetime.now().strftime("%Y%m%d")
-    filename = f"DCF_{ticker}_{fecha_str}.xlsx"
-
-    return StreamingResponse(
-        buffer,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
-
+        print("🔥 ERROR EXCEL:", str(e))
+        print(traceback.format_exc())
+        raise HTTPException(500, f"Excel error: {str(e)}")
