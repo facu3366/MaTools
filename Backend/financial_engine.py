@@ -213,7 +213,7 @@ def get_financials_ttm(ticker: str) -> Optional[dict]:
         result = {
             "Ticker": ticker,
             "Empresa": empresa,
-            "País": pais,
+            "Pais": pais,
             "Sector": sector,
             "Industria": industry,
             "Descripción": desc,

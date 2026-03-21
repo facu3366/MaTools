@@ -374,6 +374,7 @@ async function runComps() {
   const revenue =
     parseFloat(document.getElementById("comps-revenue").value) || 1000;
   const sector = document.getElementById("comps-sector").value;
+  const region = document.getElementById("comps-region")?.value || "GLOBAL";
   const analista =
     document.getElementById("comps-analista")?.value || "Analista";
   const escala = document.getElementById("comps-escala")?.value || "mm";
@@ -400,6 +401,7 @@ async function runComps() {
       moneda,
       rango_min_pct: rangoMin,
       rango_max_pct: rangoMax,
+      region,
     };
     console.log("BODY /comps →", body);
     const res = await fetch(`${API}/comps`, {
@@ -591,7 +593,7 @@ async function downloadCompsExcel() {
     selectedTicker ||
     document.getElementById("comps-empresa").value ||
     "Target";
-
+  const region = document.getElementById("comps-region")?.value || "GLOBAL";
   const revenue =
     parseFloat(document.getElementById("comps-revenue").value) || 1000;
 
@@ -613,6 +615,7 @@ async function downloadCompsExcel() {
         moneda: "USD",
         rango_min_pct: 30,
         rango_max_pct: 300,
+        region,
       }),
     });
 
@@ -628,7 +631,7 @@ async function downloadCompsExcel() {
     const fname = `Comps_${empresa}_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
     // Método 1: abrir en nueva pestaña (el browser decide si abrir o descargar)
-    const newWindow = window.open(url, '_blank');
+    const newWindow = window.open(url, "_blank");
 
     // Si el browser bloqueó el popup, fallback a descarga directa
     if (!newWindow) {

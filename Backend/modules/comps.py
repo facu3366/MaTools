@@ -29,7 +29,10 @@ from Backend.comps_automatico import (
 
 router = APIRouter()
 
-
+REGION_MAP = {
+    "LATAM": ["Argentina", "Brazil", "Mexico", "Chile", "Colombia"],
+    "US": ["United States"],
+}
 class CompsRequest(BaseModel):
     mensaje: str
     analista: str = "Analista"
@@ -40,7 +43,7 @@ class CompsRequest(BaseModel):
     escala: str = "mm"
     rango_min_pct: float = 30
     rango_max_pct: float = 300
-
+    region: str = "GLOBAL"
 
 _empresas_cache = None
 
@@ -206,6 +209,31 @@ def generar_comps(request: CompsRequest):
         if target_industry:
             empresas = filter_by_industry(empresas, target_industry)
 
+        # ── FILTRO POR REGIÓN / PAÍS ─────────────────────────────
+
+        region = request.region
+
+        if region and region != "GLOBAL":
+
+            if region in REGION_MAP:
+                allowed = REGION_MAP[region]
+                empresas_region = [
+                    e for e in empresas
+                    if e.get("Pais") in allowed
+                ]
+            else:
+                # caso país específico
+                empresas_region = [
+                    e for e in empresas
+                    if e.get("Pais") == region
+                ]
+
+            # fallback inteligente
+            if len(empresas_region) >= 5:
+                print(f"🌎 Usando filtro región {region}: {len(empresas_region)} comps")
+                empresas = empresas_region
+            else:
+                print(f"⚠️ Muy pocos comps en {region}, usando global")
         # EXCLUIR el target de sus propios comps
         target_upper = empresa.upper() if empresa else ""
         empresas = [e for e in empresas if e.get("Ticker", "").upper() != target_upper]
