@@ -262,10 +262,21 @@ def generar_comps(request: CompsRequest):
 
             region = COUNTRY_TO_REGION.get(region, region)
 
-            empresas = sorted(
-                empresas,
-                key=lambda e: 0 if get_region_from_country(e.get("Pais")) == region else 1
-            )
+            # Separar región vs resto
+            empresas_region = [
+                e for e in empresas
+                if get_region_from_country(e.get("Pais")) == region
+            ]
+
+            empresas_resto = [
+                e for e in empresas
+                if get_region_from_country(e.get("Pais")) != region
+            ]
+
+            # Concatenar: primero región, después resto
+            empresas = empresas_region + empresas_resto
+
+            print(f"🌎 Región {region}: {len(empresas_region)} | Resto: {len(empresas_resto)}")
 
             print(f"🌎 Priorizando región {region}")
         # EXCLUIR el target de sus propios comps
