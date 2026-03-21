@@ -33,17 +33,7 @@ COUNTRY_TO_REGION = {
     "Brazil": "LATAM",
     "Mexico": "LATAM",
 }
-REGION_MAP = {
-    "LATAM": ["Argentina", "Brazil", "Mexico", "Chile", "Colombia"],
-    "US": ["United States", "USA", "United States of America"],
-    "EU": [
-    "Germany", "France", "Spain", "Italy", "Luxembourg",
-    "Netherlands", "Switzerland", "Sweden", "Norway",
-    "Denmark", "Finland", "Belgium", "Austria"],
-    "ASIA": [
-    "China", "Hong Kong", "Singapore", "India", "Japan", "Indonesia",
-    "South Korea", "Taiwan", "Thailand", "Philippines", "Malaysia"],
-}
+
 class CompsRequest(BaseModel):
     mensaje: str
     analista: str = "Analista"
@@ -57,7 +47,51 @@ class CompsRequest(BaseModel):
     region: str = "GLOBAL"
 
 _empresas_cache = None
+def get_region_from_country(pais: str) -> str:
+    if not pais:
+        return "OTHER"
 
+    # LATAM
+    if pais in [
+        "Argentina","Brazil","Mexico","Chile","Colombia","Peru","Uruguay",
+        "Paraguay","Bolivia","Ecuador","Venezuela","Costa Rica","Panama",
+        "Guatemala","Dominican Republic","El Salvador","Honduras","Nicaragua"
+    ]:
+        return "LATAM"
+
+    # US
+    if pais in ["United States", "USA", "United States of America"]:
+        return "US"
+
+    # EUROPE
+    if pais in [
+        "Germany","France","Spain","Italy","Luxembourg","Ireland",
+        "Netherlands","Switzerland","Sweden","Norway","Denmark","Finland",
+        "Belgium","Austria","Portugal","Poland","Czech Republic","Greece",
+        "Hungary","Romania","Ukraine","United Kingdom","UK"
+    ]:
+        return "EU"
+
+    # ASIA
+    if pais in [
+        "China","Hong Kong","Singapore","India","Japan","Indonesia",
+        "South Korea","Taiwan","Thailand","Philippines","Malaysia",
+        "Vietnam","Pakistan","Bangladesh","Saudi Arabia","UAE","Qatar","Israel"
+    ]:
+        return "ASIA"
+
+    # AFRICA
+    if pais in [
+        "South Africa","Egypt","Nigeria","Kenya","Morocco","Ghana",
+        "Ethiopia","Algeria","Tunisia"
+    ]:
+        return "AFRICA"
+
+    # OCEANIA
+    if pais in ["Australia", "New Zealand"]:
+        return "OCEANIA"
+
+    return "OTHER"
 def load_empresas():
     global _empresas_cache
     if _empresas_cache is not None:
@@ -226,16 +260,11 @@ def generar_comps(request: CompsRequest):
 
         if region and region != "GLOBAL":
 
-            # Si el user eligió país → mapear a región
             region = COUNTRY_TO_REGION.get(region, region)
 
-            # Obtener países de esa región
-            allowed = REGION_MAP.get(region, [region])
-
-            # Ordenar: primero los de la región, después el resto
             empresas = sorted(
                 empresas,
-                key=lambda e: 0 if e.get("Pais") in allowed else 1
+                key=lambda e: 0 if get_region_from_country(e.get("Pais")) == region else 1
             )
 
             print(f"🌎 Priorizando región {region}")
