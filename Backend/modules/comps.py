@@ -236,20 +236,42 @@ def filter_by_industry(empresas, target_industry):
     similar = get_similar_industries(target_industry)
     similar_set = set(similar)
 
-    exact = [e for e in empresas if e.get("Industria") == target_industry]
+    # 1. exact match
+    exact = [
+        e for e in empresas
+        if e.get("Industria") == target_industry
+    ]
 
-    if len(exact) >= 5:
-        return exact
+    # 2. similares
+    sim = [
+        e for e in empresas
+        if e.get("Industria") in similar_set
+    ]
 
-    sim = [e for e in empresas if e.get("Industria") in similar_set]
+    # 3. expansión (soft match)
+    expansion_keywords = ["retail", "commerce", "marketplace"]
 
-    if len(sim) >= 8:
-        return sim
+    expanded = [
+        e for e in empresas
+        if any(
+            kw in (e.get("Industria") or "").lower()
+            for kw in expansion_keywords
+        )
+    ]
 
-    # fallback controlado (NO todo)
-    print("⚠️ fallback suave")
-    return sim[:15]  # límite
+    # combinar sin duplicados
+    combined = []
+    seen = set()
 
+    for group in [exact, sim, expanded]:
+        for e in group:
+            if e["Ticker"] not in seen:
+                combined.append(e)
+                seen.add(e["Ticker"])
+
+    print(f"Exact: {len(exact)} | Sim: {len(sim)} | Exp: {len(expanded)}")
+
+    return combined[:25]  # 🔥 clave: límite sano
 
 @router.post("/comps")
 def generar_comps(request: CompsRequest):
