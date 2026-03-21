@@ -553,8 +553,21 @@ function renderCompsResult(data) {
       </div>`;
   };
 
+  const selectedRegion =
+    document.getElementById("comps-region")?.value || "GLOBAL";
+
   const tableRows = filtradas
-    .sort((a, b) => (b["Revenue ($mm)"] || 0) - (a["Revenue ($mm)"] || 0))
+    .sort((a, b) => {
+      const ra = getRegionFromCountry(a.Pais);
+      const rb = getRegionFromCountry(b.Pais);
+
+      // 1. priorizar región elegida
+      if (ra === selectedRegion && rb !== selectedRegion) return -1;
+      if (ra !== selectedRegion && rb === selectedRegion) return 1;
+
+      // 2. dentro de cada grupo → ordenar por revenue
+      return (b["Revenue ($mm)"] || 0) - (a["Revenue ($mm)"] || 0);
+    })
     .map(
       (e) => `
     <tr>
