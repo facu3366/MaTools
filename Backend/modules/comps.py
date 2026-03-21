@@ -33,7 +33,44 @@ COUNTRY_TO_REGION = {
     "Brazil": "LATAM",
     "Mexico": "LATAM",
 }
+import requests
 
+def discover_tickers(query: str):
+    url = f"https://query1.finance.yahoo.com/v1/finance/search?q={query}"
+
+    try:
+        res = requests.get(url, timeout=5)
+        data = res.json()
+
+        tickers = []
+
+        for q in data.get("quotes", []):
+            if q.get("quoteType") == "EQUITY":
+                tickers.append(q["symbol"])
+
+        return tickers
+
+    except Exception:
+        return []
+
+def build_dynamic_universe(sector: str):
+
+    queries_map = {
+        "Technology": ["technology", "software", "ecommerce", "saas"],
+        "Financials": ["bank", "fintech", "insurance"],
+        "Energy": ["oil", "gas", "renewable"],
+        "Consumer": ["retail", "consumer"],
+        "Industrials": ["industrial", "manufacturing"],
+    }
+
+    queries = queries_map.get(sector, [sector])
+
+    tickers = []
+
+    for q in queries:
+        tickers.extend(discover_tickers(q))
+
+    return list(set(tickers))
 class CompsRequest(BaseModel):
     mensaje: str
     analista: str = "Analista"
@@ -234,12 +271,21 @@ def generar_comps(request: CompsRequest):
         # La industria de Yahoo Finance es lo que importa, no el sector del JSON
         all_sectors = ["Technology", "Consumer", "Financials", "Industrials", "Energy", "Health Insurance", "Real Estate"]
         
-        all_tickers = []
+        # base (lo que ya tenés)
+        base_tickers = []
         for s in all_sectors:
-            all_tickers.extend(get_universe_by_sector(s))
-        
-        # Deduplicar
-        all_tickers = list(dict.fromkeys(all_tickers))
+            base_tickers.extend(get_universe_by_sector(s))
+
+        # NUEVO: discovery dinámico desde Yahoo
+        dynamic_tickers = build_dynamic_universe(sector)
+
+        print(f"🔎 Dynamic tickers: {len(dynamic_tickers)}")
+
+        # combinar ambos
+        all_tickers = list(set(base_tickers + dynamic_tickers))
+
+        # limitar para no matar Yahoo
+        all_tickers = all_tickers[:200]
 
         if not all_tickers:
             raise HTTPException(status_code=400, detail="No hay empresas cargadas")
