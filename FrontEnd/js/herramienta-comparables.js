@@ -409,9 +409,6 @@ async function runComps() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    data.empresas_filtradas.forEach((e) => {
-      console.log(e.Ticker, e.Pais);
-    });
 
     let data = null;
     let text = "";
@@ -421,6 +418,16 @@ async function runComps() {
       data = text ? JSON.parse(text) : null;
     } catch (err) {
       console.error("Respuesta no JSON en /comps:", text);
+    }
+
+    // 👇 AHORA SÍ (acá podés usar data)
+    if (data?.empresas_filtradas) {
+      data.empresas_filtradas.forEach((e) => {
+        console.log("PAIS:", e.Ticker, e.Pais);
+      });
+
+      const arg = data.empresas_filtradas.filter((e) => e.Pais === "Argentina");
+      console.log("ARGENTINA COUNT:", arg.length);
     }
 
     if (!res.ok) {
