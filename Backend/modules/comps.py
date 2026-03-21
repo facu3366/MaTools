@@ -35,9 +35,14 @@ COUNTRY_TO_REGION = {
 }
 REGION_MAP = {
     "LATAM": ["Argentina", "Brazil", "Mexico", "Chile", "Colombia"],
-    "US": ["United States"],
-    "EU": ["Germany", "France", "Spain", "Italy", "Luxembourg"],
-    "ASIA": ["China", "Hong Kong", "Singapore", "India", "Japan", "Indonesia"],
+    "US": ["United States", "USA", "United States of America"],
+    "EU": [
+    "Germany", "France", "Spain", "Italy", "Luxembourg",
+    "Netherlands", "Switzerland", "Sweden", "Norway",
+    "Denmark", "Finland", "Belgium", "Austria"],
+    "ASIA": [
+    "China", "Hong Kong", "Singapore", "India", "Japan", "Indonesia",
+    "South Korea", "Taiwan", "Thailand", "Philippines", "Malaysia"],
 }
 class CompsRequest(BaseModel):
     mensaje: str
