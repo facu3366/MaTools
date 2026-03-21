@@ -1,4 +1,4 @@
-const API = "https://dealdesk.up.railway.app";
+const API = window.location.origin;
 // helpers visuales
 function fmt(v, d = 1) {
   return v == null

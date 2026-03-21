@@ -631,8 +631,7 @@ def generar_excel(df: pd.DataFrame):
 
 
 def _generar_excel_buffer(df: pd.DataFrame, buffer) -> None:
-    """Igual que generar_excel pero guarda en un BytesIO en vez de disco.
-    Usa el DEAL_CONFIG que ya fue seteado antes de llamarla."""
+    """Genera un Excel limpio con UN solo sheet: todas las empresas comparables + stats."""
     wb = Workbook()
     df_sorted = df.sort_values("Revenue ($mm)", ascending=False).reset_index(drop=True)
     col_idx_map = {c[0]: i for i, c in enumerate(COLS_VISIBLE, 1)}
@@ -646,128 +645,86 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer) -> None:
         ("EV/Revenue", '0.0"x"'), ("EV/EBITDA", '0.0"x"'),
     ]
 
-    # ── HOJA 1: UNIVERSE COMPLETO ──
-    ws1 = wb.active
-    ws1.title = "Universe Completo"
-    ws1.sheet_view.showGridLines = False
-    ws1.freeze_panes = "A4"
+    ws = wb.active
+    ws.title = "Comparable Companies"
+    ws.sheet_view.showGridLines = False
+    ws.freeze_panes = "A4"
     ncols = len(COLS_VISIBLE)
 
-    ws1.merge_cells(f"A1:{get_column_letter(ncols)}1")
-    ws1["A1"] = f"Comparable Companies — Universe | {DEAL_CONFIG['empresa_target']} | {DEAL_CONFIG['sector']}"
-    ws1["A1"].font = title_font()
-    ws1.row_dimensions[1].height = 26
+    # ── HEADER ──
+    ws.merge_cells(f"A1:{get_column_letter(ncols)}1")
+    ws["A1"] = f"Comparable Companies — {DEAL_CONFIG['empresa_target']} | {DEAL_CONFIG['sector']}"
+    ws["A1"].font = title_font()
+    ws.row_dimensions[1].height = 26
 
-    ws1.merge_cells(f"A2:{get_column_letter(ncols)}2")
-    ws1["A2"] = f"Analista: {DEAL_CONFIG['analista']}  |  Fecha: {DEAL_CONFIG['fecha']}  |  Fuente: Yahoo Finance  |  {len(df_sorted)} empresas"
-    ws1["A2"].font = sub_font()
-    ws1.row_dimensions[2].height = 16
-    write_header_row(ws1, 3, COLS_VISIBLE)
-    DATA_START1 = 4
+    ws.merge_cells(f"A2:{get_column_letter(ncols)}2")
+    ws["A2"] = f"Analista: {DEAL_CONFIG.get('analista', 'Analista')}  |  Fecha: {DEAL_CONFIG['fecha']}  |  Fuente: Yahoo Finance (TTM)  |  {len(df_sorted)} empresas"
+    ws["A2"].font = sub_font()
+    ws.row_dimensions[2].height = 16
+
+    # ── COLUMN HEADERS ──
+    write_header_row(ws, 3, COLS_VISIBLE)
+
+    # ── DATA ROWS ──
+    DATA_START = 4
     for i, row_data in df_sorted.iterrows():
-        er = DATA_START1 + i
-        ws1.row_dimensions[er].height = 32 if row_data.get("Descripción") else 18
-        write_data_row(ws1, er, row_data, COLS_VISIBLE, col_idx_map)
+        er = DATA_START + i
+        ws.row_dimensions[er].height = 32 if row_data.get("Descripción") else 18
+        write_data_row(ws, er, row_data, COLS_VISIBLE, col_idx_map)
 
-    last1 = DATA_START1 + len(df_sorted) - 1
-    stats1 = last1 + 2
+    last_row = DATA_START + len(df_sorted) - 1
+
+    # ── MEDIAN & MEAN ──
+    med_row = last_row + 2
+    avg_row = last_row + 3
+
     for offset, label in enumerate(["Mediana", "Promedio"], 1):
-        sr = stats1 + offset
-        ws1.cell(row=sr, column=1, value=label).font = bold_font()
-        ws1.cell(row=sr, column=1).fill   = sum_fill()
-        ws1.cell(row=sr, column=1).border = thin
+        sr = last_row + 1 + offset
+        ws.cell(row=sr, column=1, value=label).font = bold_font()
+        ws.cell(row=sr, column=1).fill = sum_fill()
+        ws.cell(row=sr, column=1).border = thin
         fn = "MEDIAN" if label == "Mediana" else "AVERAGE"
         for key, fmt_str in NUM_STAT_COLS:
-            if key not in col_idx_map: continue
+            if key not in col_idx_map:
+                continue
             ci = col_idx_map[key]
             cl = get_column_letter(ci)
-            cell = ws1.cell(row=sr, column=ci, value=f"={fn}({cl}{DATA_START1}:{cl}{last1})")
-            cell.fill = sum_fill(); cell.border = thin
-            cell.font = bold_font(); cell.alignment = AR
+            cell = ws.cell(row=sr, column=ci, value=f"={fn}({cl}{DATA_START}:{cl}{last_row})")
+            cell.fill = sum_fill()
+            cell.border = thin
+            cell.font = bold_font()
+            cell.alignment = AR
             cell.number_format = fmt_str
 
-    # ── HOJA 2: FILTRADAS ──
-    ws2 = wb.create_sheet("Comps Filtradas")
-    ws2.sheet_view.showGridLines = False
-    ws2.freeze_panes = "A8"
-
-    ws2["A1"] = "PARÁMETROS DEL DEAL"
-    ws2["A1"].font = Font(name="Arial", bold=True, size=11, color=DELOITTE)
-    ws2.row_dimensions[1].height = 20
-
-    param_rows = [
-        (2, "Revenue Target ($mm)", DEAL_CONFIG["revenue_target"],    '#,##0'),
-        (3, "Rango mínimo (%)",     DEAL_CONFIG["rango_min_pct"]*100, '0"%"'),
-        (4, "Rango máximo (%)",     DEAL_CONFIG["rango_max_pct"]*100, '0"%"'),
-    ]
-    for r_num, label, val, fmt_str in param_rows:
-        ws2.cell(row=r_num, column=1, value=label).font = dat_font()
-        cell = ws2.cell(row=r_num, column=2, value=val)
-        cell.font = blue_font(); cell.fill = PatternFill("solid", start_color=YELLOW)
-        cell.number_format = fmt_str; cell.border = thin
-
-    ws2.merge_cells(f"A6:{get_column_letter(ncols)}6")
-    ws2["A6"] = "Empresas con revenue entre $B$2*(B3/100) y $B$2*(B4/100) — modificá B2:B4 para cambiar el filtro"
-    ws2["A6"].font = sub_font()
-    ws2.row_dimensions[6].height = 14
-    ws2.row_dimensions[5].height = 8
-
-    write_header_row(ws2, 7, COLS_VISIBLE)
-
-    rev_min = DEAL_CONFIG["revenue_target"] * DEAL_CONFIG["rango_min_pct"]
-    rev_max = DEAL_CONFIG["revenue_target"] * DEAL_CONFIG["rango_max_pct"]
-    df_filt = df_sorted[
-        (df_sorted["Revenue ($mm)"].notna()) &
-        (df_sorted["Revenue ($mm)"] >= rev_min) &
-        (df_sorted["Revenue ($mm)"] <= rev_max)
-    ].reset_index(drop=True)
-
-    DATA_START2 = 8
-    for i, row_data in df_filt.iterrows():
-        er = DATA_START2 + i
-        ws2.row_dimensions[er].height = 42
-        write_data_row(ws2, er, row_data, COLS_VISIBLE, col_idx_map)
-
-    last2 = DATA_START2 + len(df_filt) - 1
-    med_row = last2 + 2
-    for offset, label in enumerate(["Mediana", "Promedio"], 1):
-        sr = last2 + 1 + offset
-        ws2.cell(row=sr, column=1, value=label).font = bold_font()
-        ws2.cell(row=sr, column=1).fill   = sum_fill()
-        ws2.cell(row=sr, column=1).border = thin
-        fn = "MEDIAN" if label == "Mediana" else "AVERAGE"
-        for key, fmt_str in NUM_STAT_COLS:
-            if key not in col_idx_map: continue
-            ci = col_idx_map[key]
-            cl = get_column_letter(ci)
-            cell = ws2.cell(row=sr, column=ci, value=f"={fn}({cl}{DATA_START2}:{cl}{last2})")
-            cell.fill = sum_fill(); cell.border = thin
-            cell.font = bold_font(); cell.alignment = AR
-            cell.number_format = fmt_str
-
-    # IMPLIED VALUATION
+    # ── IMPLIED VALUATION ──
     ev_rev_ci = col_idx_map.get("EV/Revenue")
     ev_ebt_ci = col_idx_map.get("EV/EBITDA")
     ebt_mg_ci = col_idx_map.get("EBITDA Mg%")
-    ev_rev_ref = f"{get_column_letter(ev_rev_ci)}{med_row}"
-    ev_ebt_ref = f"{get_column_letter(ev_ebt_ci)}{med_row}"
-    ebt_mg_ref = f"{get_column_letter(ebt_mg_ci)}{med_row}"
 
-    impl = last2 + 6
-    ws2.cell(row=impl, column=1, value="── IMPLIED VALUATION ──").font = Font(name="Arial", bold=True, size=10, color=DELOITTE)
-    ws2.row_dimensions[impl].height = 20
+    if ev_rev_ci and ev_ebt_ci and ebt_mg_ci:
+        ev_rev_ref = f"{get_column_letter(ev_rev_ci)}{med_row}"
+        ev_ebt_ref = f"{get_column_letter(ev_ebt_ci)}{med_row}"
+        ebt_mg_ref = f"{get_column_letter(ebt_mg_ci)}{med_row}"
 
-    impl_rows = [
-        ("Revenue Target ($mm)",             "=$B$2",                                       '#,##0'),
-        ("EV Implied — EV/Revenue (mediana)", f"=$B$2*{ev_rev_ref}",                         '#,##0'),
-        ("EV Implied — EV/EBITDA (mediana)",  f"=$B$2*({ebt_mg_ref}/100)*{ev_ebt_ref}",      '#,##0'),
-    ]
-    for j, (lbl, formula, fmt_str) in enumerate(impl_rows):
-        ws2.cell(row=impl+1+j, column=1, value=lbl).font = dat_font()
-        cell = ws2.cell(row=impl+1+j, column=2, value=formula)
-        cell.font = bold_font(); cell.fill = sum_fill()
-        cell.border = thin; cell.alignment = AR
-        cell.number_format = fmt_str
+        impl = avg_row + 3
+        ws.cell(row=impl, column=1, value="── IMPLIED VALUATION ──").font = Font(name="Arial", bold=True, size=10, color=DELOITTE)
+        ws.row_dimensions[impl].height = 20
+
+        rev_target = DEAL_CONFIG.get("revenue_target", 0)
+        impl_rows = [
+            ("Revenue Target ($mm)", rev_target, '#,##0'),
+            ("EV Implied — EV/Revenue (mediana)", f"={impl+1}*{ev_rev_ref}" if rev_target else "", '#,##0'),
+            ("EV Implied — EV/EBITDA (mediana)", f"={impl+1}*({ebt_mg_ref}/100)*{ev_ebt_ref}" if rev_target else "", '#,##0'),
+        ]
+        for j, (lbl, formula, fmt_str) in enumerate(impl_rows):
+            r = impl + 1 + j
+            ws.cell(row=r, column=1, value=lbl).font = dat_font()
+            cell = ws.cell(row=r, column=2, value=formula)
+            cell.font = bold_font()
+            cell.fill = sum_fill()
+            cell.border = thin
+            cell.alignment = AR
+            cell.number_format = fmt_str
 
     wb.save(buffer)
 

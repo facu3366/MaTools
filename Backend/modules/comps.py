@@ -1,20 +1,24 @@
+"""
+📊 COMPS MODULE v4 — FULL UNIVERSE + INDUSTRY FILTER
+=====================================================
+Baja TODAS las empresas del sector (cache = 2da vez instantáneo).
+Filtra por industria Yahoo Finance ANTES de revenue range.
+"""
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 
 import pathlib
 import json
-import os
-import sys
 import pandas as pd
 import io
 import traceback
 from datetime import datetime
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
 from Backend.financial_engine import (
     get_financials_ttm,
+    fetch_many_parallel,
     build_comps_response
 )
 
@@ -26,192 +30,273 @@ from Backend.comps_automatico import (
 router = APIRouter()
 
 
-# ─────────────────────────────────────────────
-# MODELO REQUEST
-# ─────────────────────────────────────────────
-
 class CompsRequest(BaseModel):
-
     mensaje: str
-
     analista: str = "Analista"
-
     empresa_override: str = ""
     sector_override: str = ""
     revenue_override: float = 0
-
     moneda: str = "USD"
     escala: str = "mm"
-
     rango_min_pct: float = 30
     rango_max_pct: float = 300
 
 
-# ─────────────────────────────────────────────
-# LOAD EMPRESAS.JSON
-# ─────────────────────────────────────────────
+_empresas_cache = None
 
 def load_empresas():
-
+    global _empresas_cache
+    if _empresas_cache is not None:
+        return _empresas_cache
     base = pathlib.Path(__file__).resolve().parents[2]
-
-    posibles_rutas = [
-        base / "FrontEnd" / "Data" / "empresas.json",
-        base / "Data" / "empresas.json",
-        base / "empresas.json"
-    ]
-
-    for path in posibles_rutas:
+    for path in [base / "FrontEnd" / "Data" / "empresas.json", base / "Data" / "empresas.json", base / "empresas.json"]:
         try:
             if path.exists():
                 data = json.loads(path.read_text(encoding="utf-8"))
                 print(f"✅ empresas.json cargado ({len(data)} empresas)")
+                _empresas_cache = data
                 return data
         except Exception:
             continue
-
-    print("⚠️ empresas.json no encontrado")
+    _empresas_cache = []
     return []
 
-
-# ─────────────────────────────────────────────
-# UNIVERSO POR SECTOR
-# ─────────────────────────────────────────────
-
 def get_universe_by_sector(sector: str):
-
-    empresas = load_empresas()
-
-    return [
-        e["ticker"]
-        for e in empresas
-        if e.get("sector", "").lower() == sector.lower()
-    ]
+    return [e["ticker"] for e in load_empresas() if e.get("sector", "").lower() == sector.lower()]
 
 
-# ─────────────────────────────────────────────
-# COMPS API
-# ─────────────────────────────────────────────
+INDUSTRY_GROUPS = {
+    "Internet Retail": ["Internet Retail", "Specialty Retail", "Broadline Retail"],
+    "Broadline Retail": ["Broadline Retail", "Internet Retail", "Specialty Retail"],
+    "Software - Application": ["Software - Application", "Software - Infrastructure", "Information Technology Services"],
+    "Software - Infrastructure": ["Software - Infrastructure", "Software - Application", "Information Technology Services"],
+    "Information Technology Services": ["Information Technology Services", "Software - Application", "Software - Infrastructure", "Consulting Services"],
+    "Semiconductors": ["Semiconductors", "Semiconductor Equipment & Materials", "Electronic Components"],
+    "Semiconductor Equipment & Materials": ["Semiconductor Equipment & Materials", "Semiconductors"],
+    "Internet Content & Information": ["Internet Content & Information", "Internet Retail", "Electronic Gaming & Multimedia"],
+    "Electronic Gaming & Multimedia": ["Electronic Gaming & Multimedia", "Internet Content & Information", "Entertainment"],
+    "Consumer Electronics": ["Consumer Electronics", "Internet Retail", "Communication Equipment"],
+    "Telecom Services": ["Telecom Services", "Communication Equipment"],
+    "Communication Equipment": ["Communication Equipment", "Telecom Services"],
+    "Credit Services": ["Credit Services", "Financial Data & Stock Exchanges", "Capital Markets"],
+    "Financial Data & Stock Exchanges": ["Financial Data & Stock Exchanges", "Capital Markets", "Credit Services"],
+    "Capital Markets": ["Capital Markets", "Financial Data & Stock Exchanges", "Asset Management"],
+    "Asset Management": ["Asset Management", "Capital Markets"],
+    "Banks - Diversified": ["Banks - Diversified", "Banks - Regional"],
+    "Banks - Regional": ["Banks - Regional", "Banks - Diversified"],
+    "Insurance - Diversified": ["Insurance - Diversified", "Insurance - Life", "Insurance Brokers", "Insurance - Property & Casualty"],
+    "Insurance - Life": ["Insurance - Life", "Insurance - Diversified"],
+    "Insurance Brokers": ["Insurance Brokers", "Insurance - Diversified"],
+    "Health Care Plans": ["Health Care Plans", "Insurance - Diversified", "Medical Care Facilities"],
+    "Oil & Gas Integrated": ["Oil & Gas Integrated", "Oil & Gas E&P", "Oil & Gas Refining & Marketing"],
+    "Oil & Gas E&P": ["Oil & Gas E&P", "Oil & Gas Integrated", "Oil & Gas Midstream"],
+    "Oil & Gas Refining & Marketing": ["Oil & Gas Refining & Marketing", "Oil & Gas Integrated"],
+    "Oil & Gas Midstream": ["Oil & Gas Midstream", "Oil & Gas E&P", "Oil & Gas Integrated"],
+    "Oil & Gas Equipment & Services": ["Oil & Gas Equipment & Services", "Oil & Gas E&P"],
+    "Drug Manufacturers - General": ["Drug Manufacturers - General", "Drug Manufacturers - Specialty & Generic", "Biotechnology"],
+    "Drug Manufacturers - Specialty & Generic": ["Drug Manufacturers - Specialty & Generic", "Drug Manufacturers - General", "Biotechnology"],
+    "Biotechnology": ["Biotechnology", "Drug Manufacturers - General", "Drug Manufacturers - Specialty & Generic"],
+    "Medical Devices": ["Medical Devices", "Medical Instruments & Supplies", "Health Care Equipment & Services"],
+    "Medical Care Facilities": ["Medical Care Facilities", "Health Care Plans", "Medical Devices"],
+    "Medical Instruments & Supplies": ["Medical Instruments & Supplies", "Medical Devices", "Diagnostics & Research"],
+    "Diagnostics & Research": ["Diagnostics & Research", "Medical Instruments & Supplies", "Biotechnology"],
+    "Medical Distribution": ["Medical Distribution", "Medical Instruments & Supplies", "Health Care Plans"],
+    "Discount Stores": ["Discount Stores", "Department Stores", "Grocery Stores"],
+    "Grocery Stores": ["Grocery Stores", "Discount Stores"],
+    "Home Improvement Retail": ["Home Improvement Retail", "Specialty Retail", "Building Products & Equipment"],
+    "Specialty Retail": ["Specialty Retail", "Internet Retail", "Apparel Retail"],
+    "Apparel Retail": ["Apparel Retail", "Specialty Retail", "Footwear & Accessories"],
+    "Luxury Goods": ["Luxury Goods", "Apparel Retail", "Footwear & Accessories"],
+    "Restaurants": ["Restaurants", "Packaged Foods", "Food Distribution"],
+    "Packaged Foods": ["Packaged Foods", "Beverages - Non-Alcoholic", "Household & Personal Products"],
+    "Beverages - Non-Alcoholic": ["Beverages - Non-Alcoholic", "Packaged Foods", "Beverages - Brewers"],
+    "Auto Manufacturers": ["Auto Manufacturers", "Auto Parts", "Recreational Vehicles"],
+    "Aerospace & Defense": ["Aerospace & Defense", "Specialty Industrial Machinery"],
+    "Specialty Industrial Machinery": ["Specialty Industrial Machinery", "Diversified Industrials", "Farm & Heavy Construction Machinery"],
+    "Farm & Heavy Construction Machinery": ["Farm & Heavy Construction Machinery", "Specialty Industrial Machinery"],
+    "Railroads": ["Railroads", "Trucking", "Integrated Freight & Logistics"],
+    "Trucking": ["Trucking", "Integrated Freight & Logistics", "Railroads"],
+    "Integrated Freight & Logistics": ["Integrated Freight & Logistics", "Trucking", "Air Freight & Logistics"],
+    "Airlines": ["Airlines", "Airports & Air Services"],
+    "Waste Management": ["Waste Management", "Environmental Services"],
+    "REIT - Industrial": ["REIT - Industrial", "REIT - Diversified", "REIT - Office"],
+    "REIT - Residential": ["REIT - Residential", "REIT - Diversified"],
+    "REIT - Retail": ["REIT - Retail", "REIT - Diversified"],
+    "REIT - Office": ["REIT - Office", "REIT - Industrial", "REIT - Diversified"],
+    "REIT - Specialty": ["REIT - Specialty", "REIT - Diversified", "REIT - Industrial"],
+    "Real Estate Services": ["Real Estate Services", "Real Estate - Development", "REIT - Diversified"],
+    "Utilities - Regulated Electric": ["Utilities - Regulated Electric", "Utilities - Diversified", "Utilities - Renewable"],
+    "Utilities - Renewable": ["Utilities - Renewable", "Utilities - Regulated Electric", "Solar"],
+    "Solar": ["Solar", "Utilities - Renewable"],
+    "Lodging": ["Lodging", "Resorts & Casinos", "Travel Services"],
+    "Resorts & Casinos": ["Resorts & Casinos", "Lodging", "Entertainment"],
+    "Travel Services": ["Travel Services", "Lodging", "Internet Content & Information"],
+    "Entertainment": ["Entertainment", "Electronic Gaming & Multimedia", "Media - Diversified"],
+}
+
+def get_similar_industries(industry: str) -> list[str]:
+    if not industry:
+        return []
+    if industry in INDUSTRY_GROUPS:
+        return INDUSTRY_GROUPS[industry]
+    il = industry.lower()
+    for key, values in INDUSTRY_GROUPS.items():
+        if key.lower() in il or il in key.lower():
+            return values
+    return [industry]
+
+MIN_COMPS = 10
+
+def filter_by_industry(empresas: list[dict], target_industry: str) -> list[dict]:
+    if not target_industry:
+        return empresas
+    similar = get_similar_industries(target_industry)
+    similar_set = set(similar)
+
+    exact = [e for e in empresas if e.get("Industria") == target_industry]
+    if len(exact) >= MIN_COMPS:
+        print(f"   🎯 '{target_industry}': {len(exact)} empresas")
+        return exact
+
+    sim = [e for e in empresas if e.get("Industria") in similar_set]
+    if len(sim) >= MIN_COMPS:
+        print(f"   🎯 Similares {set(e.get('Industria') for e in sim)}: {len(sim)}")
+        return sim
+
+    print(f"   ⚠️ Solo {len(sim)} en '{target_industry}', usando sector ({len(empresas)})")
+    return sorted(empresas, key=lambda e: (0 if e.get("Industria") in similar_set else 1))
+
 
 @router.post("/comps")
 def generar_comps(request: CompsRequest):
-
     try:
-
         empresa = request.empresa_override
         sector = request.sector_override
         revenue = request.revenue_override
 
-        tickers = get_universe_by_sector(sector)[:50]
+        # Detectar industria del target
+        target_industry = None
+        if empresa:
+            td = get_financials_ttm(empresa.upper())
+            if td and td.get("Industria"):
+                target_industry = td["Industria"]
+                print(f"\n📊 Comps: {empresa} | Industria: {target_industry}")
 
-        empresas = []
+        # BUSCAR EN TODOS LOS SECTORES — no solo el seleccionado
+        # La industria de Yahoo Finance es lo que importa, no el sector del JSON
+        all_sectors = ["Technology", "Consumer", "Financials", "Industrials", "Energy", "Health Insurance", "Real Estate"]
+        
+        all_tickers = []
+        for s in all_sectors:
+            all_tickers.extend(get_universe_by_sector(s))
+        
+        # Deduplicar
+        all_tickers = list(dict.fromkeys(all_tickers))
 
-        for ticker in tickers:
+        if not all_tickers:
+            raise HTTPException(status_code=400, detail="No hay empresas cargadas")
 
-            data = get_financials_ttm(ticker)
-
-            if not data:
-                continue
-
-            empresas.append(data)
-
+        print(f"   Bajando {len(all_tickers)} tickers de TODOS los sectores | PARALLEL")
+        empresas = fetch_many_parallel(all_tickers, max_workers=15)
         if not empresas:
-            raise HTTPException(
-                status_code=500,
-                detail="No se pudieron obtener empresas"
-            )
+            raise HTTPException(status_code=500, detail="No se pudieron obtener datos")
+        print(f"   ✅ {len(empresas)}/{len(all_tickers)} obtenidas")
+
+        # Filtrar por industria
+        if target_industry:
+            empresas = filter_by_industry(empresas, target_industry)
+
+        # EXCLUIR el target de sus propios comps
+        target_upper = empresa.upper() if empresa else ""
+        empresas = [e for e in empresas if e.get("Ticker", "").upper() != target_upper]
+        
+        # Deduplicar por empresa (BABA y 9988.HK son la misma)
+        seen_names = set()
+        unique_empresas = []
+        for e in empresas:
+            name = e.get("Empresa", "")
+            if name not in seen_names:
+                seen_names.add(name)
+                unique_empresas.append(e)
+        empresas = unique_empresas
+        
+        print(f"   📊 Final: {len(empresas)} comps únicos para {empresa}")
 
         result = build_comps_response(
-            empresas,
-            empresa,
-            sector,
-            revenue,
-            request.rango_min_pct / 100,
-            request.rango_max_pct / 100
+            empresas, empresa, sector, revenue,
+            request.rango_min_pct / 100, request.rango_max_pct / 100
         )
-
+        result["target_industry"] = target_industry
         return result
 
+    except HTTPException:
+        raise
     except Exception as e:
-
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
-
-
-# ─────────────────────────────────────────────
-# EXCEL DOWNLOAD
-# ─────────────────────────────────────────────
 
 @router.post("/comps/excel")
 def descargar_excel(request: CompsRequest):
-
     try:
-
         empresa = request.empresa_override
         sector = request.sector_override
         revenue = request.revenue_override
 
-        tickers = get_universe_by_sector(sector)[:25]
+        target_industry = None
+        if empresa:
+            td = get_financials_ttm(empresa.upper())
+            if td and td.get("Industria"):
+                target_industry = td["Industria"]
 
-        resultados = []
+        # Buscar en TODOS los sectores
+        all_sectors = ["Technology", "Consumer", "Financials", "Industrials", "Energy", "Health Insurance", "Real Estate"]
+        all_tickers = []
+        for s in all_sectors:
+            all_tickers.extend(get_universe_by_sector(s))
+        all_tickers = list(dict.fromkeys(all_tickers))
 
-        for ticker in tickers:
+        resultados = fetch_many_parallel(all_tickers, max_workers=15)
+        resultados = [r for r in resultados if r.get("Revenue ($mm)") is not None]
 
-            data = get_financials_ttm(ticker)
+        if target_industry:
+            resultados = filter_by_industry(resultados, target_industry)
 
-            if not data:
-                continue
-
-            if data.get("Revenue ($mm)") is None:
-                continue
-
-            resultados.append(data)
+        # Excluir target + deduplicar
+        target_upper = empresa.upper() if empresa else ""
+        resultados = [r for r in resultados if r.get("Ticker", "").upper() != target_upper]
+        seen = set()
+        unique = []
+        for r in resultados:
+            name = r.get("Empresa", "")
+            if name not in seen:
+                seen.add(name)
+                unique.append(r)
+        resultados = unique
 
         if not resultados:
-            raise HTTPException(
-                status_code=500,
-                detail="No se pudieron obtener datos"
-            )
+            raise HTTPException(status_code=500, detail="Sin datos")
 
         df = pd.DataFrame(resultados)
-
         DEAL_CONFIG.update({
-            "empresa_target": empresa,
-            "sector": sector,
-            "revenue_target": revenue,
-            "rango_min_pct": request.rango_min_pct / 100,
-            "rango_max_pct": request.rango_max_pct / 100,
-            "analista": request.analista,
-            "fecha": datetime.now().strftime("%d/%m/%Y"),
+            "empresa_target": empresa, "sector": sector, "revenue_target": revenue,
+            "rango_min_pct": request.rango_min_pct / 100, "rango_max_pct": request.rango_max_pct / 100,
+            "analista": request.analista, "fecha": datetime.now().strftime("%d/%m/%Y"),
         })
 
-        fecha_str = datetime.now().strftime("%Y%m%d")
-
-        fname = f"Comps_{empresa.replace(' ','_')}_{fecha_str}.xlsx"
-
+        fname = f"Comps_{empresa.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.xlsx"
         buffer = io.BytesIO()
-
         _generar_excel_buffer(df, buffer)
-
         buffer.seek(0)
 
         return StreamingResponse(
             buffer,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f'attachment; filename="{fname}"'
-            }
+            headers={"Content-Disposition": f'attachment; filename="{fname}"'}
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
-
         traceback.print_exc()
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=500, detail=str(e))

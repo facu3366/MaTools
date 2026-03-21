@@ -9,25 +9,28 @@ def get_connection():
 
 
 def init_db():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
 
-    conn = get_connection()
-    cursor = conn.cursor()
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bcra_bancos (
+            id SERIAL PRIMARY KEY,
+            banco TEXT,
+            activos REAL,
+            depositos REAL,
+            patrimonio REAL,
+            prestamos REAL,
+            fecha_reporte TEXT,
+            fecha_scraping TEXT
+        )
+        """)
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS bcra_bancos (
-        id SERIAL PRIMARY KEY,
-        banco TEXT,
-        activos REAL,
-        depositos REAL,
-        patrimonio REAL,
-        prestamos REAL,
-        fecha_reporte TEXT,
-        fecha_scraping TEXT
-    )
-    """)
-
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
+        print("✅ DB conectada")
+    except Exception as e:
+        print(f"⚠️ DB no disponible (local mode): {e}")
 
 
 # ─────────────────────────────────────────────
@@ -35,38 +38,39 @@ def init_db():
 # ─────────────────────────────────────────────
 
 def save_bcra_data(data):
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
 
-    conn = get_connection()
-    cursor = conn.cursor()
+        cursor.execute("DELETE FROM bcra_bancos")
 
-    # limpio tabla antes de insertar (como ya hacías)
-    cursor.execute("DELETE FROM bcra_bancos")
+        for b in data["bancos"]:
 
-    for b in data["bancos"]:
+            cursor.execute("""
+            INSERT INTO bcra_bancos (
+                banco,
+                activos,
+                depositos,
+                patrimonio,
+                prestamos,
+                fecha_reporte,
+                fecha_scraping
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                b.get("Banco"),
+                b.get("Activos"),
+                b.get("Depositos"),
+                b.get("Patrimonio Neto"),
+                b.get("Prestamos"),
+                data.get("fecha_reporte"),
+                data.get("fecha_scraping")
+            ))
 
-        cursor.execute("""
-        INSERT INTO bcra_bancos (
-            banco,
-            activos,
-            depositos,
-            patrimonio,
-            prestamos,
-            fecha_reporte,
-            fecha_scraping
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (
-            b.get("Banco"),
-            b.get("Activos"),
-            b.get("Depositos"),
-            b.get("Patrimonio Neto"),
-            b.get("Prestamos"),
-            data.get("fecha_reporte"),
-            data.get("fecha_scraping")
-        ))
-
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ save_bcra_data failed (no DB): {e}")
 
 
 # ─────────────────────────────────────────────
@@ -74,25 +78,28 @@ def save_bcra_data(data):
 # ─────────────────────────────────────────────
 
 def get_bcra_data():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
 
-    conn = get_connection()
-    cursor = conn.cursor()
+        cursor.execute("SELECT * FROM bcra_bancos")
 
-    cursor.execute("SELECT * FROM bcra_bancos")
+        rows = cursor.fetchall()
 
-    rows = cursor.fetchall()
+        conn.close()
 
-    conn.close()
-
-    return [
-        {
-            "Banco": r[1],
-            "Activos": r[2],
-            "Depositos": r[3],
-            "Patrimonio Neto": r[4],
-            "Prestamos": r[5],
-            "fecha_reporte": r[6],
-            "fecha_scraping": r[7]
-        }
-        for r in rows
-    ]
+        return [
+            {
+                "Banco": r[1],
+                "Activos": r[2],
+                "Depositos": r[3],
+                "Patrimonio Neto": r[4],
+                "Prestamos": r[5],
+                "fecha_reporte": r[6],
+                "fecha_scraping": r[7]
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"⚠️ get_bcra_data failed (no DB): {e}")
+        return []

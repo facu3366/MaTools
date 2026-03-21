@@ -20,7 +20,7 @@ from Backend.modules.bcra import router as bcra_router
 from Backend.modules.comps import router as comps_router
 from Backend.modules.empresas import router as empresas_router
 from Backend.modules.financials import router as financials_router
-from Backend.modules.precedents import router as precedents_router
+# from Backend.modules.precedents import router as precedents_router  # DESHABILITADO
 from Backend.modules.bcra_export import router as bcra_export_router
 from Backend.modules.research import router as research_router
 
@@ -92,7 +92,7 @@ async def options_handler(request: Request, full_path: str):
 app.include_router(empresas_router)
 app.include_router(comps_router)
 app.include_router(financials_router)
-app.include_router(precedents_router)
+# app.include_router(precedents_router)  # DESHABILITADO: rutas duplicadas con financials.py
 app.include_router(bcra_router)
 app.include_router(bcra_export_router)
 app.include_router(research_router)

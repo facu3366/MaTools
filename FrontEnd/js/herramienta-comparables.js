@@ -621,21 +621,29 @@ async function downloadCompsExcel() {
     }
 
     const blob = await res.blob();
-
     const url = window.URL.createObjectURL(blob);
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Comps_${empresa}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    // Intentar abrir directo (funciona si el browser tiene Excel asociado)
+    // Si no, hace download normal como fallback
+    const fname = `Comps_${empresa}_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    // Método 1: abrir en nueva pestaña (el browser decide si abrir o descargar)
+    const newWindow = window.open(url, '_blank');
 
-    window.URL.revokeObjectURL(url);
+    // Si el browser bloqueó el popup, fallback a descarga directa
+    if (!newWindow) {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    // Limpiar URL después de un rato
+    setTimeout(() => window.URL.revokeObjectURL(url), 30000);
   } catch (err) {
     alert("Error generando Excel");
-
     console.error(err);
   }
 
