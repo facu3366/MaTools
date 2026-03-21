@@ -28,10 +28,16 @@ from Backend.comps_automatico import (
 )
 
 router = APIRouter()
-
+COUNTRY_TO_REGION = {
+    "Argentina": "LATAM",
+    "Brazil": "LATAM",
+    "Mexico": "LATAM",
+}
 REGION_MAP = {
     "LATAM": ["Argentina", "Brazil", "Mexico", "Chile", "Colombia"],
     "US": ["United States"],
+    "EU": ["Germany", "France", "Spain", "Italy", "Luxembourg"],
+    "ASIA": ["China", "Hong Kong", "Singapore", "India", "Japan", "Indonesia"],
 }
 class CompsRequest(BaseModel):
     mensaje: str
@@ -209,17 +215,19 @@ def generar_comps(request: CompsRequest):
         if target_industry:
             empresas = filter_by_industry(empresas, target_industry)
 
-        # ── FILTRO POR REGIÓN / PAÍS ─────────────────────────────
+        # ── PRIORIDAD POR REGIÓN (NO FILTRO DURO) ───────────────
 
         region = request.region
 
         if region and region != "GLOBAL":
 
-            if region in REGION_MAP:
-                allowed = REGION_MAP[region]
-            else:
-                allowed = [region]
+            # Si el user eligió país → mapear a región
+            region = COUNTRY_TO_REGION.get(region, region)
 
+            # Obtener países de esa región
+            allowed = REGION_MAP.get(region, [region])
+
+            # Ordenar: primero los de la región, después el resto
             empresas = sorted(
                 empresas,
                 key=lambda e: 0 if e.get("Pais") in allowed else 1
