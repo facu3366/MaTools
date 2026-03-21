@@ -53,17 +53,15 @@ def discover_tickers(query: str):
     except Exception:
         return []
 
-def build_dynamic_universe(sector: str):
+def build_dynamic_universe_from_industry(industry: str):
 
-    queries_map = {
-        "Technology": ["technology", "software", "ecommerce", "saas"],
-        "Financials": ["bank", "fintech", "insurance"],
-        "Energy": ["oil", "gas", "renewable"],
-        "Consumer": ["retail", "consumer"],
-        "Industrials": ["industrial", "manufacturing"],
-    }
+    if not industry:
+        return []
 
-    queries = queries_map.get(sector, [sector])
+    # usar tu mapa (esto es clave)
+    related_industries = INDUSTRY_GROUPS.get(industry, [industry])
+
+    queries = list(set(related_industries))
 
     tickers = []
 
@@ -277,7 +275,7 @@ def generar_comps(request: CompsRequest):
             base_tickers.extend(get_universe_by_sector(s))
 
         # NUEVO: discovery dinámico desde Yahoo
-        dynamic_tickers = build_dynamic_universe(sector)
+        dynamic_tickers = build_dynamic_universe_from_industry(industry)
 
         print(f"🔎 Dynamic tickers: {len(dynamic_tickers)}")
 
