@@ -409,6 +409,9 @@ async function runComps() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    data.empresas_filtradas.forEach((e) => {
+      console.log(e.Ticker, e.Pais);
+    });
 
     let data = null;
     let text = "";
