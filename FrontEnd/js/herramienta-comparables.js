@@ -445,29 +445,87 @@ async function runComps() {
   btn.disabled = false;
 }
 function getRegionFromCountry(pais) {
-  if (!pais) return "—";
+  if (!pais) return "OTHER";
 
-  if (["Argentina", "Brazil", "Mexico", "Chile", "Colombia"].includes(pais)) {
+  if (
+    [
+      "Argentina",
+      "Brazil",
+      "Mexico",
+      "Chile",
+      "Colombia",
+      "Peru",
+      "Uruguay",
+      "Paraguay",
+      "Bolivia",
+      "Ecuador",
+      "Venezuela",
+    ].includes(pais)
+  ) {
     return "LATAM";
   }
 
-  if (pais === "United States") {
+  if (["United States", "USA", "United States of America"].includes(pais)) {
     return "US";
   }
 
-  if (["Germany", "France", "Spain", "Italy", "Luxembourg"].includes(pais)) {
+  if (
+    [
+      "Germany",
+      "France",
+      "Spain",
+      "Italy",
+      "Luxembourg",
+      "Ireland",
+      "Netherlands",
+      "Switzerland",
+      "Sweden",
+      "Norway",
+      "Denmark",
+      "Finland",
+      "Belgium",
+      "Austria",
+      "United Kingdom",
+      "UK",
+    ].includes(pais)
+  ) {
     return "EU";
   }
 
   if (
-    ["China", "Hong Kong", "Singapore", "India", "Japan", "Indonesia"].includes(
-      pais,
-    )
+    [
+      "China",
+      "Hong Kong",
+      "Singapore",
+      "India",
+      "Japan",
+      "Indonesia",
+      "South Korea",
+      "Taiwan",
+      "Thailand",
+      "Philippines",
+      "Malaysia",
+      "Vietnam",
+      "Pakistan",
+      "Bangladesh",
+      "Saudi Arabia",
+      "UAE",
+      "Qatar",
+      "Israel",
+    ].includes(pais)
   ) {
-    return "Asia";
+    return "ASIA";
   }
 
-  return "Other";
+  if (["South Africa", "Egypt", "Nigeria", "Kenya", "Morocco"].includes(pais)) {
+    return "AFRICA";
+  }
+
+  if (["Australia", "New Zealand"].includes(pais)) {
+    return "OCEANIA";
+  }
+
+  return "OTHER";
 }
 // ── RENDER COMPS RESULT ───────────────────────────────────────
 
