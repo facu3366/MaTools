@@ -275,7 +275,7 @@ def generar_comps(request: CompsRequest):
             base_tickers.extend(get_universe_by_sector(s))
 
         # NUEVO: discovery dinámico desde Yahoo
-        dynamic_tickers = build_dynamic_universe_from_industry(industry)
+        dynamic_tickers = build_dynamic_universe_from_industry(target_industry)
 
         print(f"🔎 Dynamic tickers: {len(dynamic_tickers)}")
 
