@@ -33,42 +33,7 @@ COUNTRY_TO_REGION = {
     "Brazil": "LATAM",
     "Mexico": "LATAM",
 }
-import requests
 
-def discover_tickers(query: str):
-    url = f"https://query1.finance.yahoo.com/v1/finance/search?q={query}"
-
-    try:
-        res = requests.get(url, timeout=5)
-        data = res.json()
-
-        tickers = []
-
-        for q in data.get("quotes", []):
-            if q.get("quoteType") == "EQUITY":
-                tickers.append(q["symbol"])
-
-        return tickers
-
-    except Exception:
-        return []
-
-def build_dynamic_universe_from_industry(industry: str):
-
-    if not industry:
-        return []
-
-    # usar tu mapa (esto es clave)
-    related_industries = INDUSTRY_GROUPS.get(industry, [industry])
-
-    queries = list(set(related_industries))
-
-    tickers = []
-
-    for q in queries:
-        tickers.extend(discover_tickers(q))
-
-    return list(set(tickers))
 class CompsRequest(BaseModel):
     mensaje: str
     analista: str = "Analista"
@@ -228,50 +193,27 @@ def get_similar_industries(industry: str) -> list[str]:
             return values
     return [industry]
 
-def filter_by_industry(empresas, target_industry):
+MIN_COMPS = 10
 
+def filter_by_industry(empresas: list[dict], target_industry: str) -> list[dict]:
     if not target_industry:
         return empresas
-
     similar = get_similar_industries(target_industry)
     similar_set = set(similar)
 
-    # 1. exact match
-    exact = [
-        e for e in empresas
-        if e.get("Industria") == target_industry
-    ]
+    exact = [e for e in empresas if e.get("Industria") == target_industry]
+    if len(exact) >= MIN_COMPS:
+        print(f"   🎯 '{target_industry}': {len(exact)} empresas")
+        return exact
 
-    # 2. similares
-    sim = [
-        e for e in empresas
-        if e.get("Industria") in similar_set
-    ]
+    sim = [e for e in empresas if e.get("Industria") in similar_set]
+    if len(sim) >= MIN_COMPS:
+        print(f"   🎯 Similares {set(e.get('Industria') for e in sim)}: {len(sim)}")
+        return sim
 
-    # 3. expansión (soft match)
-    expansion_keywords = ["retail", "commerce", "marketplace"]
+    print(f"   ⚠️ Solo {len(sim)} en '{target_industry}', usando sector ({len(empresas)})")
+    return sorted(empresas, key=lambda e: (0 if e.get("Industria") in similar_set else 1))
 
-    expanded = [
-        e for e in empresas
-        if any(
-            kw in (e.get("Industria") or "").lower()
-            for kw in expansion_keywords
-        )
-    ]
-
-    # combinar sin duplicados
-    combined = []
-    seen = set()
-
-    for group in [exact, sim, expanded]:
-        for e in group:
-            if e["Ticker"] not in seen:
-                combined.append(e)
-                seen.add(e["Ticker"])
-
-    print(f"Exact: {len(exact)} | Sim: {len(sim)} | Exp: {len(expanded)}")
-
-    return combined[:25]  # 🔥 clave: límite sano
 
 @router.post("/comps")
 def generar_comps(request: CompsRequest):
@@ -292,21 +234,12 @@ def generar_comps(request: CompsRequest):
         # La industria de Yahoo Finance es lo que importa, no el sector del JSON
         all_sectors = ["Technology", "Consumer", "Financials", "Industrials", "Energy", "Health Insurance", "Real Estate"]
         
-        # base (lo que ya tenés)
-        base_tickers = []
+        all_tickers = []
         for s in all_sectors:
-            base_tickers.extend(get_universe_by_sector(s))
-
-        # NUEVO: discovery dinámico desde Yahoo
-        dynamic_tickers = build_dynamic_universe_from_industry(target_industry)
-
-        print(f"🔎 Dynamic tickers: {len(dynamic_tickers)}")
-
-        # combinar ambos
-        all_tickers = list(set(base_tickers + dynamic_tickers))
-
-        # limitar para no matar Yahoo
-        all_tickers = all_tickers[:200]
+            all_tickers.extend(get_universe_by_sector(s))
+        
+        # Deduplicar
+        all_tickers = list(dict.fromkeys(all_tickers))
 
         if not all_tickers:
             raise HTTPException(status_code=400, detail="No hay empresas cargadas")
