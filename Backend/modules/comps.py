@@ -217,23 +217,15 @@ def generar_comps(request: CompsRequest):
 
             if region in REGION_MAP:
                 allowed = REGION_MAP[region]
-                empresas_region = [
-                    e for e in empresas
-                    if e.get("Pais") in allowed
-                ]
             else:
-                # caso país específico
-                empresas_region = [
-                    e for e in empresas
-                    if e.get("Pais") == region
-                ]
+                allowed = [region]
 
-            # fallback inteligente
-            if len(empresas_region) >= 5:
-                print(f"🌎 Usando filtro región {region}: {len(empresas_region)} comps")
-                empresas = empresas_region
-            else:
-                print(f"⚠️ Muy pocos comps en {region}, usando global")
+            empresas = sorted(
+                empresas,
+                key=lambda e: 0 if e.get("Pais") in allowed else 1
+            )
+
+            print(f"🌎 Priorizando región {region}")
         # EXCLUIR el target de sus propios comps
         target_upper = empresa.upper() if empresa else ""
         empresas = [e for e in empresas if e.get("Ticker", "").upper() != target_upper]
