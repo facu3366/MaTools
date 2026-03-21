@@ -228,26 +228,27 @@ def get_similar_industries(industry: str) -> list[str]:
             return values
     return [industry]
 
-MIN_COMPS = 10
+def filter_by_industry(empresas, target_industry):
 
-def filter_by_industry(empresas: list[dict], target_industry: str) -> list[dict]:
     if not target_industry:
         return empresas
+
     similar = get_similar_industries(target_industry)
     similar_set = set(similar)
 
     exact = [e for e in empresas if e.get("Industria") == target_industry]
-    if len(exact) >= MIN_COMPS:
-        print(f"   🎯 '{target_industry}': {len(exact)} empresas")
+
+    if len(exact) >= 5:
         return exact
 
     sim = [e for e in empresas if e.get("Industria") in similar_set]
-    if len(sim) >= MIN_COMPS:
-        print(f"   🎯 Similares {set(e.get('Industria') for e in sim)}: {len(sim)}")
+
+    if len(sim) >= 8:
         return sim
 
-    print(f"   ⚠️ Solo {len(sim)} en '{target_industry}', usando sector ({len(empresas)})")
-    return sorted(empresas, key=lambda e: (0 if e.get("Industria") in similar_set else 1))
+    # fallback controlado (NO todo)
+    print("⚠️ fallback suave")
+    return sim[:15]  # límite
 
 
 @router.post("/comps")
