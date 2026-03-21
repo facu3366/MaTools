@@ -444,7 +444,31 @@ async function runComps() {
 
   btn.disabled = false;
 }
+function getRegionFromCountry(pais) {
+  if (!pais) return "—";
 
+  if (["Argentina", "Brazil", "Mexico", "Chile", "Colombia"].includes(pais)) {
+    return "LATAM";
+  }
+
+  if (pais === "United States") {
+    return "US";
+  }
+
+  if (["Germany", "France", "Spain", "Italy", "Luxembourg"].includes(pais)) {
+    return "EU";
+  }
+
+  if (
+    ["China", "Hong Kong", "Singapore", "India", "Japan", "Indonesia"].includes(
+      pais,
+    )
+  ) {
+    return "Asia";
+  }
+
+  return "Other";
+}
 // ── RENDER COMPS RESULT ───────────────────────────────────────
 
 function renderCompsResult(data) {
@@ -478,6 +502,7 @@ function renderCompsResult(data) {
     <tr>
       <td class="t-ticker">${e.Ticker}</td>
       <td class="t-name">${e.Empresa || ""}</td>
+      <td class="t-region">${getRegionFromCountry(e.Pais)}</td>
       <td class="t-num">${fmtNum(e["Revenue ($mm)"])}</td>
       <td class="t-num">${fmtNum(e["EBITDA ($mm)"])}</td>
       <td class="t-num">${fmtNum(e["EV ($mm)"])}</td>
@@ -542,6 +567,7 @@ function renderCompsResult(data) {
               <tr>
                 <th>Ticker</th>
                 <th>Company</th>
+                <th>Region</th>
                 <th>Revenue (TTM)</th>
                 <th>EBITDA (TTM)</th>
                 <th>EV</th>
