@@ -315,7 +315,7 @@ def get_financials_ttm(ticker: str) -> Optional[dict]:
         result = {
             "Ticker": ticker,
             "Empresa": empresa,
-            "Pais": pais,  # ← CORREGIDO: con acento (antes era "Pais")
+            "País": pais,  # ← CORREGIDO: con acento (antes era "Pais")
             "Sector": sector,
             "Industria": industry,
             "Descripción": desc,
