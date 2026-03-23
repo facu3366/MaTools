@@ -38,6 +38,14 @@ Ranking del sistema financiero argentino · Datos del Banco Central
 <button data-n="50">50</button>
 </div>
 
+<!-- 👉 BOTÓN BIEN UBICADO -->
+<button 
+  class="bcra-bank-btn bcra-export-btn"
+  style="margin-left:10px;"
+  onclick="exportBcraExcel()">
+  ⬇ Exportar Excel
+</button>
+
 <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
 
 <span class="nav-badge live" id="bcra-badge-count"></span>
@@ -55,85 +63,37 @@ style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">
 </div>
 
 
-<!-- BLOQUE PRINCIPAL -->
-<div class="bcra-grid" style="margin-top:14px; align-items:stretch;">
+<!-- SELECTOR BANCOS -->
+<div class="bcra-card" style="margin-top:14px;">
 
-  <!-- IZQUIERDA -->
-  <div class="bcra-card" style="display:flex;flex-direction:column;">
+<h3>Selección de bancos</h3>
+<div class="sub">Filtrá las entidades a analizar</div>
 
-    <h3>Selección de bancos</h3>
-    <div class="sub">Filtrá las entidades a analizar</div>
+<div class="bcra-bank-selector" style="margin-top:12px;">
 
-    <div class="bcra-bank-selector" style="margin-top:12px; flex:1; display:flex; flex-direction:column;">
+<div class="bcra-bank-header">
 
-      <div class="bcra-bank-header">
+<input
+id="bcra-bank-search"
+placeholder="Buscar banco..."
+class="bcra-bank-search"
+/>
 
-        <input
-          id="bcra-bank-search"
-          placeholder="Buscar banco..."
-          class="bcra-bank-search"
-        />
+<div class="bcra-bank-actions">
+<button id="bcra-select-all" class="bcra-bank-btn">
+Todos
+</button>
 
-        <div class="bcra-bank-actions">
-          <button id="bcra-select-all" class="bcra-bank-btn">
-            Todos
-          </button>
+<button id="bcra-clear-all" class="bcra-bank-btn">
+Limpiar
+</button>
+</div>
 
-          <button id="bcra-clear-all" class="bcra-bank-btn">
-            Limpiar
-          </button>
-        </div>
+</div>
 
-      </div>
+<div id="bcra-chip-row" class="chip-row"></div>
 
-      <div id="bcra-chip-row" class="chip-row" style="margin-top:10px;"></div>
-
-    </div>
-
-  </div>
-
-
-  <!-- DERECHA (FIX REAL) -->
-  <div class="bcra-card" style="
-    display:flex;
-    flex-direction:column;
-    justify-content:space-between;
-    min-height:100%;
-  ">
-
-    <div>
-      <h3>Exportación</h3>
-      <div class="sub">Descargá el análisis completo</div>
-    </div>
-
-    <div style="
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      flex:1;
-    ">
-
-      <button 
-        class="bcra-bank-btn bcra-export-btn"
-        style="
-          padding:14px 22px;
-          font-size:13px;
-        "
-        onclick="exportBcraExcel()">
-        ⬇ EXPORTAR EXCEL
-      </button>
-
-    </div>
-
-    <div style="
-      font-size:11px;
-      color:var(--muted);
-      text-align:center;
-    ">
-      Incluye KPIs, rankings y gráficos
-    </div>
-
-  </div>
+</div>
 
 </div>
 
@@ -144,36 +104,33 @@ style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">
 
 <!-- TABS -->
 <div class="bcra-tabs">
-
 <button class="bcra-tab on" data-view="ranking">Rankings</button>
 <button class="bcra-tab" data-view="market">Market share</button>
 <button class="bcra-tab" data-view="scatter">Scatter</button>
 <button class="bcra-tab" data-view="ratios">Ratios M&A</button>
-
 </div>
 
 
 <!-- RANKING -->
 <div class="bcra-grid bcra-view" id="bcra-view-ranking">
-
 <div class="bcra-card">
 
 <h3 id="bcra-rank-title">Top 10 por Activos</h3>
 
-<div class="sub">Click en barra para aislar banco</div>
+<div class="sub">
+Click en barra para aislar banco
+</div>
 
 <div class="bcra-chart-wrap h-bar">
 <canvas id="bcra-chart-bar"></canvas>
 </div>
 
 </div>
-
 </div>
 
 
 <!-- MARKET -->
 <div class="bcra-grid bcra-view" id="bcra-view-market" style="display:none">
-
 <div class="bcra-card">
 
 <h3 id="bcra-pie-title">Composición — Activos</h3>
@@ -191,13 +148,11 @@ style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">
 </div>
 
 </div>
-
 </div>
 
 
 <!-- SCATTER -->
 <div class="bcra-view" id="bcra-view-scatter" style="display:none">
-
 <div class="bcra-card">
 
 <h3>Eficiencia bancaria</h3>
@@ -211,39 +166,28 @@ X = Activos · Y = Préstamos / Depósitos · Tamaño = Patrimonio
 </div>
 
 </div>
-
 </div>
 
 
 <!-- RATIOS -->
 <div class="bcra-view" id="bcra-view-ratios" style="display:none">
-
 <div class="bcra-grid">
 
 <div class="bcra-card">
-
 <h3>Ratios M&A</h3>
-
 <div class="sub">Préstamos/Depósitos · Leverage</div>
-
 <div id="bcra-ratios-list"></div>
-
 </div>
 
 <div class="bcra-card">
-
 <h3>Concentración del sistema</h3>
-
 <div class="sub">% acumulado del mercado</div>
-
 <div class="bcra-chart-wrap h260">
 <canvas id="bcra-chart-concentration"></canvas>
 </div>
-
 </div>
 
 </div>
-
 </div>
 
 
@@ -255,7 +199,6 @@ X = Activos · Y = Préstamos / Depósitos · Tamaño = Patrimonio
 <div class="sub" id="bcra-tbl-sub"></div>
 
 <div style="overflow:auto;max-height:420px">
-
 <table class="bcra-tbl">
 <thead>
 <tr>
@@ -270,7 +213,6 @@ X = Activos · Y = Préstamos / Depósitos · Tamaño = Patrimonio
 
 <tbody id="bcra-tbl-body"></tbody>
 </table>
-
 </div>
 
 </div>
