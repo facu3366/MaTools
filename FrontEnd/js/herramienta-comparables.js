@@ -264,10 +264,17 @@ function getPaisSafe(e) {
 function renderCharts(data) {
   const empresas = data.empresas_filtradas || [];
 
-  // mostrar contenedor
   document.getElementById("comps-charts").style.display = "block";
 
   // ───────── SCATTER EV vs REVENUE ─────────
+  const scatter = empresas.map((e) => ({
+    x: e["Revenue ($mm)"],
+    y: e["EV ($mm)"],
+    label: e.Ticker,
+  }));
+
+  const ctx1 = document.getElementById("chart-ev-rev");
+
   new Chart(ctx1, {
     type: "scatter",
     data: {
@@ -275,7 +282,10 @@ function renderCharts(data) {
         {
           label: "Comps",
           data: scatter,
-          backgroundColor: "#999",
+          backgroundColor: scatter.map((e) =>
+            e.label === selectedTicker ? "#b8860b" : "#999",
+          ),
+          pointRadius: scatter.map((e) => (e.label === selectedTicker ? 6 : 3)),
         },
       ],
     },
@@ -287,7 +297,6 @@ function renderCharts(data) {
           },
         },
       },
-
       scales: {
         x: {
           type: "logarithmic",
