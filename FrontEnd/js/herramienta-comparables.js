@@ -251,7 +251,9 @@ async function autoDetectSector(ticker) {
     console.error("autoDetectSector error:", err);
   }
 }
-
+function getPaisSafe(e) {
+  return e?.Pais || null;
+}
 // ── REVENUE CARD ──────────────────────────────────────────────
 async function fetchRevenueCard(ticker, name) {
   const container = document.getElementById("revenue-preview");
@@ -420,10 +422,10 @@ async function runComps() {
       console.error("Respuesta no JSON en /comps:", text);
     }
 
-    // 👇 AHORA SÍ (acá podés usar data)
     if (data?.empresas_filtradas) {
       data.empresas_filtradas.forEach((e) => {
         console.log("PAIS:", e.Ticker, e.Pais);
+        console.log("REGION:", getRegionFromCountry(e.Pais));
       });
 
       const arg = data.empresas_filtradas.filter((e) => e.Pais === "Argentina");
@@ -558,8 +560,8 @@ function renderCompsResult(data) {
 
   const tableRows = filtradas
     .sort((a, b) => {
-      const ra = getRegionFromCountry(a.Pais);
-      const rb = getRegionFromCountry(b.Pais);
+      const ra = getRegionFromCountry(a?.Pais);
+      const rb = getRegionFromCountry(b?.Pais);
 
       // 1. priorizar región elegida
       if (ra === selectedRegion && rb !== selectedRegion) return -1;
@@ -573,7 +575,7 @@ function renderCompsResult(data) {
     <tr>
       <td class="t-ticker">${e.Ticker}</td>
       <td class="t-name">${e.Empresa || ""}</td>
-      <td class="t-region">${getRegionFromCountry(e.Pais)}</td>
+      <td class="t-region">${getRegionFromCountry(e?.Pais)}</td>
       <td class="t-num">${fmtNum(e["Revenue ($mm)"])}</td>
       <td class="t-num">${fmtNum(e["EBITDA ($mm)"])}</td>
       <td class="t-num">${fmtNum(e["EV ($mm)"])}</td>
