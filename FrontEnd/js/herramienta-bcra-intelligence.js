@@ -869,6 +869,15 @@ function bcraRenderScatter() {
   });
 }
 async function exportBcraExcel() {
+  const btn = document.getElementById("btn-export-excel");
+
+  let original = "";
+  if (btn) {
+    original = btn.innerHTML;
+    btn.innerHTML = "⏳ Descargando...";
+    btn.disabled = true;
+  }
+
   try {
     const res = await fetch(`${API}/bcra/export-excel`);
 
@@ -893,6 +902,12 @@ async function exportBcraExcel() {
   } catch (error) {
     console.error("Error exportando Excel BCRA:", error);
     alert("No se pudo descargar el Excel de BCRA");
+  } finally {
+    // 🔥 vuelve siempre al estado original (éxito o error)
+    if (btn) {
+      btn.innerHTML = original;
+      btn.disabled = false;
+    }
   }
 }
 
