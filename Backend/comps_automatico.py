@@ -595,16 +595,20 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
     # Hoja 2 activa por defecto (la que el analista necesita ver primero)
     wb.active = wb.sheetnames.index("Comparable Companies")
     # ══════════════════════════════════════════════
-    # 📊 CHARTS (EXCEL REAL)
+    # 📊 CHARTS (EXCEL REAL + LABELS)
     # ══════════════════════════════════════════════
 
     try:
         from openpyxl.chart import ScatterChart, Reference, Series, BarChart
+        from openpyxl.chart.label import DataLabelList
 
         ws3 = wb.create_sheet("Charts")
 
+        # ⚠️ USAR EL MISMO DATAFRAME QUE LA TABLA
+        df_chart = df.sort_values("Revenue ($mm)", ascending=False).reset_index(drop=True)
+
         # ─────────────────────────────
-        # TABLA BASE (datos para charts)
+        # TABLA BASE
         # ─────────────────────────────
 
         ws3["A1"] = "Ticker"
@@ -612,17 +616,15 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
         ws3["C1"] = "EV"
         ws3["D1"] = "EV/EBITDA"
 
-        row_start = 2
-
-        for i, row in df.iterrows():
-            r = row_start + i
+        for i, row in df_chart.iterrows():
+            r = i + 2
 
             ws3.cell(r, 1, row["Ticker"])
             ws3.cell(r, 2, row["Revenue ($mm)"])
             ws3.cell(r, 3, row["EV ($mm)"])
             ws3.cell(r, 4, row.get("EV/EBITDA"))
 
-        last_row = row_start + len(df) - 1
+        last_row = len(df_chart) + 1
 
         # ─────────────────────────────
         # SCATTER: EV vs Revenue
@@ -637,6 +639,11 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
 
         series = Series(yvalues, xvalues, title="Comps")
         scatter.series.append(series)
+
+        series.dLbls = DataLabelList()
+        series.dLbls.showVal = False
+        series.dLbls.showSerName = False
+        series.dLbls.showCatName = True
 
         scatter.x_axis.title = "Revenue ($mm)"
         scatter.y_axis.title = "Enterprise Value ($mm)"
@@ -667,6 +674,7 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
 
     except Exception as e:
         print("⚠️ Error generando charts:", e)
+
     wb.save(buffer)
 
 
