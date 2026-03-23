@@ -1853,3 +1853,22 @@ transform:translateY(1px);
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* GRID EN UNA SOLA LÍNEA */
+.form-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+  max-width: 900px;
+}
+
+/* BOTÓN VOLVER MÁS FUERTE */
+.btn-back-strong {
+  background: var(--white);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  opacity: 1;
+}
+
+.btn-back-strong:hover {
+  background: var(--cream);
+  border-color: var(--gold);
+}

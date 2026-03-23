@@ -762,3 +762,8 @@ async function downloadCompsExcel() {
   btn.innerHTML = original;
   btn.disabled = false;
 }
+// habilitar inputs una vez seleccionada empresa
+document.getElementById("comps-revenue").disabled = false;
+document.getElementById("comps-sector").disabled = false;
+document.getElementById("comps-region").disabled = false;
+document.getElementById("btn-comps").disabled = false;
