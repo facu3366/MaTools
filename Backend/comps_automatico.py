@@ -594,50 +594,60 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
 
     # Hoja 2 activa por defecto (la que el analista necesita ver primero)
     wb.active = wb.sheetnames.index("Comparable Companies")
-    # ══════════════════════════════════════════════
-    # 📊 CHARTS (nuevo)
-    # ══════════════════════════════════════════════
+    # ── EV vs Revenue (PRO) ──
+    fig, ax = plt.subplots(figsize=(8, 5))
 
-    try:
-        ws3 = wb.create_sheet("Charts")
+    target = DEAL_CONFIG.get("empresa_target", "").upper()
 
-        # ── EV vs Revenue (scatter) ──
-        fig, ax = plt.subplots()
+    for _, row in df.iterrows():
+        x = row["Revenue ($mm)"]
+        y = row["EV ($mm)"]
+        ticker = row["Ticker"]
 
-        ax.scatter(
-            df["Revenue ($mm)"],
-            df["EV ($mm)"]
+        if pd.isna(x) or pd.isna(y):
+            continue
+
+        is_target = ticker.upper() == target
+
+        color = "#b8860b" if is_target else "#6c757d"
+        size = 70 if is_target else 35
+        alpha = 1 if is_target else 0.7
+
+        ax.scatter(x, y, color=color, s=size, alpha=alpha, edgecolors="black", linewidth=0.5)
+
+        # label con offset para que no se pise
+        ax.annotate(
+            ticker,
+            (x, y),
+            textcoords="offset points",
+            xytext=(5, 5),
+            fontsize=8,
+            color="#333333" if not is_target else "#b8860b",
+            weight="bold" if is_target else "normal"
         )
 
-        ax.set_xlabel("Revenue ($mm)")
-        ax.set_ylabel("EV ($mm)")
-        ax.set_title("EV vs Revenue")
+    # títulos
+    ax.set_title("EV vs Revenue", fontsize=11, weight="bold", color="#111")
+    ax.set_xlabel("Revenue ($mm)", fontsize=9)
+    ax.set_ylabel("Enterprise Value ($mm)", fontsize=9)
 
-        tmp1 = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-        plt.savefig(tmp1.name, bbox_inches="tight")
-        plt.close(fig)
+    # escala log como frontend
+    ax.set_xscale("log")
+    ax.set_yscale("log")
 
-        img1 = Image(tmp1.name)
-        ws3.add_image(img1, "A1")
+    # grid elegante
+    ax.grid(True, which="major", linestyle="--", linewidth=0.5, alpha=0.5)
 
-        # ── EV / EBITDA (bar) ──
-        fig2, ax2 = plt.subplots()
+    # sacar bordes feos
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
-        df_sorted = df.sort_values("EV/EBITDA")
+    # ticks más chicos
+    ax.tick_params(axis='both', labelsize=8)
 
-        ax2.bar(df_sorted["Ticker"], df_sorted["EV/EBITDA"])
-
-        ax2.set_title("EV / EBITDA")
-
-        tmp2 = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-        plt.savefig(tmp2.name, bbox_inches="tight")
-        plt.close(fig2)
-
-        img2 = Image(tmp2.name)
-        ws3.add_image(img2, "A20")
-
-    except Exception as e:
-        print("⚠️ Error generando charts:", e)
+    # fondo limpio
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
     wb.save(buffer)
 
 
