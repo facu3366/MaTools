@@ -594,60 +594,77 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
 
     # Hoja 2 activa por defecto (la que el analista necesita ver primero)
     wb.active = wb.sheetnames.index("Comparable Companies")
-    # ── EV vs Revenue (PRO) ──
-    fig, ax = plt.subplots(figsize=(8, 5))
+    # ══════════════════════════════════════════════
+    # 📊 CHARTS (PRO)
+    # ══════════════════════════════════════════════
 
-    target = DEAL_CONFIG.get("empresa_target", "").upper()
+    try:
+        ws3 = wb.create_sheet("Charts")
 
-    for _, row in df.iterrows():
-        x = row["Revenue ($mm)"]
-        y = row["EV ($mm)"]
-        ticker = row["Ticker"]
+        # ── EV vs Revenue (PRO) ──
+        fig, ax = plt.subplots(figsize=(8, 5))
 
-        if pd.isna(x) or pd.isna(y):
-            continue
+        target = DEAL_CONFIG.get("empresa_target", "").upper()
 
-        is_target = ticker.upper() == target
+        for _, row in df.iterrows():
+            x = row["Revenue ($mm)"]
+            y = row["EV ($mm)"]
+            ticker = row["Ticker"]
 
-        color = "#b8860b" if is_target else "#6c757d"
-        size = 70 if is_target else 35
-        alpha = 1 if is_target else 0.7
+            if pd.isna(x) or pd.isna(y):
+                continue
 
-        ax.scatter(x, y, color=color, s=size, alpha=alpha, edgecolors="black", linewidth=0.5)
+            is_target = ticker.upper() == target
 
-        # label con offset para que no se pise
-        ax.annotate(
-            ticker,
-            (x, y),
-            textcoords="offset points",
-            xytext=(5, 5),
-            fontsize=8,
-            color="#333333" if not is_target else "#b8860b",
-            weight="bold" if is_target else "normal"
-        )
+            color = "#b8860b" if is_target else "#6c757d"
+            size = 70 if is_target else 35
+            alpha = 1 if is_target else 0.7
 
-    # títulos
-    ax.set_title("EV vs Revenue", fontsize=11, weight="bold", color="#111")
-    ax.set_xlabel("Revenue ($mm)", fontsize=9)
-    ax.set_ylabel("Enterprise Value ($mm)", fontsize=9)
+            ax.scatter(
+                x, y,
+                color=color,
+                s=size,
+                alpha=alpha,
+                edgecolors="black",
+                linewidth=0.5
+            )
 
-    # escala log como frontend
-    ax.set_xscale("log")
-    ax.set_yscale("log")
+            ax.annotate(
+                ticker,
+                (x, y),
+                textcoords="offset points",
+                xytext=(5, 5),
+                fontsize=8,
+                color="#b8860b" if is_target else "#333333",
+                weight="bold" if is_target else "normal"
+            )
 
-    # grid elegante
-    ax.grid(True, which="major", linestyle="--", linewidth=0.5, alpha=0.5)
+        ax.set_title("EV vs Revenue", fontsize=11, weight="bold")
+        ax.set_xlabel("Revenue ($mm)", fontsize=9)
+        ax.set_ylabel("Enterprise Value ($mm)", fontsize=9)
 
-    # sacar bordes feos
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+        ax.set_xscale("log")
+        ax.set_yscale("log")
 
-    # ticks más chicos
-    ax.tick_params(axis='both', labelsize=8)
+        ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.5)
 
-    # fondo limpio
-    fig.patch.set_facecolor("white")
-    ax.set_facecolor("white")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        ax.tick_params(axis='both', labelsize=8)
+
+        plt.tight_layout()
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        plt.savefig(tmp.name, bbox_inches="tight", dpi=150)
+        plt.close(fig)
+
+        img = Image(tmp.name)
+        ws3.add_image(img, "A1")
+
+    except Exception as e:
+        print("⚠️ Error generando charts:", e)
+
     wb.save(buffer)
 
 
