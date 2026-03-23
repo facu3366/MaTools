@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-
+from openpyxl.chart import BarChart, PieChart
 from Backend.scrapers.bcra_scraper import get_bcra_bancos
 
 router = APIRouter()
