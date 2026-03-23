@@ -124,8 +124,17 @@ def get_financials_ttm(ticker: str) -> Optional[dict]:
         sector = info.get("sector", "N/A")
         industry = info.get("industry", "N/A")
         desc = info.get("longBusinessSummary", "")
-        if desc and len(desc) > 220:
-            desc = desc[:217] + "..."
+        if desc and len(desc) > 300:
+            # Cortar en la última oración completa antes de 300 chars
+            truncated = desc[:300]
+            # Buscar el último punto seguido de espacio
+            last_period = truncated.rfind('. ')
+            if last_period > 100:
+                desc = truncated[:last_period + 1]
+            else:
+                # Si no hay punto, cortar en el último espacio
+                last_space = truncated.rfind(' ')
+                desc = truncated[:last_space] + "…" if last_space > 100 else truncated + "…"
 
         # ── TTM REVENUE & EBITDA ──
         ttm_method = "quarterly"
@@ -185,6 +194,24 @@ def get_financials_ttm(ticker: str) -> Optional[dict]:
         revenue_mm = mm(revenue_ttm_raw)
         ebitda_mm = mm(ebitda_ttm_raw)
 
+        # ── CONVERSIÓN A USD si la moneda no es USD ──
+        fin_currency = info.get("financialCurrency", "USD")
+        if fin_currency and fin_currency != "USD":
+            try:
+                fx_ticker = f"{fin_currency}USD=X"
+                fx_rate = yf.Ticker(fx_ticker).info.get("regularMarketPrice")
+                if fx_rate and fx_rate > 0:
+                    revenue_mm = round(revenue_mm * fx_rate, 1) if revenue_mm else None
+                    ebitda_mm = round(ebitda_mm * fx_rate, 1) if ebitda_mm else None
+                    net_income_mm = round(net_income_mm * fx_rate, 1) if net_income_mm else None
+                    gross_mm = round(gross_mm * fx_rate, 1) if gross_mm else None
+                    total_debt_mm = round(total_debt_mm * fx_rate, 1) if total_debt_mm else None
+                    cash_mm = round(cash_mm * fx_rate, 1) if cash_mm else None
+                    fin_currency = "USD"
+                    logger.info(f"[{ticker}] Converted from {info.get('financialCurrency')} → USD (rate={fx_rate})")
+            except Exception as e:
+                logger.warning(f"[{ticker}] FX conversion failed: {e}")
+
         if not revenue_mm:
             _cache_set(ticker, "__NONE__")
             return None
@@ -213,7 +240,7 @@ def get_financials_ttm(ticker: str) -> Optional[dict]:
         result = {
             "Ticker": ticker,
             "Empresa": empresa,
-            "Pais": pais,
+            "País": pais,
             "Sector": sector,
             "Industria": industry,
             "Descripción": desc,
@@ -233,6 +260,7 @@ def get_financials_ttm(ticker: str) -> Optional[dict]:
             "Gross Mg%": gross_margin,
             "Rev Growth %": rev_growth,
             "Empleados": info.get("fullTimeEmployees"),
+            "Currency": info.get("financialCurrency", "USD"),
             "ttm_method": ttm_method,
             "quarters_used": quarters_used,
         }

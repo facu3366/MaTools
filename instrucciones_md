@@ -1,0 +1,28 @@
+# FIXES PARA COMPS PERFECTO — DealDesk
+# =====================================
+
+## ARCHIVO 1: Backend/modules/comps.py
+Reemplazar COMPLETO con el archivo comps.py adjunto.
+Cambios:
+- Nueva función `clean_and_dedup()` usada por AMBOS endpoints (/comps y /comps/excel)
+- Dedup por revenue (no por nombre) — elimina JD/9618.HK, BABA/9988.HK, MPNGY/3690.HK
+- Filtro de data quality: revenue > 5M mm = moneda local (Bukalapak), EV negativo
+- Prefiere ticker US sobre HK/SW/etc
+
+## ARCHIVO 2: Backend/financial_engine.py
+Cambiar UNA línea (~línea 170):
+  ANTES:  "Pais": pais,
+  DESPUÉS: "País": pais,
+Esto arregla la columna País vacía en el Excel.
+
+## ARCHIVO 3: FrontEnd/Data/empresas.json
+Agregar eBay al final del array (antes del último ]):
+  { "name": "eBay", "alias": ["ebay", "ebay inc"], "ticker": "EBAY", "sector": "Consumer", "region": "US" }
+
+## DESPUÉS DE APLICAR:
+1. git add -A
+2. git commit -m "fix: dedup por revenue + data quality + País accent + eBay"
+3. git push origin main
+4. uvicorn Backend.api:app --reload --port 8000
+5. Abrir ventana incógnito → localhost:8000
+6. Probar MELI → deberían salir ~15-18 comps SIN duplicados

@@ -587,7 +587,7 @@ function renderCompsResult(data) {
 
   const medianRow = `
     <tr class="stats-row stats-median">
-      <td colspan="2"><strong>Median</strong></td>
+      <td colspan="3"><strong>Median</strong></td>
       <td class="t-num">${fmtNum(stats["Revenue ($mm)"]?.median)}</td>
       <td class="t-num">${fmtNum(stats["EBITDA ($mm)"]?.median)}</td>
       <td class="t-num">${fmtNum(stats["EV ($mm)"]?.median)}</td>
@@ -599,7 +599,7 @@ function renderCompsResult(data) {
 
   const meanRow = `
     <tr class="stats-row stats-mean">
-      <td colspan="2"><strong>Mean</strong></td>
+      <td colspan="3"><strong>Mean</strong></td>
       <td class="t-num">${fmtNum(stats["Revenue ($mm)"]?.mean)}</td>
       <td class="t-num">${fmtNum(stats["EBITDA ($mm)"]?.mean)}</td>
       <td class="t-num">${fmtNum(stats["EV ($mm)"]?.mean)}</td>

@@ -1,8 +1,9 @@
 """
-📊 COMPS MODULE v4 — FULL UNIVERSE + INDUSTRY FILTER
-=====================================================
-Baja TODAS las empresas del sector (cache = 2da vez instantáneo).
-Filtra por industria Yahoo Finance ANTES de revenue range.
+📊 COMPS MODULE v6 — DYNAMIC DISCOVERY + SMART FILTER
+======================================================
+Source A: yf.Industry(industryKey).top_companies → Yahoo Finance peers (dynamic)
+Source B: empresas.json filtered by industry → international comps (fallback)
+Smart filter: currency, revenue range, outliers, dedup
 """
 
 from fastapi import APIRouter, HTTPException
@@ -15,6 +16,8 @@ import pandas as pd
 import io
 import traceback
 from datetime import datetime
+import yfinance as yf
+import logging
 
 from Backend.financial_engine import (
     get_financials_ttm,
@@ -28,11 +31,8 @@ from Backend.comps_automatico import (
 )
 
 router = APIRouter()
-COUNTRY_TO_REGION = {
-    "Argentina": "LATAM",
-    "Brazil": "LATAM",
-    "Mexico": "LATAM",
-}
+logger = logging.getLogger(__name__)
+
 
 class CompsRequest(BaseModel):
     mensaje: str
@@ -46,52 +46,9 @@ class CompsRequest(BaseModel):
     rango_max_pct: float = 300
     region: str = "GLOBAL"
 
+
 _empresas_cache = None
-def get_region_from_country(pais: str) -> str:
-    if not pais:
-        return "OTHER"
 
-    # LATAM
-    if pais in [
-        "Argentina","Brazil","Mexico","Chile","Colombia","Peru","Uruguay",
-        "Paraguay","Bolivia","Ecuador","Venezuela","Costa Rica","Panama",
-        "Guatemala","Dominican Republic","El Salvador","Honduras","Nicaragua"
-    ]:
-        return "LATAM"
-
-    # US
-    if pais in ["United States", "USA", "United States of America"]:
-        return "US"
-
-    # EUROPE
-    if pais in [
-        "Germany","France","Spain","Italy","Luxembourg","Ireland",
-        "Netherlands","Switzerland","Sweden","Norway","Denmark","Finland",
-        "Belgium","Austria","Portugal","Poland","Czech Republic","Greece",
-        "Hungary","Romania","Ukraine","United Kingdom","UK"
-    ]:
-        return "EU"
-
-    # ASIA
-    if pais in [
-        "China","Hong Kong","Singapore","India","Japan","Indonesia",
-        "South Korea","Taiwan","Thailand","Philippines","Malaysia",
-        "Vietnam","Pakistan","Bangladesh","Saudi Arabia","UAE","Qatar","Israel"
-    ]:
-        return "ASIA"
-
-    # AFRICA
-    if pais in [
-        "South Africa","Egypt","Nigeria","Kenya","Morocco","Ghana",
-        "Ethiopia","Algeria","Tunisia"
-    ]:
-        return "AFRICA"
-
-    # OCEANIA
-    if pais in ["Australia", "New Zealand"]:
-        return "OCEANIA"
-
-    return "OTHER"
 def load_empresas():
     global _empresas_cache
     if _empresas_cache is not None:
@@ -111,6 +68,21 @@ def load_empresas():
 
 def get_universe_by_sector(sector: str):
     return [e["ticker"] for e in load_empresas() if e.get("sector", "").lower() == sector.lower()]
+
+
+def discover_industry_peers(industry_key: str) -> list[str]:
+    if not industry_key:
+        return []
+    try:
+        ind = yf.Industry(industry_key)
+        tc = ind.top_companies
+        if tc is not None and not tc.empty:
+            tickers = list(tc.index)
+            print(f"   🔍 Yahoo Industry '{industry_key}': {len(tickers)} peers → {tickers[:10]}...")
+            return tickers
+    except Exception as e:
+        logger.warning(f"yf.Industry('{industry_key}') failed: {e}")
+    return []
 
 
 INDUSTRY_GROUPS = {
@@ -200,19 +172,162 @@ def filter_by_industry(empresas: list[dict], target_industry: str) -> list[dict]
         return empresas
     similar = get_similar_industries(target_industry)
     similar_set = set(similar)
-
     exact = [e for e in empresas if e.get("Industria") == target_industry]
     if len(exact) >= MIN_COMPS:
-        print(f"   🎯 '{target_industry}': {len(exact)} empresas")
         return exact
-
     sim = [e for e in empresas if e.get("Industria") in similar_set]
     if len(sim) >= MIN_COMPS:
-        print(f"   🎯 Similares {set(e.get('Industria') for e in sim)}: {len(sim)}")
         return sim
+    return sorted(empresas, key=lambda e: (0 if e.get("Industria") in similar_set else 1))[:30]
 
-    print(f"   ⚠️ Solo {len(sim)} en '{target_industry}', usando sector ({len(empresas)})")
-    return sorted(empresas, key=lambda e: (0 if e.get("Industria") in similar_set else 1))
+
+def get_region_from_country(pais: str) -> str:
+    if not pais:
+        return "OTHER"
+    if pais in ["Argentina", "Brazil", "Mexico", "Chile", "Colombia", "Peru", "Uruguay",
+                "Paraguay", "Bolivia", "Ecuador", "Venezuela", "Costa Rica", "Panama",
+                "Guatemala", "Dominican Republic", "El Salvador", "Honduras", "Nicaragua"]:
+        return "LATAM"
+    if pais in ["United States", "USA", "United States of America"]:
+        return "US"
+    if pais in ["Germany", "France", "Spain", "Italy", "Luxembourg", "Ireland",
+                "Netherlands", "Switzerland", "Sweden", "Norway", "Denmark", "Finland",
+                "Belgium", "Austria", "Portugal", "Poland", "Czech Republic", "Greece",
+                "Hungary", "Romania", "Ukraine", "United Kingdom", "UK"]:
+        return "EU"
+    if pais in ["China", "Hong Kong", "Singapore", "India", "Japan", "Indonesia",
+                "South Korea", "Taiwan", "Thailand", "Philippines", "Malaysia",
+                "Vietnam", "Pakistan", "Bangladesh", "Saudi Arabia", "UAE", "Qatar", "Israel"]:
+        return "ASIA"
+    if pais in ["South Africa", "Egypt", "Nigeria", "Kenya", "Morocco", "Ghana",
+                "Ethiopia", "Algeria", "Tunisia"]:
+        return "AFRICA"
+    if pais in ["Australia", "New Zealand"]:
+        return "OCEANIA"
+    return "OTHER"
+
+COUNTRY_TO_REGION = {"Argentina": "LATAM", "Brazil": "LATAM", "Mexico": "LATAM"}
+
+
+def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenue: float = 0) -> list[dict]:
+    target_upper = target_ticker.upper() if target_ticker else ""
+    empresas = [e for e in empresas if e.get("Ticker", "").upper() != target_upper]
+
+    clean = []
+    for e in empresas:
+        ticker = e.get("Ticker", "")
+        rev = e.get("Revenue ($mm)")
+        ev = e.get("EV ($mm)")
+        currency = e.get("Currency", "USD")
+
+        if not rev or rev <= 0:
+            continue
+        #if currency and currency != "USD":
+        #    print(f"   ⚠️ Skip {ticker} — moneda {currency}")
+        #    continue
+        if not ev or ev <= 0:
+            continue
+        # EBITDA negativo → no sirve para valuation
+        ebitda = e.get("EBITDA ($mm)")
+        if ebitda is not None and ebitda < 0:
+            print(f"   ⚠️ Skip {ticker} — EBITDA negativo ({ebitda})")
+            continue
+        if rev > 5_000_000:
+            print(f"   ⚠️ Skip {ticker} — revenue {rev:,.0f} parece moneda local")
+            continue
+        ev_rev = ev / rev if rev > 0 else 0
+        if ev_rev > 50:
+            print(f"   ⚠️ Skip {ticker} — EV/Rev {ev_rev:.0f}x outlier")
+            continue
+        ebitda_check = e.get("EBITDA ($mm)")
+        if ebitda_check and ebitda_check > 0:
+            ev_ebitda = ev / ebitda_check
+            if ev_ebitda > 100:
+                print(f"   ⚠️ Skip {ticker} — EV/EBITDA {ev_ebitda:.0f}x outlier")
+                continue
+        
+        clean.append(e)
+
+    if target_revenue and target_revenue > 0:
+        min_rev = target_revenue * 0.02
+        max_rev = target_revenue * 50
+        before = len(clean)
+        clean = [e for e in clean if min_rev <= e.get("Revenue ($mm)", 0) <= max_rev]
+        filtered = before - len(clean)
+        if filtered > 0:
+            print(f"   📏 Revenue range ${min_rev:,.0f}-${max_rev:,.0f}mm: {filtered} fuera de rango")
+
+    revenue_map = {}
+    for e in clean:
+        rev_key = round(e.get("Revenue ($mm)", 0), 0)
+        ticker = e.get("Ticker", "")
+        if rev_key not in revenue_map:
+            revenue_map[rev_key] = e
+        else:
+            existing_ticker = revenue_map[rev_key].get("Ticker", "")
+            if "." in existing_ticker and "." not in ticker:
+                revenue_map[rev_key] = e
+            elif "." not in existing_ticker and "." not in ticker and len(ticker) < len(existing_ticker):
+                revenue_map[rev_key] = e
+
+    result = list(revenue_map.values())
+    result.sort(key=lambda e: e.get("Revenue ($mm)", 0), reverse=True)
+    print(f"   🧹 Resultado: {len(result)} comps limpios")
+    return result
+
+
+def discover_comps(target_ticker: str, target_industry: str, industry_key: str) -> list[dict]:
+    all_tickers = set()
+
+    # Source A: Yahoo Finance Industry (dinámico, ~15 tickers)
+    yahoo_tickers = discover_industry_peers(industry_key)
+    all_tickers.update(yahoo_tickers)
+    n_yahoo = len(yahoo_tickers)
+
+    # Source B: empresas.json — SOLO tickers que matcheen la industria
+    # NO bajar los 1550 tickers completos
+    similar_industries = get_similar_industries(target_industry) if target_industry else []
+    json_tickers = []
+    if similar_industries:
+        all_empresas = load_empresas()
+        # Primero: bajar financials solo de los Yahoo peers + un subset del JSON
+        # Para saber la industria de cada empresa del JSON, necesitamos sus datos
+        # Pero no podemos bajarlos todos. Solución: usar SOLO los sectores relevantes
+        sector_map = {
+            "Internet Retail": ["Technology", "Consumer"],
+            "Software - Application": ["Technology"],
+            "Software - Infrastructure": ["Technology"],
+            "Semiconductors": ["Technology"],
+            "Banks - Diversified": ["Financials"],
+            "Banks - Regional": ["Financials"],
+            "Credit Services": ["Financials"],
+            "Health Care Plans": ["Health Insurance"],
+            "Oil & Gas Integrated": ["Energy"],
+            "Oil & Gas E&P": ["Energy"],
+        }
+        relevant_sectors = sector_map.get(target_industry, ["Technology", "Consumer", "Financials"])
+        for s in relevant_sectors:
+            json_tickers.extend(get_universe_by_sector(s))
+
+    all_tickers.update(json_tickers)
+    n_json = len(json_tickers)
+
+    all_tickers = list(all_tickers)
+    print(f"   📊 Sources: Yahoo={n_yahoo} + JSON={n_json} → {len(all_tickers)} únicos")
+
+    if not all_tickers:
+        return []
+
+    print(f"   Bajando {len(all_tickers)} tickers | PARALLEL")
+    empresas = fetch_many_parallel(all_tickers, max_workers=10)
+    if not empresas:
+        return []
+    print(f"   ✅ {len(empresas)}/{len(all_tickers)} obtenidas")
+
+    if target_industry:
+        empresas = filter_by_industry(empresas, target_industry)
+
+    return empresas
 
 
 @router.post("/comps")
@@ -222,84 +337,35 @@ def generar_comps(request: CompsRequest):
         sector = request.sector_override
         revenue = request.revenue_override
 
-        # Detectar industria del target
         target_industry = None
+        industry_key = None
         if empresa:
             td = get_financials_ttm(empresa.upper())
-            if td and td.get("Industria"):
-                target_industry = td["Industria"]
-                print(f"\n📊 Comps: {empresa} | Industria: {target_industry}")
+            if td:
+                target_industry = td.get("Industria")
+                if target_industry:
+                    industry_key = target_industry.lower().replace(" ", "-").replace("&", "and")
+                print(f"\n📊 Comps: {empresa} | Industria: {target_industry} | Key: {industry_key}")
 
-        # BUSCAR EN TODOS LOS SECTORES — no solo el seleccionado
-        # La industria de Yahoo Finance es lo que importa, no el sector del JSON
-        all_sectors = ["Technology", "Consumer", "Financials", "Industrials", "Energy", "Health Insurance", "Real Estate"]
-        
-        all_tickers = []
-        for s in all_sectors:
-            all_tickers.extend(get_universe_by_sector(s))
-        
-        # Deduplicar
-        all_tickers = list(dict.fromkeys(all_tickers))
-
-        if not all_tickers:
-            raise HTTPException(status_code=400, detail="No hay empresas cargadas")
-
-        print(f"   Bajando {len(all_tickers)} tickers de TODOS los sectores | PARALLEL")
-        empresas = fetch_many_parallel(all_tickers, max_workers=15)
-        if not empresas:
-            raise HTTPException(status_code=500, detail="No se pudieron obtener datos")
-        print(f"   ✅ {len(empresas)}/{len(all_tickers)} obtenidas")
-
-        # Filtrar por industria
-        if target_industry:
-            empresas = filter_by_industry(empresas, target_industry)
-
-        # ── PRIORIDAD POR REGIÓN (NO FILTRO DURO) ───────────────
+        empresas = discover_comps(empresa, target_industry, industry_key)
 
         region = request.region
-
         if region and region != "GLOBAL":
-
             region = COUNTRY_TO_REGION.get(region, region)
-
-            # Separar región vs resto
-            empresas_region = [
-                e for e in empresas
-                if get_region_from_country(e.get("Pais")) == region
-            ]
-
-            empresas_resto = [
-                e for e in empresas
-                if get_region_from_country(e.get("Pais")) != region
-            ]
-
-            # Concatenar: primero región, después resto
+            empresas_region = [e for e in empresas if get_region_from_country(e.get("País") or e.get("Pais")) == region]
+            empresas_resto = [e for e in empresas if get_region_from_country(e.get("País") or e.get("Pais")) != region]
             empresas = empresas_region + empresas_resto
+            print(f"   🌎 Región {region}: {len(empresas_region)} | Resto: {len(empresas_resto)}")
 
-            print(f"🌎 Región {region}: {len(empresas_region)} | Resto: {len(empresas_resto)}")
-
-            print(f"🌎 Priorizando región {region}")
-        # EXCLUIR el target de sus propios comps
-        target_upper = empresa.upper() if empresa else ""
-        empresas = [e for e in empresas if e.get("Ticker", "").upper() != target_upper]
-        
-        # Deduplicar por empresa (BABA y 9988.HK son la misma)
-        seen_names = set()
-        unique_empresas = []
-        for e in empresas:
-            name = e.get("Empresa", "")
-            if name not in seen_names:
-                seen_names.add(name)
-                unique_empresas.append(e)
-        empresas = unique_empresas
-        
-        print(f"   📊 Final: {len(empresas)} comps únicos para {empresa}")
+        empresas = clean_and_dedup(empresas, empresa, revenue)
+        print(f"   📊 Final: {len(empresas)} comps para {empresa}")
 
         result = build_comps_response(
             empresas, empresa, sector, revenue,
             request.rango_min_pct / 100, request.rango_max_pct / 100
         )
         result["target_industry"] = target_industry
+        result["discovery"] = {"yahoo_industry_key": industry_key, "sources": "Yahoo Industry + empresas.json"}
         return result
 
     except HTTPException:
@@ -317,40 +383,39 @@ def descargar_excel(request: CompsRequest):
         revenue = request.revenue_override
 
         target_industry = None
+        industry_key = None
         if empresa:
             td = get_financials_ttm(empresa.upper())
-            if td and td.get("Industria"):
-                target_industry = td["Industria"]
+            if td:
+                target_industry = td.get("Industria")
+                if target_industry:
+                    industry_key = target_industry.lower().replace(" ", "-").replace("&", "and")
 
-        # Buscar en TODOS los sectores
-        all_sectors = ["Technology", "Consumer", "Financials", "Industrials", "Energy", "Health Insurance", "Real Estate"]
-        all_tickers = []
-        for s in all_sectors:
-            all_tickers.extend(get_universe_by_sector(s))
-        all_tickers = list(dict.fromkeys(all_tickers))
-
-        resultados = fetch_many_parallel(all_tickers, max_workers=15)
+        resultados = discover_comps(empresa, target_industry, industry_key)
         resultados = [r for r in resultados if r.get("Revenue ($mm)") is not None]
-
-        if target_industry:
-            resultados = filter_by_industry(resultados, target_industry)
-
-        # Excluir target + deduplicar
+        # Universe: solo excluir target + dedup, SIN filtros de calidad
         target_upper = empresa.upper() if empresa else ""
-        resultados = [r for r in resultados if r.get("Ticker", "").upper() != target_upper]
-        seen = set()
-        unique = []
-        for r in resultados:
-            name = r.get("Empresa", "")
-            if name not in seen:
-                seen.add(name)
-                unique.append(r)
-        resultados = unique
+        universe_raw = [r for r in resultados if r.get("Ticker", "").upper() != target_upper]
+        # Dedup simple por revenue
+        rev_map = {}
+        for e in universe_raw:
+            rev_key = round(e.get("Revenue ($mm)", 0) or 0, 0)
+            t = e.get("Ticker", "")
+            if rev_key not in rev_map:
+                rev_map[rev_key] = e
+            elif "." in rev_map[rev_key].get("Ticker", "") and "." not in t:
+                rev_map[rev_key] = e
+        universe = sorted(rev_map.values(), key=lambda x: x.get("Revenue ($mm)", 0) or 0, reverse=True)
 
-        if not resultados:
+        # Comps FILTRADOS (con revenue range) para Hoja 2
+        filtrados = clean_and_dedup(resultados, empresa, revenue)
+
+        if not filtrados:
             raise HTTPException(status_code=500, detail="Sin datos")
 
-        df = pd.DataFrame(resultados)
+        df_universe = pd.DataFrame(universe)
+        df_filtrados = pd.DataFrame(filtrados)
+
         DEAL_CONFIG.update({
             "empresa_target": empresa, "sector": sector, "revenue_target": revenue,
             "rango_min_pct": request.rango_min_pct / 100, "rango_max_pct": request.rango_max_pct / 100,
@@ -359,7 +424,7 @@ def descargar_excel(request: CompsRequest):
 
         fname = f"Comps_{empresa.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.xlsx"
         buffer = io.BytesIO()
-        _generar_excel_buffer(df, buffer)
+        _generar_excel_buffer(df_filtrados, buffer, df_universe=df_universe)
         buffer.seek(0)
 
         return StreamingResponse(

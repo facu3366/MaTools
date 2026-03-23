@@ -5,12 +5,8 @@ import pathlib
 import json
 import pandas as pd
 import time
-import os
-import sys
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
-from comps_automatico import get_dcf_inputs, calcular_wacc
+from Backend.comps_automatico import get_dcf_inputs, calcular_wacc
 
 router = APIRouter()
 
