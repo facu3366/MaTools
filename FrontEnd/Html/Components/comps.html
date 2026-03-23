@@ -1,132 +1,109 @@
 <div id="view-comps" class="tool-view">
 
-<div class="tool-header">
+  <!-- HEADER -->
+  <div class="tool-header">
+    <div>
+      <div class="tool-header-icon">◈</div>
+      <div class="tool-header-name">
+        Comparable Companies
+      </div>
+      <div class="tool-header-desc">
+        Generá comparables automáticos por sector y revenue target
+      </div>
+    </div>
 
-<div>
+    <button class="btn-back" onclick="showView('home','Inicio')">
+      ← VOLVER
+    </button>
+  </div>
 
-<div class="tool-header-icon">◈</div>
+  <!-- EMPRESA + PREVIEW (SEPARADO) -->
+  <div class="form-group" style="position:relative">
 
-<div class="tool-header-name">
-Comparable Companies
-</div>
+    <label>Empresa Target</label>
 
-<div class="tool-header-desc">
-Generá comparables automáticos por sector y revenue target
-</div>
+    <input
+      type="text"
+      id="comps-empresa"
+      placeholder="Ej: Mercado Libre, MELI, Apple..."
+      oninput="showSuggestions(this.value)"
+      onkeydown="handleKey(event)"
+      autocomplete="off">
 
-</div>
+    <div id="suggestions"></div>
+    <span id="detect-hint"></span>
 
-<button class="btn-back" onclick="showView('home','Inicio')">
-← VOLVER
-</button>
+  </div>
 
-</div>
+  <!-- PREVIEW FUERA DEL GRID (CLAVE) -->
+  <div id="revenue-preview" style="display:none; margin-top:10px;"></div>
 
+  <!-- FORM GRID (YA FIJO, NO SE MUEVE MÁS) -->
+  <div class="form-grid">
 
+    <div class="form-group">
+      <label>
+        Revenue Target
+        <span style="font-size:10px;font-weight:400;opacity:.5">
+          (USD mm · editable)
+        </span>
+      </label>
 
-<div class="form-grid">
+      <input
+        type="number"
+        id="comps-revenue"
+        placeholder="Se autocompleta al elegir empresa">
+    </div>
 
+    <div class="form-group">
+      <label>Sector</label>
 
-<div class="form-group" style="position:relative">
+      <select id="comps-sector">
+        <option>Health Insurance</option>
+        <option>Technology</option>
+        <option>Financials</option>
+        <option>Energy</option>
+        <option>Consumer</option>
+        <option>Real Estate</option>
+        <option>Industrials</option>
+      </select>
+    </div>
 
-<label>Empresa Target</label>
+    <div class="form-group">
+      <label>
+        Región / País
+        <span style="font-size:10px;opacity:.5;">
+          (prioriza, no excluye)
+        </span>
+      </label>
 
-<input
-type="text"
-id="comps-empresa"
-placeholder="Ej: Mercado Libre, MELI, Apple..."
-oninput="showSuggestions(this.value)"
-onkeydown="handleKey(event)"
-autocomplete="off">
+      <select id="comps-region">
+        <option value="GLOBAL">🌍 Global</option>
+        <option value="LATAM">🌎 LATAM</option>
+        <option value="ASIA">🌏 Asia</option>
+        <option value="AFRICA">🌍 Africa</option>
+        <option value="OCEANIA">🌏 Oceania</option>
+        <option value="US">🇺🇸 USA</option>
+        <option value="EU">🇪🇺 Europa</option>
+        <option value="Argentina">🇦🇷 Argentina</option>
+        <option value="Brazil">🇧🇷 Brazil</option>
+        <option value="Mexico">🇲🇽 Mexico</option>
+      </select> 
+    </div>
 
-<div id="suggestions"></div>
+  </div>
 
-<span id="detect-hint"></span>
+  <!-- BOTÓN -->
+  <button
+    class="btn-primary"
+    id="btn-comps"
+    onclick="runComps()">
 
-</div>
+    ▶ GENERAR COMPS
 
+  </button>
 
-<!-- Revenue preview -->
-
-<div id="revenue-preview"
-style="display:none; grid-column: 1 / -1;">
-</div>
-
-
-
-<div class="form-group">
-
-<label>
-Revenue Target
-<span style="font-size:10px;font-weight:400;opacity:.5">
-(USD mm · editable)
-</span>
-</label>
-
-<input
-type="number"
-id="comps-revenue"
-placeholder="Se autocompleta al elegir empresa">
-
-</div>
-
-
-
-<div class="form-group">
-
-<label>Sector</label>
-
-<select id="comps-sector">
-
-<option>Health Insurance</option>
-<option>Technology</option>
-<option>Financials</option>
-<option>Energy</option>
-<option>Consumer</option>
-<option>Real Estate</option>
-<option>Industrials</option>
-
-</select>
-
-</div>
-
-<div class="form-group">
-
-<label>
-  Región / País
-  <span style="font-size:10px;opacity:.5;">
-    (prioriza, no excluye)
-  </span>
-</label>
-
-<select id="comps-region">
-  <option value="GLOBAL">🌍 Global</option>
-  <option value="LATAM">🌎 LATAM</option>
-  <option value="ASIA">🌏 Asia</option>
-  <option value="AFRICA">🌍 Africa</option>
-  <option value="OCEANIA">🌏 Oceania</option>
-  <option value="US">🇺🇸 USA</option>
-  <option value="EU">🇪🇺 Europa</option>
-  <option value="Argentina">🇦🇷 Argentina</option>
-  <option value="Brazil">🇧🇷 Brazil</option>
-  <option value="Mexico">🇲🇽 Mexico</option>
-</select> 
-</div>
-</div>
-
-
-
-<button
-class="btn-primary"
-id="btn-comps"
-onclick="runComps()">
-
-▶ GENERAR COMPS
-
-</button>
-
-
-
-<div id="result-comps"></div>
+  <!-- RESULTADO -->
+  <div id="result-comps"></div>
 
 </div>
