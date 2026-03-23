@@ -213,8 +213,6 @@ function bcraRenderBadge() {
     const of = bcraState.usdRates.official;
     const blue = bcraState.usdRates.blue;
 
-    const fmt = (v) => (v ? "$ " + Math.round(v).toLocaleString("es-AR") : "—");
-
     fx.innerHTML = `
       <div style="
         display:flex;
