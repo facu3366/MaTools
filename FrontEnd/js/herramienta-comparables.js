@@ -258,7 +258,7 @@ async function autoDetectSector(ticker) {
   }
 }
 function getPaisSafe(e) {
-  return e?.Pais || null;
+  return e?.País || e?.Pais || null;
 }
 
 function renderCharts(data) {
@@ -443,7 +443,11 @@ async function fetchRevenueCard(ticker, name) {
     `;
   }
 }
-
+function toggleColumn(col, show) {
+  document.querySelectorAll(`[data-col="${col}"]`).forEach((el) => {
+    el.style.display = show ? "" : "none";
+  });
+}
 // ── GENERAR COMPS ─────────────────────────────────────────────
 
 async function runComps() {
@@ -501,7 +505,7 @@ async function runComps() {
 
     if (data?.empresas_filtradas) {
       data.empresas_filtradas.forEach((e) => {
-        console.log("PAIS:", e.Ticker, e.Pais);
+        console.log("PAIS:", e.Ticker, getPaisSafe(e));
         console.log("REGION:", getRegionFromCountry(e.Pais));
       });
 
@@ -626,8 +630,8 @@ function renderCompsResult(data) {
 
   const tableRows = filtradas
     .sort((a, b) => {
-      const ra = getRegionFromCountry(a?.Pais);
-      const rb = getRegionFromCountry(b?.Pais);
+      const ra = getRegionFromCountry(getPaisSafe(a));
+      const rb = getRegionFromCountry(getPaisSafe(b));
 
       if (ra === selectedRegion && rb !== selectedRegion) return -1;
       if (ra !== selectedRegion && rb === selectedRegion) return 1;
@@ -639,41 +643,24 @@ function renderCompsResult(data) {
     <tr>
       <td class="t-ticker">${e.Ticker}</td>
       <td class="t-name">${e.Empresa || ""}</td>
-      <td class="t-region">${getRegionFromCountry(e?.Pais)}</td>
-      <td class="t-num">${fmtNum(e["Revenue ($mm)"])}</td>
-      <td class="t-num">${fmtNum(e["EBITDA ($mm)"])}</td>
-      <td class="t-num">${fmtNum(e["EV ($mm)"])}</td>
-      <td class="t-mult">${fmtMult(e["EV/Revenue"])}</td>
-      <td class="t-mult">${fmtMult(e["EV/EBITDA"])}</td>
+      <td class="t-region">${getRegionFromCountry(getPaisSafe(e))}</td>
+
+      <td class="t-num" data-col="revenue">${fmtNum(e["Revenue ($mm)"])}</td>
+      <td class="t-num" data-col="ebitda">${fmtNum(e["EBITDA ($mm)"])}</td>
+      <td class="t-num" data-col="ev">${fmtNum(e["EV ($mm)"])}</td>
+
+      <td class="t-mult" data-col="evrev">${fmtMult(e["EV/Revenue"])}</td>
+      <td class="t-mult" data-col="evebitda">${fmtMult(e["EV/EBITDA"])}</td>
+
+      <td class="t-mult" data-col="pe">${fmtMult(e["P/E"])}</td>
+      <td class="t-num" data-col="mktcap">${fmtNum(e["Mkt Cap ($mm)"])}</td>
+      <td class="t-pct" data-col="growth">${fmtPct(e["Rev Growth %"])}</td>
+
       <td class="t-pct">${fmtPct(e["EBITDA Mg%"])}</td>
       <td class="t-ttm">${e.ttm_method === "quarterly" ? "✓ Q4" : "⚠ FY"}</td>
     </tr>`,
     )
     .join("");
-
-  const medianRow = `
-    <tr class="stats-row stats-median">
-      <td colspan="3"><strong>Median</strong></td>
-      <td class="t-num">${fmtNum(stats["Revenue ($mm)"]?.median)}</td>
-      <td class="t-num">${fmtNum(stats["EBITDA ($mm)"]?.median)}</td>
-      <td class="t-num">${fmtNum(stats["EV ($mm)"]?.median)}</td>
-      <td class="t-mult">${fmtMult(stats["EV/Revenue"]?.median)}</td>
-      <td class="t-mult">${fmtMult(stats["EV/EBITDA"]?.median)}</td>
-      <td class="t-pct">${fmtPct(stats["EBITDA Mg%"]?.median)}</td>
-      <td></td>
-    </tr>`;
-
-  const meanRow = `
-    <tr class="stats-row stats-mean">
-      <td colspan="3"><strong>Mean</strong></td>
-      <td class="t-num">${fmtNum(stats["Revenue ($mm)"]?.mean)}</td>
-      <td class="t-num">${fmtNum(stats["EBITDA ($mm)"]?.mean)}</td>
-      <td class="t-num">${fmtNum(stats["EV ($mm)"]?.mean)}</td>
-      <td class="t-mult">${fmtMult(stats["EV/Revenue"]?.mean)}</td>
-      <td class="t-mult">${fmtMult(stats["EV/EBITDA"]?.mean)}</td>
-      <td class="t-pct">${fmtPct(stats["EBITDA Mg%"]?.mean)}</td>
-      <td></td>
-    </tr>`;
 
   document.getElementById("result-comps").innerHTML = `
     <div class="result-box">
@@ -687,51 +674,13 @@ function renderCompsResult(data) {
 
       <div class="result-body">
 
-        <div class="kpi-row">
-
-          <div class="kpi">
-            <div class="kpi-label">Universe</div>
-            <div class="kpi-value">${data.n_empresas_universe}</div>
-          </div>
-
-          <div class="kpi">
-            <div class="kpi-label">Filtradas</div>
-            <div class="kpi-value">${data.n_empresas_filtradas}</div>
-          </div>
-
-          ${
-            stats["EV/Revenue"]?.median != null
-              ? `
-          <div class="kpi">
-            <div class="kpi-label">EV / Revenue</div>
-            <div class="kpi-value">${fmtMult(stats["EV/Revenue"].median)}</div>
-          </div>`
-              : ""
-          }
-
-          ${
-            stats["EV/EBITDA"]?.median != null
-              ? `
-          <div class="kpi">
-            <div class="kpi-label">EV / EBITDA</div>
-            <div class="kpi-value">${fmtMult(stats["EV/EBITDA"].median)}</div>
-          </div>`
-              : ""
-          }
-
-          ${
-            stats["EBITDA Mg%"]?.median != null
-              ? `
-          <div class="kpi">
-            <div class="kpi-label">EBITDA Margin</div>
-            <div class="kpi-value">${fmtPct(stats["EBITDA Mg%"].median)}</div>
-          </div>`
-              : ""
-          }
-
+        <!-- CHECKBOXES -->
+        <div style="margin-bottom:12px;">
+          <label><input type="checkbox" data-col="pe"> P/E</label>
+          <label style="margin-left:12px;"><input type="checkbox" data-col="mktcap"> Mkt Cap</label>
+          <label style="margin-left:12px;"><input type="checkbox" data-col="growth"> Growth</label>
         </div>
 
-        <!-- TABLA -->
         <div class="comps-table-wrapper">
           <table class="comps-table">
             <thead>
@@ -739,36 +688,45 @@ function renderCompsResult(data) {
                 <th>Ticker</th>
                 <th>Company</th>
                 <th>Region</th>
-                <th>Revenue (TTM)</th>
-                <th>EBITDA (TTM)</th>
-                <th>EV</th>
-                <th>EV/Rev</th>
-                <th>EV/EBITDA</th>
+
+                <th data-col="revenue">Revenue</th>
+                <th data-col="ebitda">EBITDA</th>
+                <th data-col="ev">EV</th>
+
+                <th data-col="evrev">EV/Rev</th>
+                <th data-col="evebitda">EV/EBITDA</th>
+
+                <th data-col="pe">P/E</th>
+                <th data-col="mktcap">Mkt Cap</th>
+                <th data-col="growth">Growth</th>
+
                 <th>EBITDA Mg</th>
                 <th>TTM</th>
               </tr>
             </thead>
             <tbody>
               ${tableRows}
-              ${medianRow}
-              ${meanRow}
             </tbody>
           </table>
         </div>
 
-        <div class="comps-note">
-          Revenue y EBITDA = Trailing Twelve Months (suma últimos 4 quarters reportados).
-          Empresas marcadas "⚠ FY" usan dato de último año fiscal como fallback.
-          Fuente: Yahoo Finance · ${new Date().toLocaleDateString("es-AR")}
-        </div>
-
-        <button class="btn-secondary" onclick="downloadCompsExcel()">
-          ⬇ DESCARGAR EXCEL
-        </button>
-
       </div>
     </div>
   `;
+
+  // listeners checkbox
+  document.querySelectorAll("[data-col]").forEach((el) => {
+    if (el.tagName === "INPUT") {
+      el.addEventListener("change", (e) => {
+        toggleColumn(e.target.dataset.col, e.target.checked);
+      });
+    }
+  });
+
+  // ocultar columnas nuevas por default
+  toggleColumn("pe", false);
+  toggleColumn("mktcap", false);
+  toggleColumn("growth", false);
 
   renderCharts(data);
 }
