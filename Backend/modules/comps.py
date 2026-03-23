@@ -1,9 +1,15 @@
 """
-📊 COMPS MODULE v6 — DYNAMIC DISCOVERY + SMART FILTER
-======================================================
+📊 COMPS MODULE v7 — DIRECTED DISCOVERY + OUTLIER KILL
+=======================================================
 Source A: yf.Industry(industryKey).top_companies → Yahoo Finance peers (dynamic)
-Source B: empresas.json filtered by industry → international comps (fallback)
-Smart filter: currency, revenue range, outliers, dedup
+Source B: empresas.json filtered by INDUSTRY → limited fallback (not full sector dump)
+Smart filter: sanitize + clean_and_dedup + revenue range + dedup
+
+v7 CAMBIOS vs v6:
+- discover_comps baja ~40-60 tickers en vez de 609 (15-25 seg vs 3:20 min)
+- INDUSTRY_TO_JSON_SECTORS: mapa industria → sectores JSON con caps
+- Hard cap de 80 tickers totales
+- clean_and_dedup con caps consistentes (40x EV/Rev, 75x EV/EBITDA)
 """
 
 from fastapi import APIRouter, HTTPException
@@ -47,6 +53,10 @@ class CompsRequest(BaseModel):
     region: str = "GLOBAL"
 
 
+# ─────────────────────────────────────────────
+# EMPRESAS.JSON LOADER
+# ─────────────────────────────────────────────
+
 _empresas_cache = None
 
 def load_empresas():
@@ -70,6 +80,10 @@ def get_universe_by_sector(sector: str):
     return [e["ticker"] for e in load_empresas() if e.get("sector", "").lower() == sector.lower()]
 
 
+# ─────────────────────────────────────────────
+# YAHOO INDUSTRY PEERS
+# ─────────────────────────────────────────────
+
 def discover_industry_peers(industry_key: str) -> list[str]:
     if not industry_key:
         return []
@@ -84,6 +98,10 @@ def discover_industry_peers(industry_key: str) -> list[str]:
         logger.warning(f"yf.Industry('{industry_key}') failed: {e}")
     return []
 
+
+# ─────────────────────────────────────────────
+# INDUSTRY GROUPS (para filter_by_industry)
+# ─────────────────────────────────────────────
 
 INDUSTRY_GROUPS = {
     "Internet Retail": ["Internet Retail", "Specialty Retail", "Broadline Retail"],
@@ -181,6 +199,10 @@ def filter_by_industry(empresas: list[dict], target_industry: str) -> list[dict]
     return sorted(empresas, key=lambda e: (0 if e.get("Industria") in similar_set else 1))[:30]
 
 
+# ─────────────────────────────────────────────
+# REGION HELPERS
+# ─────────────────────────────────────────────
+
 def get_region_from_country(pais: str) -> str:
     if not pais:
         return "OTHER"
@@ -209,8 +231,27 @@ def get_region_from_country(pais: str) -> str:
 COUNTRY_TO_REGION = {"Argentina": "LATAM", "Brazil": "LATAM", "Mexico": "LATAM"}
 
 
+# ─────────────────────────────────────────────
+# CLEAN & DEDUP (caps consistentes con sanitize_empresa)
+# ─────────────────────────────────────────────
+
 def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenue: float = 0) -> list[dict]:
+    """
+    Limpia y deduplica la lista de empresas para comps.
+    
+    Filtros (en orden):
+    1. Excluir la empresa target
+    2. Revenue > 0 y EV > 0
+    3. EBITDA no negativo (no sirve para valuation)
+    4. EV/Revenue <= 40x (consistente con sanitize_empresa)
+    5. EV/EBITDA <= 75x (consistente con sanitize_empresa)
+    6. Gross Margin <= 100% (imposible)
+    7. Revenue range relativo al target (2% - 50x)
+    8. Dedup por revenue (preferir ticker US sobre extranjero)
+    """
     target_upper = target_ticker.upper() if target_ticker else ""
+    
+    # 1. Excluir target
     empresas = [e for e in empresas if e.get("Ticker", "").upper() != target_upper]
 
     clean = []
@@ -218,36 +259,44 @@ def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenu
         ticker = e.get("Ticker", "")
         rev = e.get("Revenue ($mm)")
         ev = e.get("EV ($mm)")
-        currency = e.get("Currency", "USD")
 
+        # 2. Revenue y EV deben existir y ser positivos
         if not rev or rev <= 0:
             continue
-        #if currency and currency != "USD":
-        #    print(f"   ⚠️ Skip {ticker} — moneda {currency}")
-        #    continue
         if not ev or ev <= 0:
+            print(f"   ⚠️ Skip {ticker} — EV negativo o inexistente")
             continue
-        # EBITDA negativo → no sirve para valuation
+
+        # 3. EBITDA negativo
         ebitda = e.get("EBITDA ($mm)")
         if ebitda is not None and ebitda < 0:
             print(f"   ⚠️ Skip {ticker} — EBITDA negativo ({ebitda})")
             continue
-        if rev > 5_000_000:
-            print(f"   ⚠️ Skip {ticker} — revenue {rev:,.0f} parece moneda local")
+
+        # 4. EV/Revenue > 40x
+        ev_rev = ev / rev
+        if ev_rev > 40:
+            print(f"   ⚠️ Skip {ticker} — EV/Rev {ev_rev:.1f}x > 40x")
             continue
-        ev_rev = ev / rev if rev > 0 else 0
-        if ev_rev > 50:
-            print(f"   ⚠️ Skip {ticker} — EV/Rev {ev_rev:.0f}x outlier")
-            continue
-        ebitda_check = e.get("EBITDA ($mm)")
-        if ebitda_check and ebitda_check > 0:
-            ev_ebitda = ev / ebitda_check
-            if ev_ebitda > 100:
-                print(f"   ⚠️ Skip {ticker} — EV/EBITDA {ev_ebitda:.0f}x outlier")
+
+        # 5. EV/EBITDA > 75x
+        if ebitda and ebitda > 0:
+            ev_ebitda = ev / ebitda
+            if ev_ebitda > 75:
+                print(f"   ⚠️ Skip {ticker} — EV/EBITDA {ev_ebitda:.1f}x > 75x")
                 continue
-        
+
+        # 6. Gross Margin > 100%
+        gross = e.get("Gross ($mm)")
+        if gross and rev > 0:
+            gm = gross / rev * 100
+            if gm > 100:
+                print(f"   ⚠️ Skip {ticker} — Gross Margin {gm:.1f}% > 100%")
+                continue
+
         clean.append(e)
 
+    # 7. Revenue range relativo al target
     if target_revenue and target_revenue > 0:
         min_rev = target_revenue * 0.02
         max_rev = target_revenue * 50
@@ -257,6 +306,7 @@ def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenu
         if filtered > 0:
             print(f"   📏 Revenue range ${min_rev:,.0f}-${max_rev:,.0f}mm: {filtered} fuera de rango")
 
+    # 8. Dedup por revenue (preferir US ticker)
     revenue_map = {}
     for e in clean:
         rev_key = round(e.get("Revenue ($mm)", 0), 0)
@@ -272,63 +322,191 @@ def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenu
 
     result = list(revenue_map.values())
     result.sort(key=lambda e: e.get("Revenue ($mm)", 0), reverse=True)
-    print(f"   🧹 Resultado: {len(result)} comps limpios")
+    print(f"   🧹 Resultado: {len(result)} comps limpios (de {len(empresas)} candidatos)")
     return result
 
 
+# ─────────────────────────────────────────────
+# INDUSTRY → JSON SECTORS MAP (para discover_comps)
+# ─────────────────────────────────────────────
+# Dado que empresas.json solo tiene "sector" (no "industry"),
+# este mapa dice: para cada industria de Yahoo, qué sectores
+# del JSON son relevantes y cuántos tickers máximo bajar.
+
+INDUSTRY_TO_JSON_SECTORS = {
+    # E-COMMERCE / RETAIL
+    "Internet Retail":          [("Consumer", 15), ("Technology", 10)],
+    "Broadline Retail":         [("Consumer", 20)],
+    "Specialty Retail":         [("Consumer", 20)],
+    "Apparel Retail":           [("Consumer", 15)],
+    "Discount Stores":          [("Consumer", 15)],
+    "Grocery Stores":           [("Consumer", 15)],
+    "Home Improvement Retail":  [("Consumer", 15)],
+    "Luxury Goods":             [("Consumer", 15)],
+
+    # SOFTWARE / TECH
+    "Software - Application":           [("Technology", 25)],
+    "Software - Infrastructure":        [("Technology", 25)],
+    "Information Technology Services":  [("Technology", 25)],
+    "Internet Content & Information":   [("Technology", 20)],
+    "Electronic Gaming & Multimedia":   [("Technology", 20)],
+    "Consumer Electronics":             [("Technology", 20)],
+
+    # SEMICONDUCTORS
+    "Semiconductors":                       [("Technology", 20)],
+    "Semiconductor Equipment & Materials":  [("Technology", 15)],
+
+    # TELECOM
+    "Telecom Services":         [("Technology", 15)],
+    "Communication Equipment":  [("Technology", 15)],
+
+    # FINANCIALS
+    "Credit Services":                      [("Financials", 25)],
+    "Financial Data & Stock Exchanges":     [("Financials", 20)],
+    "Capital Markets":                      [("Financials", 25)],
+    "Asset Management":                     [("Financials", 20)],
+    "Banks - Diversified":                  [("Financials", 25)],
+    "Banks - Regional":                     [("Financials", 25)],
+    "Insurance - Diversified":              [("Financials", 20), ("Health Insurance", 10)],
+    "Insurance - Life":                     [("Financials", 20)],
+    "Insurance Brokers":                    [("Financials", 15)],
+
+    # HEALTH
+    "Health Care Plans":                [("Health Insurance", 25)],
+    "Medical Devices":                  [("Health Insurance", 20)],
+    "Medical Care Facilities":          [("Health Insurance", 20)],
+    "Drug Manufacturers - General":     [("Health Insurance", 25)],
+    "Biotechnology":                    [("Health Insurance", 25)],
+    "Diagnostics & Research":           [("Health Insurance", 15)],
+    "Medical Distribution":             [("Health Insurance", 15)],
+
+    # ENERGY
+    "Oil & Gas Integrated":             [("Energy", 25)],
+    "Oil & Gas E&P":                    [("Energy", 25)],
+    "Oil & Gas Refining & Marketing":   [("Energy", 20)],
+    "Oil & Gas Midstream":              [("Energy", 20)],
+    "Oil & Gas Equipment & Services":   [("Energy", 15)],
+
+    # INDUSTRIALS
+    "Aerospace & Defense":              [("Industrials", 25)],
+    "Specialty Industrial Machinery":   [("Industrials", 20)],
+    "Railroads":                        [("Industrials", 15)],
+    "Trucking":                         [("Industrials", 15)],
+    "Integrated Freight & Logistics":   [("Industrials", 15)],
+    "Airlines":                         [("Industrials", 15)],
+    "Waste Management":                 [("Industrials", 15)],
+    "Auto Manufacturers":               [("Consumer", 15), ("Industrials", 10)],
+    "Farm & Heavy Construction Machinery": [("Industrials", 15)],
+
+    # REAL ESTATE
+    "REIT - Industrial":        [("Real Estate", 20)],
+    "REIT - Residential":       [("Real Estate", 20)],
+    "REIT - Retail":            [("Real Estate", 20)],
+    "REIT - Office":            [("Real Estate", 20)],
+    "REIT - Specialty":         [("Real Estate", 20)],
+    "Real Estate Services":     [("Real Estate", 20)],
+
+    # CONSUMER
+    "Restaurants":              [("Consumer", 20)],
+    "Packaged Foods":           [("Consumer", 20)],
+    "Beverages - Non-Alcoholic": [("Consumer", 15)],
+    "Lodging":                  [("Consumer", 15)],
+    "Resorts & Casinos":        [("Consumer", 15)],
+    "Travel Services":          [("Consumer", 15)],
+    "Entertainment":            [("Consumer", 15), ("Technology", 10)],
+
+    # UTILITIES
+    "Utilities - Regulated Electric":   [("Energy", 20)],
+    "Utilities - Renewable":            [("Energy", 20)],
+    "Solar":                            [("Energy", 15)],
+}
+
+MAX_JSON_TICKERS = 40
+MAX_TOTAL_TICKERS = 80
+
+
+# ─────────────────────────────────────────────
+# DISCOVER COMPS — DIRECTED SEARCH
+# ─────────────────────────────────────────────
+
 def discover_comps(target_ticker: str, target_industry: str, industry_key: str) -> list[dict]:
+    """
+    Descubre empresas comparables con búsqueda DIRIGIDA.
+    
+    Estrategia:
+    1. Yahoo Industry peers (~15 tickers) → siempre se bajan
+    2. JSON fallback → SOLO sectores relevantes, con cap por sector
+    3. Hard cap de 80 tickers totales
+    
+    Para MELI (Internet Retail):
+      Yahoo: 15 peers (AMZN, DASH, EBAY, CPNG, etc.)
+      JSON:  15 de Consumer + 10 de Technology = 25
+      Total: ~40 tickers en vez de 609
+    """
     all_tickers = set()
 
-    # Source A: Yahoo Finance Industry (dinámico, ~15 tickers)
+    # ── SOURCE A: Yahoo Finance Industry (~15 tickers) ──
     yahoo_tickers = discover_industry_peers(industry_key)
     all_tickers.update(yahoo_tickers)
     n_yahoo = len(yahoo_tickers)
 
-    # Source B: empresas.json — SOLO tickers que matcheen la industria
-    # NO bajar los 1550 tickers completos
-    similar_industries = get_similar_industries(target_industry) if target_industry else []
+    # ── SOURCE B: empresas.json — FILTRADO por industria ──
     json_tickers = []
-    if similar_industries:
+    
+    if target_industry and target_industry in INDUSTRY_TO_JSON_SECTORS:
+        # Tenemos mapping específico → usar solo los sectores relevantes con caps
+        sector_limits = INDUSTRY_TO_JSON_SECTORS[target_industry]
+        for sector_name, max_from_sector in sector_limits:
+            sector_tickers = get_universe_by_sector(sector_name)
+            json_tickers.extend(sector_tickers[:max_from_sector])
+    elif target_industry:
+        # Industria no mapeada → fallback conservador
+        similar = get_similar_industries(target_industry)
+        print(f"   ⚠️ Industria '{target_industry}' sin mapping directo. Similar: {similar[:3]}")
+        # Usar el sector del target en empresas.json como fallback
         all_empresas = load_empresas()
-        # Primero: bajar financials solo de los Yahoo peers + un subset del JSON
-        # Para saber la industria de cada empresa del JSON, necesitamos sus datos
-        # Pero no podemos bajarlos todos. Solución: usar SOLO los sectores relevantes
-        sector_map = {
-            "Internet Retail": ["Technology", "Consumer"],
-            "Software - Application": ["Technology"],
-            "Software - Infrastructure": ["Technology"],
-            "Semiconductors": ["Technology"],
-            "Banks - Diversified": ["Financials"],
-            "Banks - Regional": ["Financials"],
-            "Credit Services": ["Financials"],
-            "Health Care Plans": ["Health Insurance"],
-            "Oil & Gas Integrated": ["Energy"],
-            "Oil & Gas E&P": ["Energy"],
-        }
-        relevant_sectors = sector_map.get(target_industry, ["Technology", "Consumer", "Financials"])
-        for s in relevant_sectors:
-            json_tickers.extend(get_universe_by_sector(s))
-
+        target_data = next((e for e in all_empresas if e.get("ticker", "").upper() == target_ticker.upper()), None)
+        if target_data:
+            fallback_sector = target_data.get("sector", "")
+            if fallback_sector:
+                json_tickers = get_universe_by_sector(fallback_sector)[:30]
+    
+    # Aplicar hard cap al JSON
+    if len(json_tickers) > MAX_JSON_TICKERS:
+        json_tickers = json_tickers[:MAX_JSON_TICKERS]
+    
     all_tickers.update(json_tickers)
     n_json = len(json_tickers)
 
+    # Hard cap total
     all_tickers = list(all_tickers)
-    print(f"   📊 Sources: Yahoo={n_yahoo} + JSON={n_json} → {len(all_tickers)} únicos")
+    if len(all_tickers) > MAX_TOTAL_TICKERS:
+        excess = len(all_tickers) - MAX_TOTAL_TICKERS
+        print(f"   ⚠️ Hard cap: recortando {excess} tickers (de {len(all_tickers)} a {MAX_TOTAL_TICKERS})")
+        all_tickers = all_tickers[:MAX_TOTAL_TICKERS]
+
+    print(f"   📊 Sources: Yahoo={n_yahoo} + JSON={n_json} → {len(all_tickers)} únicos (cap={MAX_TOTAL_TICKERS})")
 
     if not all_tickers:
         return []
 
-    print(f"   Bajando {len(all_tickers)} tickers | PARALLEL")
+    # ── FETCH PARALELO ──
+    print(f"   ⬇ Bajando {len(all_tickers)} tickers | PARALLEL")
     empresas = fetch_many_parallel(all_tickers, max_workers=10)
     if not empresas:
         return []
     print(f"   ✅ {len(empresas)}/{len(all_tickers)} obtenidas")
 
+    # ── FILTRO POR INDUSTRIA ──
     if target_industry:
         empresas = filter_by_industry(empresas, target_industry)
 
     return empresas
 
+
+# ─────────────────────────────────────────────
+# ENDPOINTS
+# ─────────────────────────────────────────────
 
 @router.post("/comps")
 def generar_comps(request: CompsRequest):
