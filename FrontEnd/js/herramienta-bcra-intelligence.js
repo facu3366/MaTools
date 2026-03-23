@@ -204,7 +204,6 @@ padding:70px 0;
   bcraState.selected = new Set(BCRA_BANKS.map((b) => b.id));
 }
 
-// ── renders ──
 function bcraRenderBadge() {
   const b = document.getElementById("bcra-badge-count");
   const m = document.getElementById("bcra-hdr-mes");
@@ -224,36 +223,59 @@ function bcraRenderBadge() {
   }
 
   if (fx) {
+    const of = bcraState.usdRates.official;
+    const blue = bcraState.usdRates.blue;
+
+    const fmt = (v) => (v ? "$ " + Math.round(v).toLocaleString("es-AR") : "—");
+
     fx.innerHTML = `
-  <div style="
-    display:flex;
-    align-items:center;
-    gap:8px;
-    font-family:'DM Mono',monospace;
-  ">
+      <div style="
+        display:flex;
+        gap:18px;
+        align-items:center;
+        font-family:'DM Sans',sans-serif;
+      ">
 
-    <div style="
-      background:#ede7d9;
-      padding:4px 8px;
-      border-radius:6px;
-      font-size:11px;
-    ">
-      OF ${Math.round(bcraState.usdRates.official)}
-    </div>
+        <!-- DOLAR OFICIAL -->
+        <div style="display:flex;flex-direction:column;">
+          <span style="
+            font-size:10px;
+            color:var(--muted);
+            letter-spacing:0.5px;
+          ">
+            DÓLAR OFICIAL
+          </span>
 
-    <div style="
-      background:#111;
-      color:#fff;
-      padding:4px 10px;
-      border-radius:6px;
-      font-size:12px;
-      font-weight:600;
-    ">
-      BLUE ${Math.round(bcraState.usdRates.blue)}
-    </div>
+          <span style="
+            font-size:15px;
+            font-weight:600;
+            color:var(--ink);
+          ">
+            ${fmt(of)}
+          </span>
+        </div>
 
-  </div>
-`;
+        <!-- DOLAR BLUE -->
+        <div style="display:flex;flex-direction:column;">
+          <span style="
+            font-size:10px;
+            color:var(--muted);
+            letter-spacing:0.5px;
+          ">
+            DÓLAR BLUE
+          </span>
+
+          <span style="
+            font-size:16px;
+            font-weight:700;
+            color:#111;
+          ">
+            ${fmt(blue)}
+          </span>
+        </div>
+
+      </div>
+    `;
   }
 }
 
