@@ -1,135 +1,4 @@
-<head>
-  <style>
-    body {
-      font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
-      background: #f7f7f7;
-    }
-
-    .tool-view {
-      max-width: 1100px;
-      margin: auto;
-      padding: 30px 20px;
-    }
-
-    /* HEADER */
-    .tool-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 25px;
-    }
-
-    .tool-header-name {
-      font-size: 26px;
-      font-weight: 700;
-    }
-
-    .tool-header-desc {
-      font-size: 14px;
-      color: #666;
-      margin-top: 4px;
-    }
-
-    /* CARD */
-    .card {
-      background: #fff;
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.06);
-      margin-bottom: 20px;
-    }
-
-    /* FORM */
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-    }
-
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    label {
-      font-size: 13px;
-      font-weight: 600;
-      color: #333;
-    }
-
-    input, select {
-      padding: 10px 12px;
-      border-radius: 6px;
-      border: 1px solid #ddd;
-      font-size: 14px;
-      transition: all 0.2s;
-    }
-
-    input:focus, select:focus {
-      outline: none;
-      border-color: #b8860b;
-      box-shadow: 0 0 0 2px rgba(184,134,11,0.15);
-    }
-
-    /* BUTTONS */
-    .btn-primary {
-      margin-top: 20px;
-      padding: 12px 20px;
-      border: none;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #b8860b, #d4a017);
-      color: #fff;
-      font-weight: 600;
-      font-size: 14px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .btn-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(184,134,11,0.3);
-    }
-
-    .btn-back {
-      border: 1px solid #ddd;
-      background: #fff;
-      padding: 8px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
-    }
-
-    .btn-back:hover {
-      background: #f3f3f3;
-    }
-
-    /* AUTOCOMPLETE */
-    #suggestions {
-      position: absolute;
-      top: 65px;
-      width: 100%;
-      background: #fff;
-      border-radius: 6px;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.1);
-      z-index: 10;
-    }
-
-    /* RESULT */
-    #result-comps {
-      margin-top: 25px;
-    }
-
-    /* RESPONSIVE */
-    @media (max-width: 900px) {
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
-</head>
-
-<div id="view-comps" class="tool-view"> 
+<div id="view-comps" class="tool-view">
 
   <!-- HEADER -->
   <div class="tool-header">
@@ -148,8 +17,9 @@
     </button>
   </div>
 
-  <!-- EMPRESA -->
-  <div class="card">
+  <!-- BLOQUE SUPERIOR (EMPRESA + PREVIEW) -->
+  <div style="max-width:680px; margin-bottom:24px;">
+
     <div class="form-group" style="position:relative">
 
       <label>Empresa Target</label>
@@ -161,25 +31,32 @@
         oninput="showSuggestions(this.value)"
         onkeydown="handleKey(event)"
         autocomplete="off"
-        style="max-width: 320px;">
+        style="max-width:320px;">
 
       <div id="suggestions"></div>
       <span id="detect-hint"></span>
 
     </div>
 
-    <div id="revenue-preview" style="display:none; margin-top:12px;"></div>
+    <!-- PREVIEW -->
+    <div id="revenue-preview" style="display:none; margin-top:14px;"></div>
+
   </div>
 
-  <!-- FORM -->
-  <div class="card">
+  <!-- BLOQUE FORM (SEPARADO VISUALMENTE) -->
+  <div style="
+    max-width:680px;
+    border-top:1px solid var(--line);
+    padding-top:20px;
+    margin-bottom:20px;
+  ">
 
     <div class="form-grid">
 
       <div class="form-group">
         <label>
           Revenue Target
-          <span style="font-size:10px;opacity:.5">
+          <span style="font-size:10px;font-weight:400;opacity:.5">
             (USD mm · editable)
           </span>
         </label>
@@ -229,14 +106,14 @@
     </div>
 
     <!-- BOTÓN -->
-    <button
-      class="btn-primary"
-      id="btn-comps"
-      onclick="runComps()">
-
-      ▶ GENERAR COMPS
-
-    </button>
+    <div style="margin-top:10px;">
+      <button
+        class="btn-primary"
+        id="btn-comps"
+        onclick="runComps()">
+        ▶ GENERAR COMPS
+      </button>
+    </div>
 
   </div>
 
