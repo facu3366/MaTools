@@ -17,14 +17,23 @@
     </button>
   </div>
 
-  <!-- CONTENEDOR PRINCIPAL (ALINEA TODO) -->
-  <div style="max-width:720px;">
+  <!-- LAYOUT PRINCIPAL (DOS COLUMNAS) -->
+  <div style="
+    display:grid;
+    grid-template-columns: 420px 1fr;
+    gap:32px;
+    align-items:start;
+  ">
 
-    <!-- BLOQUE 1: EMPRESA -->
-    <div style="margin-bottom:26px;">
+    <!-- COLUMNA IZQUIERDA (FORM) -->
+    <div style="
+      display:flex;
+      flex-direction:column;
+      gap:22px;
+    ">
 
-      <div class="form-group" style="position:relative; max-width:360px;">
-
+      <!-- EMPRESA -->
+      <div class="form-group" style="position:relative;">
         <label>Empresa Target</label>
 
         <input
@@ -37,84 +46,66 @@
 
         <div id="suggestions"></div>
         <span id="detect-hint"></span>
-
       </div>
 
       <!-- PREVIEW -->
-      <div id="revenue-preview" style="display:none; margin-top:14px;"></div>
+      <div id="revenue-preview" style="display:none;"></div>
 
-    </div>
+      <!-- DIVISOR -->
+      <div style="border-top:1px solid var(--line);"></div>
 
-    <!-- BLOQUE 2: CONFIGURACIÓN -->
-    <div style="
-      border-top:1px solid var(--line);
-      padding-top:22px;
-      margin-bottom:26px;
-    ">
+      <!-- CONFIG -->
+      <div class="form-group">
+        <label>
+          Revenue Target
+          <span style="font-size:10px;font-weight:400;opacity:.5">
+            (USD mm · editable)
+          </span>
+        </label>
 
-      <div class="form-grid">
-
-        <div class="form-group">
-          <label>
-            Revenue Target
-            <span style="font-size:10px;font-weight:400;opacity:.5">
-              (USD mm · editable)
-            </span>
-          </label>
-
-          <input
-            type="number"
-            id="comps-revenue"
-            placeholder="Se autocompleta al elegir empresa">
-        </div>
-
-        <div class="form-group">
-          <label>Sector</label>
-
-          <select id="comps-sector">
-            <option>Health Insurance</option>
-            <option>Technology</option>
-            <option>Financials</option>
-            <option>Energy</option>
-            <option>Consumer</option>
-            <option>Real Estate</option>
-            <option>Industrials</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label>
-            Región / País
-            <span style="font-size:10px;opacity:.5;">
-              (prioriza, no excluye)
-            </span>
-          </label>
-
-          <select id="comps-region">
-            <option value="GLOBAL">🌍 Global</option>
-            <option value="LATAM">🌎 LATAM</option>
-            <option value="ASIA">🌏 Asia</option>
-            <option value="AFRICA">🌍 Africa</option>
-            <option value="OCEANIA">🌏 Oceania</option>
-            <option value="US">🇺🇸 USA</option>
-            <option value="EU">🇪🇺 Europa</option>
-            <option value="Argentina">🇦🇷 Argentina</option>
-            <option value="Brazil">🇧🇷 Brazil</option>
-            <option value="Mexico">🇲🇽 Mexico</option>
-          </select> 
-        </div>
-
+        <input
+          type="number"
+          id="comps-revenue"
+          placeholder="Se autocompleta al elegir empresa">
       </div>
 
-    </div>
+      <div class="form-group">
+        <label>Sector</label>
 
-    <!-- BLOQUE 3: ACCIÓN -->
-    <div style="
-      display:flex;
-      justify-content:flex-start;
-      margin-bottom:28px;
-    ">
+        <select id="comps-sector">
+          <option>Health Insurance</option>
+          <option>Technology</option>
+          <option>Financials</option>
+          <option>Energy</option>
+          <option>Consumer</option>
+          <option>Real Estate</option>
+          <option>Industrials</option>
+        </select>
+      </div>
 
+      <div class="form-group">
+        <label>
+          Región / País
+          <span style="font-size:10px;opacity:.5;">
+            (prioriza, no excluye)
+          </span>
+        </label>
+
+        <select id="comps-region">
+          <option value="GLOBAL">🌍 Global</option>
+          <option value="LATAM">🌎 LATAM</option>
+          <option value="ASIA">🌏 Asia</option>
+          <option value="AFRICA">🌍 Africa</option>
+          <option value="OCEANIA">🌏 Oceania</option>
+          <option value="US">🇺🇸 USA</option>
+          <option value="EU">🇪🇺 Europa</option>
+          <option value="Argentina">🇦🇷 Argentina</option>
+          <option value="Brazil">🇧🇷 Brazil</option>
+          <option value="Mexico">🇲🇽 Mexico</option>
+        </select> 
+      </div>
+
+      <!-- BOTÓN -->
       <button
         class="btn-primary"
         id="btn-comps"
@@ -124,9 +115,27 @@
 
     </div>
 
-  </div>
+    <!-- COLUMNA DERECHA (RESULTADO) -->
+    <div style="
+      min-height:420px;
+      border-left:1px solid var(--line);
+      padding-left:24px;
+    ">
 
-  <!-- RESULTADO (FULL WIDTH PARA TABLAS) -->
-  <div id="result-comps"></div>
+      <!-- ESTADO VACÍO -->
+      <div style="
+        font-size:13px;
+        color:var(--muted);
+        margin-bottom:10px;
+      ">
+        Seleccioná una empresa y generá comparables para ver los resultados.
+      </div>
+
+      <!-- RESULTADO -->
+      <div id="result-comps"></div>
+
+    </div>
+
+  </div>
 
 </div>
