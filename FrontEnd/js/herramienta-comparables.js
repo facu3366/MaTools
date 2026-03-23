@@ -382,7 +382,7 @@ async function fetchRevenueCard(ticker, name) {
     if (revenue != null) {
       const revenueInput = document.getElementById("comps-revenue");
       if (revenueInput) {
-        revenueInput.value = Math.round(revenue / 1e6);
+        revenueInput.value = Math.round(revenue / 1e6).toLocaleString("en-US");
       }
     }
 
@@ -455,7 +455,9 @@ async function runComps() {
   const empresa =
     selectedTicker || rawEmpresa.match(/\((.*?)\)/)?.[1] || rawEmpresa;
   const revenue =
-    parseFloat(document.getElementById("comps-revenue").value) || 1000;
+    parseFloat(
+      document.getElementById("comps-revenue").value.replace(/,/g, ""),
+    ) || 1000;
   const sector = document.getElementById("comps-sector").value;
   const region = document.getElementById("comps-region")?.value || "GLOBAL";
   const analista =

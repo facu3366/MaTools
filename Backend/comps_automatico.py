@@ -16,7 +16,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from datetime import datetime
-
+import matplotlib.pyplot as plt
+from openpyxl.drawing.image import Image
+import tempfile
 # ─────────────────────────────────────────────
 # 1. CONFIGURACIÓN DEL DEAL
 # ─────────────────────────────────────────────
@@ -592,7 +594,50 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
 
     # Hoja 2 activa por defecto (la que el analista necesita ver primero)
     wb.active = wb.sheetnames.index("Comparable Companies")
+    # ══════════════════════════════════════════════
+# 📊 CHARTS (nuevo)
+# ══════════════════════════════════════════════
 
+try:
+    ws3 = wb.create_sheet("Charts")
+
+    # ── EV vs Revenue (scatter) ──
+    fig, ax = plt.subplots()
+
+    ax.scatter(
+        df["Revenue ($mm)"],
+        df["EV ($mm)"]
+    )
+
+    ax.set_xlabel("Revenue ($mm)")
+    ax.set_ylabel("EV ($mm)")
+    ax.set_title("EV vs Revenue")
+
+    tmp1 = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    plt.savefig(tmp1.name, bbox_inches="tight")
+    plt.close(fig)
+
+    img1 = Image(tmp1.name)
+    ws3.add_image(img1, "A1")
+
+    # ── EV / EBITDA (bar) ──
+    fig2, ax2 = plt.subplots()
+
+    df_sorted = df.sort_values("EV/EBITDA")
+
+    ax2.bar(df_sorted["Ticker"], df_sorted["EV/EBITDA"])
+
+    ax2.set_title("EV / EBITDA")
+
+    tmp2 = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    plt.savefig(tmp2.name, bbox_inches="tight")
+    plt.close(fig2)
+
+    img2 = Image(tmp2.name)
+    ws3.add_image(img2, "A20")
+
+except Exception as e:
+    print("⚠️ Error generando charts:", e)
     wb.save(buffer)
 
 
