@@ -595,76 +595,78 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
     # Hoja 2 activa por defecto (la que el analista necesita ver primero)
     wb.active = wb.sheetnames.index("Comparable Companies")
     # ══════════════════════════════════════════════
-    # 📊 CHARTS (PRO)
+    # 📊 CHARTS (EXCEL REAL)
     # ══════════════════════════════════════════════
 
     try:
+        from openpyxl.chart import ScatterChart, Reference, Series, BarChart
+
         ws3 = wb.create_sheet("Charts")
 
-        # ── EV vs Revenue (PRO) ──
-        fig, ax = plt.subplots(figsize=(8, 5))
+        # ─────────────────────────────
+        # TABLA BASE (datos para charts)
+        # ─────────────────────────────
 
-        target = DEAL_CONFIG.get("empresa_target", "").upper()
+        ws3["A1"] = "Ticker"
+        ws3["B1"] = "Revenue"
+        ws3["C1"] = "EV"
+        ws3["D1"] = "EV/EBITDA"
 
-        for _, row in df.iterrows():
-            x = row["Revenue ($mm)"]
-            y = row["EV ($mm)"]
-            ticker = row["Ticker"]
+        row_start = 2
 
-            if pd.isna(x) or pd.isna(y):
-                continue
+        for i, row in df.iterrows():
+            r = row_start + i
 
-            is_target = ticker.upper() == target
+            ws3.cell(r, 1, row["Ticker"])
+            ws3.cell(r, 2, row["Revenue ($mm)"])
+            ws3.cell(r, 3, row["EV ($mm)"])
+            ws3.cell(r, 4, row.get("EV/EBITDA"))
 
-            color = "#b8860b" if is_target else "#6c757d"
-            size = 70 if is_target else 35
-            alpha = 1 if is_target else 0.7
+        last_row = row_start + len(df) - 1
 
-            ax.scatter(
-                x, y,
-                color=color,
-                s=size,
-                alpha=alpha,
-                edgecolors="black",
-                linewidth=0.5
-            )
+        # ─────────────────────────────
+        # SCATTER: EV vs Revenue
+        # ─────────────────────────────
 
-            ax.annotate(
-                ticker,
-                (x, y),
-                textcoords="offset points",
-                xytext=(5, 5),
-                fontsize=8,
-                color="#b8860b" if is_target else "#333333",
-                weight="bold" if is_target else "normal"
-            )
+        scatter = ScatterChart()
+        scatter.title = "EV vs Revenue"
+        scatter.style = 13
 
-        ax.set_title("EV vs Revenue", fontsize=11, weight="bold")
-        ax.set_xlabel("Revenue ($mm)", fontsize=9)
-        ax.set_ylabel("Enterprise Value ($mm)", fontsize=9)
+        xvalues = Reference(ws3, min_col=2, min_row=2, max_row=last_row)
+        yvalues = Reference(ws3, min_col=3, min_row=2, max_row=last_row)
 
-        ax.set_xscale("log")
-        ax.set_yscale("log")
+        series = Series(yvalues, xvalues, title="Comps")
+        scatter.series.append(series)
 
-        ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.5)
+        scatter.x_axis.title = "Revenue ($mm)"
+        scatter.y_axis.title = "Enterprise Value ($mm)"
 
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
+        scatter.height = 10
+        scatter.width = 18
 
-        ax.tick_params(axis='both', labelsize=8)
+        ws3.add_chart(scatter, "F2")
 
-        plt.tight_layout()
+        # ─────────────────────────────
+        # BAR: EV / EBITDA
+        # ─────────────────────────────
 
-        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-        plt.savefig(tmp.name, bbox_inches="tight", dpi=150)
-        plt.close(fig)
+        bar = BarChart()
+        bar.title = "EV / EBITDA"
+        bar.style = 10
 
-        img = Image(tmp.name)
-        ws3.add_image(img, "A1")
+        data = Reference(ws3, min_col=4, min_row=1, max_row=last_row)
+        cats = Reference(ws3, min_col=1, min_row=2, max_row=last_row)
+
+        bar.add_data(data, titles_from_data=True)
+        bar.set_categories(cats)
+
+        bar.height = 10
+        bar.width = 18
+
+        ws3.add_chart(bar, "F20")
 
     except Exception as e:
         print("⚠️ Error generando charts:", e)
-
     wb.save(buffer)
 
 
