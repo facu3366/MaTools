@@ -1823,22 +1823,33 @@ transform:translateY(1px);
   transform: translateX(3px);
 }
 .bcra-export-btn {
-  background: linear-gradient(135deg, #b8860b, #d4a017);
-  color: #fff;
-  font-weight: 600;
-  border: none;
-  padding: 8px 16px;
+  background: var(--cream); /* fondo suave */
+  color: var(--ink);
+
+  border: 1px solid var(--gold);
   border-radius: 6px;
-  box-shadow: 0 4px 10px rgba(184, 134, 11, 0.25);
+
+  padding: 10px 16px;
+  font-weight: 600;
+
   transition: all 0.2s ease;
 }
 
+/* HOVER */
 .bcra-export-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(184, 134, 11, 0.35);
+  background: #f0e6c8; /* leve dorado */
+  border-color: var(--gold);
+  color: var(--ink);
 }
 
+/* ACTIVE */
 .bcra-export-btn:active {
-  transform: translateY(0px);
-  box-shadow: 0 2px 6px rgba(184, 134, 11, 0.25);
+  transform: translateY(1px);
+}
+
+/* LOADING */
+.bcra-export-btn:disabled {
+  background: var(--cream);
+  opacity: 0.6;
+  cursor: not-allowed;
 }
