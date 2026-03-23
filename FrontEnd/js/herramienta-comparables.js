@@ -266,7 +266,9 @@ function renderCharts(data) {
 
   document.getElementById("comps-charts").style.display = "block";
 
-  // ───────── SCATTER EV vs REVENUE ─────────
+  Chart.getChart("chart-ev-rev")?.destroy();
+  Chart.getChart("chart-multiples")?.destroy();
+
   const scatter = empresas.map((e) => ({
     x: e["Revenue ($mm)"],
     y: e["EV ($mm)"],
@@ -290,46 +292,23 @@ function renderCharts(data) {
       ],
     },
     options: {
-      plugins: {
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.raw.label}`,
-          },
-        },
-      },
       scales: {
-        x: {
-          type: "logarithmic",
-          title: {
-            display: true,
-            text: "Revenue ($mm)",
-          },
-        },
-        y: {
-          type: "logarithmic",
-          title: {
-            display: true,
-            text: "EV ($mm)",
-          },
-        },
+        x: { type: "logarithmic" },
+        y: { type: "logarithmic" },
       },
     },
   });
-
-  // ───────── BAR EV/EBITDA ─────────
-  const labels = empresas.map((e) => e.Ticker);
-  const values = empresas.map((e) => e["EV/EBITDA"]);
 
   const ctx2 = document.getElementById("chart-multiples");
 
   new Chart(ctx2, {
     type: "bar",
     data: {
-      labels: labels,
+      labels: empresas.map((e) => e.Ticker),
       datasets: [
         {
           label: "EV/EBITDA",
-          data: values,
+          data: empresas.map((e) => e["EV/EBITDA"]),
         },
       ],
     },
