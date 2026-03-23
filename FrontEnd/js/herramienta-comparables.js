@@ -675,7 +675,7 @@ function renderCompsResult(data) {
       <div class="result-body">
 
         <!-- CHECKBOXES -->
-        <div style="margin-bottom:12px;">
+       <div class="comps-controls" style="margin-bottom:12px;">
           <label><input type="checkbox" data-col="pe"> P/E</label>
           <label style="margin-left:12px;"><input type="checkbox" data-col="mktcap"> Mkt Cap</label>
           <label style="margin-left:12px;"><input type="checkbox" data-col="growth"> Growth</label>

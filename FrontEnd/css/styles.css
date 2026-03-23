@@ -1939,3 +1939,9 @@ transform:translateY(1px);
   grid-template-columns: repeat(5, 1fr);
   gap: 14px;
 }
+
+.comps-controls input[type="checkbox"] {
+  display: inline-block !important;
+  margin-right: 6px;
+  cursor: pointer;
+}
