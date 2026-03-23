@@ -209,19 +209,6 @@ function bcraRenderBadge() {
   const m = document.getElementById("bcra-hdr-mes");
   const fx = document.getElementById("bcra-fx");
 
-  if (b) {
-    b.textContent = bcraState.selected.size + " / " + bcraState.nBancos;
-    b.className =
-      "nav-badge " + (bcraState.dataSource === "api" ? "live" : "soon");
-  }
-
-  if (m) {
-    m.textContent =
-      bcraState.fechaScraping +
-      " · " +
-      (bcraState.dataSource === "api" ? "LIVE" : "SIMULADO");
-  }
-
   if (fx) {
     const of = bcraState.usdRates.official;
     const blue = bcraState.usdRates.blue;
