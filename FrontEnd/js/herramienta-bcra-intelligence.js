@@ -224,11 +224,36 @@ function bcraRenderBadge() {
   }
 
   if (fx) {
-    fx.textContent =
-      "USD OF: " +
-      Math.round(bcraState.usdRates.official) +
-      " · BLUE: " +
-      Math.round(bcraState.usdRates.blue);
+    fx.innerHTML = `
+  <div style="
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:'DM Mono',monospace;
+  ">
+
+    <div style="
+      background:#ede7d9;
+      padding:4px 8px;
+      border-radius:6px;
+      font-size:11px;
+    ">
+      OF ${Math.round(bcraState.usdRates.official)}
+    </div>
+
+    <div style="
+      background:#111;
+      color:#fff;
+      padding:4px 10px;
+      border-radius:6px;
+      font-size:12px;
+      font-weight:600;
+    ">
+      BLUE ${Math.round(bcraState.usdRates.blue)}
+    </div>
+
+  </div>
+`;
   }
 }
 

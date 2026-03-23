@@ -247,80 +247,77 @@ def generate_excel(df, fecha_reporte, fecha_export):
     last_row = start + len(df10) - 1
 
     add_summary_rows(ws2, start, last_row)
+   # ─────────────────────────────
+    # HOJA 3 — DASHBOARD REAL
     # ─────────────────────────────
-    # HOJA 3 — DASHBOARD
-    # ─────────────────────────────
+    from openpyxl.chart import BarChart, Reference, PieChart
+
     ws3 = wb.create_sheet("Dashboard")
 
     # TITULO
     ws3.merge_cells("A1:F1")
-    ws3["A1"] = "Dashboard Ejecutivo"
+    ws3["A1"] = "BCRA Intelligence — Dashboard"
     ws3["A1"].font = title_font()
 
-    ws3.merge_cells("A2:F2")
-    ws3["A2"] = f"Reporte BCRA: {fecha_reporte}"
-    ws3["A2"].font = sub_font()
+    # KPIs (tipo cards)
+    kpi_labels = ["Activos", "Depósitos", "Préstamos", "Patrimonio"]
 
-    # KPIs
-    ws3["A4"] = "KPIs Sistema"
-    ws3["A4"].font = bold_font()
+    for i, (label, col) in enumerate(zip(kpi_labels, ["B", "C", "D", "E"])):
 
-    kpis = [
-        ("Total Activos", "B"),
-        ("Total Depósitos", "C"),
-        ("Total Préstamos", "D"),
-        ("Total Patrimonio", "E"),
-    ]
+        row = 3
 
-    start_data = 5
-    end_data = 4 + len(df)
+        ws3.cell(row, i*2 + 1, label).font = bold_font()
 
-    for i, (label, col) in enumerate(kpis, start=5):
+        formula = f"=SUM('BCRA Ranking'!{col}5:{col}{4+len(df)})"
 
-        ws3.cell(i, 1, label).font = dat_font()
-
-        formula = f"=SUM('BCRA Ranking'!{col}{start_data}:{col}{end_data})"
-
-        cell = ws3.cell(i, 2, formula)
-        cell.number_format = '#,##0.0'
-        cell.font = bold_font()
-
-    # TOP 5
-    ws3["A11"] = "Top 5 Bancos (Activos)"
-    ws3["A11"].font = bold_font()
-
-    headers = ["Banco", "Activos"]
-    for ci, h in enumerate(headers, 1):
-        c = ws3.cell(13, ci, h)
-        c.font = hdr_font()
-        c.fill = hdr_fill()
-        c.alignment = AC
-        c.border = thin
-
-    # usar ranking sheet
-    for i in range(5):
-        row_excel = 14 + i
-
-        ws3.cell(row_excel, 1, f"='BCRA Ranking'!A{start_data+i}")
-        val = ws3.cell(row_excel, 2, f"='BCRA Ranking'!B{start_data+i}")
-
+        val = ws3.cell(row+1, i*2 + 1, formula)
         val.number_format = '#,##0.0'
+        val.font = Font(size=12, bold=True)
 
-    # CONCENTRACIÓN TOP 5
-    ws3["D11"] = "Concentración Top 5"
-    ws3["D11"].font = bold_font()
+    # ─────────────────────────────
+    # TABLA TOP 10 (para gráficos)
+    # ─────────────────────────────
+    ws3["A7"] = "Top 10 Bancos"
+    ws3["A7"].font = bold_font()
 
-    ws3["D13"] = "% sobre total"
-    ws3["D13"].font = dat_font()
+    for i in range(10):
+        ws3.cell(9+i, 1, f"='BCRA Ranking'!A{5+i}")
+        ws3.cell(9+i, 2, f"='BCRA Ranking'!B{5+i}")
 
-    ws3["E13"] = f"=SUM(B14:B18)/B5"
-    ws3["E13"].number_format = "0.0%"
+    # ─────────────────────────────
+    # GRÁFICO BARRAS
+    # ─────────────────────────────
+    bar = BarChart()
+    bar.title = "Top 10 por Activos"
 
-    # ancho columnas
+    data = Reference(ws3, min_col=2, min_row=9, max_row=18)
+    cats = Reference(ws3, min_col=1, min_row=9, max_row=18)
+
+    bar.add_data(data)
+    bar.set_categories(cats)
+
+    bar.height = 8
+    bar.width = 16
+
+    ws3.add_chart(bar, "D7")
+
+    # ─────────────────────────────
+    # GRÁFICO PIE (Top 5)
+    # ─────────────────────────────
+    pie = PieChart()
+    pie.title = "Market Share"
+
+    data = Reference(ws3, min_col=2, min_row=9, max_row=13)
+    cats = Reference(ws3, min_col=1, min_row=9, max_row=13)
+
+    pie.add_data(data)
+    pie.set_categories(cats)
+
+    ws3.add_chart(pie, "D20")
+
+    # tamaños columnas
     ws3.column_dimensions["A"].width = 30
-    ws3.column_dimensions["B"].width = 18
-    ws3.column_dimensions["D"].width = 25
-    ws3.column_dimensions["E"].width = 18
+    ws3.column_dimensions["B"].width = 20
     buffer = BytesIO()
 
     wb.save(buffer)
