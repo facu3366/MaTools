@@ -355,22 +355,39 @@ input:focus, select:focus, textarea:focus {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: transparent;
-  color: var(--muted);
+
+  background: #fff;
+  color: var(--ink);
+
   border: 1px solid var(--line);
+  border-radius: 6px;
+
   padding: 10px 18px;
+
   font-family: 'DM Mono', monospace;
   font-size: 11px;
   letter-spacing: 2px;
-  cursor: pointer;
   text-transform: uppercase;
-  transition: all 0.2s;
+
+  cursor: pointer;
+
+  transition: all 0.2s ease;
 }
 
+/* HOVER MÁS FUERTE */
 .btn-back:hover {
   background: var(--cream);
   border-color: var(--gold);
   color: var(--ink);
+
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+
+/* ACTIVE (cuando clickeás) */
+.btn-back:active {
+  transform: translateY(0px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
 .btn-primary:disabled {
   opacity: 0.5;
