@@ -231,7 +231,7 @@ COLS = [
     ("Revenue ($mm)", 15, "num"),
     ("EBITDA ($mm)",  14, "num"),
     ("Net Inc ($mm)", 14, "num"),
-    ("Gross ($mm)"),
+    ("Gross ($mm)",   13, "num"),
     ("Deuda ($mm)",   13, "num"),
     ("Cash ($mm)",    13, "num"),
     ("Mkt Cap ($mm)", 15, "num"),

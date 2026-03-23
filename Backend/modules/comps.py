@@ -535,13 +535,16 @@ def generar_comps(request: CompsRequest):
             empresas = empresas_region + empresas_resto
             print(f"   🌎 Región {region}: {len(empresas_region)} | Resto: {len(empresas_resto)}")
 
+        universe_pre_filter = list(empresas)  # guardar universe ANTES de filtrar
         empresas = clean_and_dedup(empresas, empresa, revenue)
-        print(f"   📊 Final: {len(empresas)} comps para {empresa}")
+        print(f"   📊 Final: {len(empresas)} comps (de {len(universe_pre_filter)} universe) para {empresa}")
 
         result = build_comps_response(
             empresas, empresa, sector, revenue,
             request.rango_min_pct / 100, request.rango_max_pct / 100
         )
+        result["n_empresas_universe"] = len(universe_pre_filter)
+        result["empresas_universe"] = universe_pre_filter
         result["target_industry"] = target_industry
         result["discovery"] = {"yahoo_industry_key": industry_key, "sources": "Yahoo Industry + empresas.json"}
         return result
@@ -573,7 +576,12 @@ def descargar_excel(request: CompsRequest):
         resultados = [r for r in resultados if r.get("Revenue ($mm)") is not None]
         # Universe: solo excluir target + dedup, SIN filtros de calidad
         target_upper = empresa.upper() if empresa else ""
-        universe_raw = [r for r in resultados if r.get("Ticker", "").upper() != target_upper]
+        universe_raw = [
+    r for r in resultados 
+    if r.get("Ticker", "").upper() != target_upper
+    and r.get("Revenue ($mm)") and r.get("Revenue ($mm)") > 0
+    and r.get("EV ($mm)") and r.get("EV ($mm)") > 0
+]
         # Dedup simple por revenue
         rev_map = {}
         for e in universe_raw:
