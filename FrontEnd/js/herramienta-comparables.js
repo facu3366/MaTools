@@ -276,7 +276,6 @@ function renderCharts(data) {
   }));
 
   const ctx1 = document.getElementById("chart-ev-rev");
-
   new Chart(ctx1, {
     type: "scatter",
     data: {
@@ -292,6 +291,24 @@ function renderCharts(data) {
       ],
     },
     options: {
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const r = ctx.raw;
+
+              const fmt = (v) => {
+                if (!v) return "-";
+                if (v >= 1000) return `$${(v / 1000).toFixed(1)}B`;
+                return `$${v.toFixed(0)}M`;
+              };
+
+              return [`${r.label}`, `Revenue: ${fmt(r.x)}`, `EV: ${fmt(r.y)}`];
+            },
+          },
+        },
+      },
+
       scales: {
         x: { type: "logarithmic" },
         y: { type: "logarithmic" },
