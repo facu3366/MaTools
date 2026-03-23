@@ -595,7 +595,7 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
     # Hoja 2 activa por defecto (la que el analista necesita ver primero)
     wb.active = wb.sheetnames.index("Comparable Companies")
     # ══════════════════════════════════════════════
-    # 📊 CHARTS (EXCEL REAL + LABELS)
+    # 📊 CHARTS (EXCEL REAL + LABELS CORRECTOS)
     # ══════════════════════════════════════════════
 
     try:
@@ -604,11 +604,11 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
 
         ws3 = wb.create_sheet("Charts")
 
-        # ⚠️ USAR EL MISMO DATAFRAME QUE LA TABLA
+        # ⚠️ usar todos los datos (mismo dataset que tabla)
         df_chart = df.sort_values("Revenue ($mm)", ascending=False).reset_index(drop=True)
 
         # ─────────────────────────────
-        # TABLA BASE
+        # TABLA BASE PARA CHARTS
         # ─────────────────────────────
 
         ws3["A1"] = "Ticker"
@@ -627,23 +627,26 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
         last_row = len(df_chart) + 1
 
         # ─────────────────────────────
-        # SCATTER: EV vs Revenue
+        # SCATTER: EV vs Revenue (con label por punto)
         # ─────────────────────────────
 
         scatter = ScatterChart()
         scatter.title = "EV vs Revenue"
         scatter.style = 13
 
-        xvalues = Reference(ws3, min_col=2, min_row=2, max_row=last_row)
-        yvalues = Reference(ws3, min_col=3, min_row=2, max_row=last_row)
+        for i in range(2, last_row + 1):
 
-        series = Series(yvalues, xvalues, title="Comps")
-        scatter.series.append(series)
+            xvalues = Reference(ws3, min_col=2, min_row=i, max_row=i)
+            yvalues = Reference(ws3, min_col=3, min_row=i, max_row=i)
+            ticker = ws3.cell(i, 1).value
 
-        series.dLbls = DataLabelList()
-        series.dLbls.showVal = False
-        series.dLbls.showSerName = False
-        series.dLbls.showCatName = True
+            series = Series(yvalues, xvalues, title=ticker)
+
+            # 👇 esto hace que el ticker aparezca en el gráfico
+            series.dLbls = DataLabelList()
+            series.dLbls.showSerName = True
+
+            scatter.series.append(series)
 
         scatter.x_axis.title = "Revenue ($mm)"
         scatter.y_axis.title = "Enterprise Value ($mm)"
@@ -675,6 +678,7 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
     except Exception as e:
         print("⚠️ Error generando charts:", e)
 
+    # ✅ SIEMPRE AL FINAL
     wb.save(buffer)
 
 
