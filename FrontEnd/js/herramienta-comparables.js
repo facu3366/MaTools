@@ -197,6 +197,12 @@ async function selectSuggestion(ticker, name, sector) {
   selectedTicker = ticker;
   document.getElementById("comps-empresa").value = `${name} (${ticker})`;
   document.getElementById("suggestions").style.display = "none";
+  // habilitar inputs una vez seleccionada empresa
+  document.getElementById("comps-revenue").disabled = false;
+  document.getElementById("comps-sector").disabled = false;
+  document.getElementById("comps-region").disabled = false;
+  document.getElementById("btn-comps").disabled = false;
+
   if (sector) {
     autoMapSector(sector);
   } else {
@@ -762,8 +768,3 @@ async function downloadCompsExcel() {
   btn.innerHTML = original;
   btn.disabled = false;
 }
-// habilitar inputs una vez seleccionada empresa
-document.getElementById("comps-revenue").disabled = false;
-document.getElementById("comps-sector").disabled = false;
-document.getElementById("comps-region").disabled = false;
-document.getElementById("btn-comps").disabled = false;
