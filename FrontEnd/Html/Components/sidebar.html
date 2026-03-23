@@ -1,63 +1,65 @@
 <aside class="sidebar">
 
-<div class="logo">
-<div class="logo-gem"></div>
-<div class="logo-name">Deal<span>Desk</span></div>
-</div>
+  <!-- LOGO -->
+  <div class="logo">
+    <div class="logo-gem"></div>
+    <div class="logo-name">Deal<span>Desk</span></div>
+  </div>
 
-<div class="nav-label">Herramientas</div>
+  <!-- SECCIÓN -->
+  <div class="nav-label">Herramientas</div>
 
-<div class="nav-item active"
-onclick="showView('home','Inicio')">
-<span class="nav-icon">⊞</span>
-Inicio
-</div>
+  <!-- INICIO -->
+  <div class="nav-item active"
+    onclick="showView('home','Inicio')">
+    <span class="nav-icon">⊞</span>
+    Inicio
+  </div>
 
-<div class="nav-item"
-onclick="showView('comps','Comparable Companies')">
-<span class="nav-icon">◈</span>
-Comparables
-<span class="nav-badge live">LIVE</span>
-</div>
+  <!-- COMPARABLES -->
+  <div class="nav-item"
+    onclick="showView('comps','Comparables de Mercado')">
+    <span class="nav-icon">◈</span>
+    Comparables de Mercado
+    <span class="nav-badge live">ACTIVO</span>
+  </div>
 
-<div class="nav-item"
-onclick="showView('dcf','DCF & WACC')">
-<span class="nav-icon">◇</span>
-DCF / WACC
-<span class="nav-badge live">LIVE</span>
-</div>
+  <!-- DCF -->
+  <div class="nav-item"
+    onclick="showView('dcf','Valuación DCF')">
+    <span class="nav-icon">◇</span>
+    Valuación por Flujo de Fondos
+    <span class="nav-badge live">ACTIVO</span>
+  </div>
 
-<div class="nav-item"
-onclick="showView('precedents','Precedent Transactions')">
-<span class="nav-icon">◉</span>
-Precedentes
-<span class="nav-badge live">LIVE</span>
-</div>
-<!-- 
-<div class="nav-item"
-onclick="showView('bcra','BCRA Rankings')">
-<span class="nav-icon">▦</span>
-BCRA Rankings
-<span class="nav-badge live">LIVE</span>
-</div>-->
-<div class="nav-item"
-onclick="showView('research','Equity Research')">
-<span class="nav-icon">◆</span>
-Equity Research
-<span class="nav-badge live">LIVE</span>
-</div>
-<!-- NUEVO DASHBOARD -->
+  <!-- PRECEDENTES -->
+  <div class="nav-item"
+    onclick="showView('precedents','Transacciones Comparables')">
+    <span class="nav-icon">◉</span>
+    Transacciones Comparables
+    <span class="nav-badge live">ACTIVO</span>
+  </div>
 
-<div class="nav-item"
-onclick="showView('bcra-intel','BCRA Intelligence'); setTimeout(initBCRADashboard,50)">
-<span class="nav-icon">⬢</span>
-BCRA Intelligence
-<span class="nav-badge live">LIVE</span>
-</div>
+  <!-- RESEARCH -->
+  <div class="nav-item"
+    onclick="showView('research','Análisis de Empresas')">
+    <span class="nav-icon">◆</span>
+    Análisis de Empresas
+    <span class="nav-badge live">ACTIVO</span>
+  </div>
 
-<div class="sidebar-footer">
-DealDesk v2.3 · Motor financiero LATAM<br>
-© 2026
-</div>
+  <!-- BCRA -->
+  <div class="nav-item"
+    onclick="showView('bcra-intel','Sistema Financiero'); setTimeout(initBCRADashboard,50)">
+    <span class="nav-icon">⬢</span>
+    Sistema Financiero (BCRA)
+    <span class="nav-badge live">ACTIVO</span>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="sidebar-footer">
+    DealDesk · Plataforma financiera<br>
+    Argentina · 2026
+  </div>
 
 </aside>
