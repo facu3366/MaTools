@@ -391,7 +391,7 @@ async function fetchRevenueCard(ticker, name) {
           </div>
         </div>
 
-        <div class="rev-grid">
+        <div class="rev-grid rev-grid-5">
 
           <div class="rev-metric rev-metric--main">
             <div class="rev-metric-label">Revenue</div>

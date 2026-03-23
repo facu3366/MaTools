@@ -1934,3 +1934,8 @@ transform:translateY(1px);
   font-weight: 500;
   color: var(--ink);
 }
+.rev-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
