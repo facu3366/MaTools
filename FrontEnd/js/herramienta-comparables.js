@@ -645,12 +645,12 @@ function renderCompsResult(data) {
       <td class="t-name">${e.Empresa || ""}</td>
       <td class="t-region">${getRegionFromCountry(getPaisSafe(e))}</td>
 
-      <td class="t-num" data-col="revenue">${fmtNum(e["Revenue ($mm)"])}</td>
-      <td class="t-num" data-col="ebitda">${fmtNum(e["EBITDA ($mm)"])}</td>
-      <td class="t-num" data-col="ev">${fmtNum(e["EV ($mm)"])}</td>
+      <td class="t-num">${fmtNum(e["Revenue ($mm)"])}</td>
+      <td class="t-num">${fmtNum(e["EBITDA ($mm)"])}</td>
+      <td class="t-num">${fmtNum(e["EV ($mm)"])}</td>
 
-      <td class="t-mult" data-col="evrev">${fmtMult(e["EV/Revenue"])}</td>
-      <td class="t-mult" data-col="evebitda">${fmtMult(e["EV/EBITDA"])}</td>
+      <td class="t-mult">${fmtMult(e["EV/Revenue"])}</td>
+      <td class="t-mult">${fmtMult(e["EV/EBITDA"])}</td>
 
       <td class="t-mult" data-col="pe">${fmtMult(e["P/E"])}</td>
       <td class="t-num" data-col="mktcap">${fmtNum(e["Mkt Cap ($mm)"])}</td>
@@ -681,6 +681,18 @@ function renderCompsResult(data) {
           <label style="margin-left:12px;"><input type="checkbox" data-col="growth"> Growth</label>
         </div>
 
+        <div class="kpi-row">
+          <div class="kpi">
+            <div class="kpi-label">Universe</div>
+            <div class="kpi-value">${data.n_empresas_universe}</div>
+          </div>
+
+          <div class="kpi">
+            <div class="kpi-label">Filtradas</div>
+            <div class="kpi-value">${data.n_empresas_filtradas}</div>
+          </div>
+        </div>
+
         <div class="comps-table-wrapper">
           <table class="comps-table">
             <thead>
@@ -688,13 +700,11 @@ function renderCompsResult(data) {
                 <th>Ticker</th>
                 <th>Company</th>
                 <th>Region</th>
-
-                <th data-col="revenue">Revenue</th>
-                <th data-col="ebitda">EBITDA</th>
-                <th data-col="ev">EV</th>
-
-                <th data-col="evrev">EV/Rev</th>
-                <th data-col="evebitda">EV/EBITDA</th>
+                <th>Revenue</th>
+                <th>EBITDA</th>
+                <th>EV</th>
+                <th>EV/Rev</th>
+                <th>EV/EBITDA</th>
 
                 <th data-col="pe">P/E</th>
                 <th data-col="mktcap">Mkt Cap</th>
@@ -710,20 +720,23 @@ function renderCompsResult(data) {
           </table>
         </div>
 
+        <!-- BOTON EXCEL (LO RECUPERAMOS) -->
+        <button class="btn-secondary" onclick="downloadCompsExcel()">
+          ⬇ DESCARGAR EXCEL
+        </button>
+
       </div>
     </div>
   `;
 
-  // listeners checkbox
-  document.querySelectorAll("[data-col]").forEach((el) => {
-    if (el.tagName === "INPUT") {
-      el.addEventListener("change", (e) => {
-        toggleColumn(e.target.dataset.col, e.target.checked);
-      });
-    }
+  // listeners
+  document.querySelectorAll("input[data-col]").forEach((cb) => {
+    cb.addEventListener("change", (e) => {
+      toggleColumn(e.target.dataset.col, e.target.checked);
+    });
   });
 
-  // ocultar columnas nuevas por default
+  // ocultar por default
   toggleColumn("pe", false);
   toggleColumn("mktcap", false);
   toggleColumn("growth", false);
