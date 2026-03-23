@@ -1,167 +1,108 @@
 <div id="view-home" class="tool-view active">
 
-<div class="home-eyebrow">
-M&A Intelligence · LATAM
-</div>
+  <!-- HEADER -->
+  <div class="home-eyebrow">
+    Inteligencia Financiera · Argentina
+  </div>
 
-<h1 class="home-title">
-Financial Intelligence<br>
-<em>for Market Analysis.</em>
-</h1>
+  <h1 class="home-title">
+    Análisis Financiero<br>
+    <em>para decisiones de inversión</em>
+  </h1>
 
-<p class="home-desc">
-Suite de herramientas para análisis financiero, valuación de empresas y research del sistema financiero argentino.
-Seleccioná una herramienta para comenzar.
-</p>
+  <p class="home-desc">
+    Plataforma de herramientas para valuación de empresas, análisis de mercado y estudio del sistema financiero argentino.
+    Seleccioná una herramienta para comenzar.
+  </p>
 
-<div class="tools-grid">
+  <!-- GRID -->
+  <div class="tools-grid">
 
+    <!-- COMPARABLES -->
+    <div class="tool-card"
+      onclick="showView('comps','Comparables de Mercado')">
 
-<!-- COMPS -->
-<div class="tool-card"
-onclick="showView('comps','Comparable Companies')">
+      <span class="tool-icon">◈</span>
 
-<span class="tool-icon">◈</span>
+      <div class="tool-name">
+        Comparables de Mercado
+      </div>
 
-<div class="tool-name">
-Comparable Companies
-</div>
+      <div class="tool-desc">
+        Análisis de empresas similares por sector y tamaño.
+        Múltiplos, márgenes y métricas clave para valuación.
+      </div>
 
-<div class="tool-desc">
-Comparables de mercado por sector y tamaño.
-Múltiplos, márgenes y benchmarks para análisis de valuación.
-</div>
+    </div>
 
-</div>
+    <!-- DCF -->
+    <div class="tool-card"
+      onclick="showView('dcf','Valuación DCF')">
 
+      <span class="tool-icon">◇</span>
 
+      <div class="tool-name">
+        Valuación por Flujo de Fondos
+      </div>
 
-<!-- DCF -->
-<div class="tool-card"
-onclick="showView('dcf','DCF & WACC')">
+      <div class="tool-desc">
+        Modelo de descuento de flujos (DCF).
+        Cálculo de costo de capital, estructura financiera y supuestos clave.
+      </div>
 
-<span class="tool-icon">◇</span>
+    </div>
 
-<div class="tool-name">
-DCF & WACC
-</div>
+    <!-- TRANSACCIONES -->
+    <div class="tool-card"
+      onclick="showView('precedents','Transacciones Comparables')">
 
-<div class="tool-desc">
-Inputs para modelos de Discounted Cash Flow.
-Beta, cost of debt, tax rate y ponderaciones de capital.
-</div>
+      <span class="tool-icon">◉</span>
 
-</div>
+      <div class="tool-name">
+        Transacciones Comparables
+      </div>
 
+      <div class="tool-desc">
+        Operaciones históricas por sector.
+        Múltiplos pagados, valuaciones y referencias de mercado.
+      </div>
 
+    </div>
 
-<!-- PRECEDENTS -->
-<div class="tool-card"
-onclick="showView('precedents','Precedent Transactions')">
+    <!-- BCRA -->
+    <div class="tool-card"
+      onclick="showView('bcra-intel','Sistema Financiero'); setTimeout(initBCRADashboard,50)">
 
-<span class="tool-icon">◉</span>
+      <span class="tool-icon">⬢</span>
 
-<div class="tool-name">
-Precedent Transactions
-</div>
+      <div class="tool-name">
+        Sistema Financiero (BCRA)
+      </div>
 
-<div class="tool-desc">
-Deals históricos por sector y región.
-Múltiplos de entrada, EV y estadísticas de transacciones comparables.
-</div>
+      <div class="tool-desc">
+        Dashboard interactivo del sistema bancario argentino.
+        Rankings, participación de mercado y análisis de entidades.
+      </div>
 
-</div>
+    </div>
 
+    <!-- RESEARCH -->
+    <div class="tool-card"
+      onclick="showView('research','Análisis de Empresas')">
 
+      <span class="tool-icon">◆</span>
 
-<!-- BCRA SIMPLE 
-<div class="tool-card"
-onclick="showView('bcra','BCRA Rankings')">
+      <div class="tool-name">
+        Análisis de Empresas
+      </div>
 
-<span class="tool-icon">▦</span>
+      <div class="tool-desc">
+        Reporte completo automatizado.
+        Fundamentales, resultados, valuación y tesis de inversión.
+      </div>
 
-<div class="tool-name">
-BCRA Rankings
-</div>
+    </div>
 
-<div class="tool-desc">
-Activos, depósitos, patrimonio neto y préstamos
-de todas las entidades del sistema financiero argentino.
-</div>
-
-</div>
--->
-
-
-<!-- BCRA INTELLIGENCE -->
-<div class="tool-card"
-onclick="showView('bcra-intel','BCRA Intelligence'); setTimeout(initBCRADashboard,50)">
-
-<span class="tool-icon">⬢</span>
-
-<div class="tool-name">
-BCRA Intelligence
-</div>
-
-<div class="tool-desc">
-Dashboard interactivo del sistema financiero argentino.
-Rankings, composición, ratios bancarios y análisis visual.
-</div>
-
-</div>
-
-
-
-<!-- INFLATION -->
-<div class="tool-card disabled">
-
-<span class="tool-icon">⬡</span>
-
-<div class="tool-name">
-Ajuste por Inflación
-</div>
-
-<div class="tool-desc">
-Subí un balance y obtené estados contables ajustados por inflación
-según normas RT 6/17 con índices INDEC.
-</div>
-
-</div>
-
-<!-- EQUITY RESEARCH -->
-<div class="tool-card"
-onclick="showView('research','Equity Research')">
-
-<span class="tool-icon">◆</span>
-
-<div class="tool-name">
-Equity Research
-</div>
-
-<div class="tool-desc">
-Análisis completo automático en 4 fases.
-Fundamentos, earnings, DCF y tesis de inversión con IA.
-</div>
-
-</div>
-
-<!-- FX -->
-<div class="tool-card disabled">
-
-<span class="tool-icon">⬡</span>
-
-<div class="tool-name">
-Conversión Tipo de Cambio
-</div>
-
-<div class="tool-desc">
-Convertí estados contables usando dólar MEP,
-oficial o CCL con datos en tiempo real.
-</div>
-
-</div>
-
-
-</div>
+  </div>
 
 </div>
