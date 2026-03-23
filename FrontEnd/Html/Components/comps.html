@@ -23,12 +23,13 @@
     <label>Empresa Target</label>
 
     <input
-      type="text"
-      id="comps-empresa"
-      placeholder="Ej: Mercado Libre, MELI, Apple..."
-      oninput="showSuggestions(this.value)"
-      onkeydown="handleKey(event)"
-      autocomplete="off">
+    type="text"
+    id="comps-empresa"
+    placeholder="Ej: Mercado Libre, MELI, Apple..."
+    oninput="showSuggestions(this.value)"
+    onkeydown="handleKey(event)"
+    autocomplete="off"
+    style="max-width: 320px;">
 
     <div id="suggestions"></div>
     <span id="detect-hint"></span>
