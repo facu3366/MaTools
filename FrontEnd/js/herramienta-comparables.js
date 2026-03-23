@@ -268,14 +268,6 @@ function renderCharts(data) {
   document.getElementById("comps-charts").style.display = "block";
 
   // ───────── SCATTER EV vs REVENUE ─────────
-  const scatter = empresas.map((e) => ({
-    x: e["Revenue ($mm)"],
-    y: e["EV ($mm)"],
-    label: e.Ticker,
-  }));
-
-  const ctx1 = document.getElementById("chart-ev-rev");
-
   new Chart(ctx1, {
     type: "scatter",
     data: {
@@ -292,6 +284,23 @@ function renderCharts(data) {
         tooltip: {
           callbacks: {
             label: (ctx) => `${ctx.raw.label}`,
+          },
+        },
+      },
+
+      scales: {
+        x: {
+          type: "logarithmic",
+          title: {
+            display: true,
+            text: "Revenue ($mm)",
+          },
+        },
+        y: {
+          type: "logarithmic",
+          title: {
+            display: true,
+            text: "EV ($mm)",
           },
         },
       },
@@ -602,10 +611,10 @@ function renderCompsResult(data) {
   const ttmPct = quality.pct_real_ttm ?? 0;
   const ttmBadge =
     ttmPct >= 80
-      ? `<span class="ttm-badge ttm-good">TTM ${ttmPct}% real</span>`
+      ? `<span class="ttm-badge ttm-good">TTM ${ttmPct}%</span>`
       : ttmPct >= 50
-        ? `<span class="ttm-badge ttm-warn">TTM ${ttmPct}% real</span>`
-        : `<span class="ttm-badge ttm-bad">TTM ${ttmPct}% — revisar</span>`;
+        ? `<span class="ttm-badge ttm-warn">TTM ${ttmPct}%</span>`
+        : `<span class="ttm-badge ttm-bad">TTM ${ttmPct}%</span>`;
 
   const selectedRegion =
     document.getElementById("comps-region")?.value || "GLOBAL";
@@ -673,7 +682,6 @@ function renderCompsResult(data) {
 
       <div class="result-body">
 
-        <!-- 🔥 NUEVA FILA KPI -->
         <div class="kpi-row">
 
           <div class="kpi">
