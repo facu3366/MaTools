@@ -260,6 +260,63 @@ async function autoDetectSector(ticker) {
 function getPaisSafe(e) {
   return e?.Pais || null;
 }
+
+function renderCharts(data) {
+  const empresas = data.empresas_filtradas || [];
+
+  // mostrar contenedor
+  document.getElementById("comps-charts").style.display = "block";
+
+  // ───────── SCATTER EV vs REVENUE ─────────
+  const scatter = empresas.map((e) => ({
+    x: e["Revenue ($mm)"],
+    y: e["EV ($mm)"],
+    label: e.Ticker,
+  }));
+
+  const ctx1 = document.getElementById("chart-ev-rev");
+
+  new Chart(ctx1, {
+    type: "scatter",
+    data: {
+      datasets: [
+        {
+          label: "Comps",
+          data: scatter,
+          backgroundColor: "#999",
+        },
+      ],
+    },
+    options: {
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.raw.label}`,
+          },
+        },
+      },
+    },
+  });
+
+  // ───────── BAR EV/EBITDA ─────────
+  const labels = empresas.map((e) => e.Ticker);
+  const values = empresas.map((e) => e["EV/EBITDA"]);
+
+  const ctx2 = document.getElementById("chart-multiples");
+
+  new Chart(ctx2, {
+    type: "bar",
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: "EV/EBITDA",
+          data: values,
+        },
+      ],
+    },
+  });
+}
 // ── REVENUE CARD ──────────────────────────────────────────────
 async function fetchRevenueCard(ticker, name) {
   const container = document.getElementById("revenue-preview");
@@ -550,17 +607,6 @@ function renderCompsResult(data) {
         ? `<span class="ttm-badge ttm-warn">TTM ${ttmPct}% real</span>`
         : `<span class="ttm-badge ttm-bad">TTM ${ttmPct}% — revisar</span>`;
 
-  const statCard = (label, key, suffix = "") => {
-    const s = stats[key];
-    if (!s || s.median == null) return "";
-    return `
-      <div class="fin-card">
-        <div class="fin-card-label">${label}</div>
-        <div class="fin-card-value">${s.median}${suffix}</div>
-        <div class="fin-card-sub">Median (n=${s.count}) · Mean: ${s.mean}${suffix}</div>
-      </div>`;
-  };
-
   const selectedRegion =
     document.getElementById("comps-region")?.value || "GLOBAL";
 
@@ -569,11 +615,9 @@ function renderCompsResult(data) {
       const ra = getRegionFromCountry(a?.Pais);
       const rb = getRegionFromCountry(b?.Pais);
 
-      // 1. priorizar región elegida
       if (ra === selectedRegion && rb !== selectedRegion) return -1;
       if (ra !== selectedRegion && rb === selectedRegion) return 1;
 
-      // 2. dentro de cada grupo → ordenar por revenue
       return (b["Revenue ($mm)"] || 0) - (a["Revenue ($mm)"] || 0);
     })
     .map(
@@ -619,27 +663,62 @@ function renderCompsResult(data) {
 
   document.getElementById("result-comps").innerHTML = `
     <div class="result-box">
+
       <div class="result-header">
         <div class="result-title">
           Comps — ${data.empresa_target} · ${data.sector} ${ttmBadge}
         </div>
         <div class="result-date">${new Date().toLocaleDateString("es-AR")}</div>
       </div>
+
       <div class="result-body">
-        <div class="fin-grid">
-          <div class="fin-card">
-            <div class="fin-card-label">Universe</div>
-            <div class="fin-card-value">${data.n_empresas_universe}</div>
+
+        <!-- 🔥 NUEVA FILA KPI -->
+        <div class="kpi-row">
+
+          <div class="kpi">
+            <div class="kpi-label">Universe</div>
+            <div class="kpi-value">${data.n_empresas_universe}</div>
           </div>
-          <div class="fin-card">
-            <div class="fin-card-label">Filtradas</div>
-            <div class="fin-card-value">${data.n_empresas_filtradas}</div>
-            <div class="fin-card-sub">Revenue ${fmtNum(data.rango_revenue?.min_mm)}–${fmtNum(data.rango_revenue?.max_mm)} $mm</div>
+
+          <div class="kpi">
+            <div class="kpi-label">Filtradas</div>
+            <div class="kpi-value">${data.n_empresas_filtradas}</div>
           </div>
-          ${statCard("EV / Revenue", "EV/Revenue", "x")}
-          ${statCard("EV / EBITDA", "EV/EBITDA", "x")}
-          ${statCard("EBITDA Margin", "EBITDA Mg%", "%")}
+
+          ${
+            stats["EV/Revenue"]?.median != null
+              ? `
+          <div class="kpi">
+            <div class="kpi-label">EV / Revenue</div>
+            <div class="kpi-value">${fmtMult(stats["EV/Revenue"].median)}</div>
+          </div>`
+              : ""
+          }
+
+          ${
+            stats["EV/EBITDA"]?.median != null
+              ? `
+          <div class="kpi">
+            <div class="kpi-label">EV / EBITDA</div>
+            <div class="kpi-value">${fmtMult(stats["EV/EBITDA"].median)}</div>
+          </div>`
+              : ""
+          }
+
+          ${
+            stats["EBITDA Mg%"]?.median != null
+              ? `
+          <div class="kpi">
+            <div class="kpi-label">EBITDA Margin</div>
+            <div class="kpi-value">${fmtPct(stats["EBITDA Mg%"].median)}</div>
+          </div>`
+              : ""
+          }
+
         </div>
+
+        <!-- TABLA -->
         <div class="comps-table-wrapper">
           <table class="comps-table">
             <thead>
@@ -663,17 +742,22 @@ function renderCompsResult(data) {
             </tbody>
           </table>
         </div>
+
         <div class="comps-note">
           Revenue y EBITDA = Trailing Twelve Months (suma últimos 4 quarters reportados).
           Empresas marcadas "⚠ FY" usan dato de último año fiscal como fallback.
           Fuente: Yahoo Finance · ${new Date().toLocaleDateString("es-AR")}
         </div>
+
         <button class="btn-secondary" onclick="downloadCompsExcel()">
           ⬇ DESCARGAR EXCEL
         </button>
+
       </div>
     </div>
   `;
+
+  renderCharts(data);
 }
 
 // ── FORMAT HELPERS ────────────────────────────────────────────

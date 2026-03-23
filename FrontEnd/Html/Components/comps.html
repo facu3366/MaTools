@@ -17,7 +17,7 @@
     </button>
   </div>
 
-  <!-- CONTENEDOR PRINCIPAL -->
+  <!-- CONTENEDOR -->
   <div style="max-width:900px;">
 
     <!-- EMPRESA -->
@@ -42,34 +42,18 @@
     </div>
 
     <!-- CONFIG -->
-    <div style="
-      border-top:1px solid var(--line);
-      padding-top:22px;
-      margin-bottom:26px;
-    ">
+    <div style="border-top:1px solid var(--line); padding-top:22px; margin-bottom:26px;">
 
       <div class="form-grid form-grid-3">
 
         <div class="form-group">
-          <label>
-            Revenue Target
-            <span style="font-size:10px;font-weight:400;opacity:.5">
-              (USD mm)
-            </span>
-          </label>
-
-          <input
-            type="number"
-            id="comps-revenue"
-            placeholder="Auto"
-            disabled>
+          <label>Revenue Target</label>
+          <input type="number" id="comps-revenue" disabled>
         </div>
 
         <div class="form-group">
           <label>Sector</label>
-
           <select id="comps-sector" disabled>
-            <option>Health Insurance</option>
             <option>Technology</option>
             <option>Financials</option>
             <option>Energy</option>
@@ -80,21 +64,12 @@
         </div>
 
         <div class="form-group">
-          <label>
-            Región
-          </label>
-
+          <label>Región</label>
           <select id="comps-region" disabled>
             <option value="GLOBAL">🌍 Global</option>
             <option value="LATAM">🌎 LATAM</option>
-            <option value="ASIA">🌏 Asia</option>
-            <option value="AFRICA">🌍 Africa</option>
-            <option value="OCEANIA">🌏 Oceania</option>
             <option value="US">🇺🇸 USA</option>
             <option value="EU">🇪🇺 Europa</option>
-            <option value="Argentina">🇦🇷 Argentina</option>
-            <option value="Brazil">🇧🇷 Brazil</option>
-            <option value="Mexico">🇲🇽 Mexico</option>
           </select>
         </div>
 
@@ -104,20 +79,33 @@
 
     <!-- ACCIÓN -->
     <div style="margin-bottom:28px;">
-
-      <button
-        class="btn-primary"
-        id="btn-comps"
-        onclick="runComps()"
-        disabled>
-        ▶ GENERAR COMPARABLES
+      <button class="btn-primary" id="btn-comps" onclick="runComps()" disabled>
+        ▶ GENERAR COMPS
       </button>
-
     </div>
 
   </div>
 
-  <!-- RESULTADO -->
+  <!-- RESULT -->
   <div id="result-comps"></div>
+
+  <!-- 📊 GRÁFICOS -->
+  <div id="comps-charts" style="display:none;">
+
+    <div class="comps-charts">
+
+      <div class="chart-card">
+        <h3>EV vs Revenue</h3>
+        <canvas id="chart-ev-rev"></canvas>
+      </div>
+
+      <div class="chart-card">
+        <h3>EV / EBITDA</h3>
+        <canvas id="chart-multiples"></canvas>
+      </div>
+
+    </div>
+
+  </div>
 
 </div>
