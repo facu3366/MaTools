@@ -112,6 +112,22 @@ async function searchEmpresas(query) {
 
 // ── AUTOCOMPLETE UI ──────────────────────────────────────────
 
+function renderSuggestions(box, results) {
+  box.style.display = "block";
+  box.innerHTML = results
+    .map(
+      (r, i) => `
+    <div class="suggestion-item${i === selectedSuggestion ? " active" : ""}"
+         onmousedown="selectSuggestion('${r.ticker}', '${r.name.replace(/'/g, "\\'")}', '${r.sector}')"
+         onmouseenter="selectedSuggestion=${i}; highlightSuggestion()">
+      <span class="suggestion-ticker">${r.ticker}</span>
+      <span class="suggestion-name">${r.name}</span>
+      ${r.exchange ? `<span class="suggestion-exchange">${r.exchange}</span>` : ""}
+    </div>`,
+    )
+    .join("");
+}
+
 function showSuggestions(val) {
   const box = document.getElementById("suggestions");
   selectedSuggestion = -1;
@@ -138,22 +154,6 @@ function showSuggestions(val) {
     }
     renderSuggestions(box, results);
   }, 300);
-}
-
-function renderSuggestions(box, results) {
-  box.style.display = "block";
-  box.innerHTML = results
-    .map(
-      (r, i) => `
-    <div class="suggestion-item${i === selectedSuggestion ? " active" : ""}"
-         onmousedown="selectSuggestion('${r.ticker}', '${r.name.replace(/'/g, "\\'")}', '${r.sector}')"
-         onmouseenter="selectedSuggestion=${i}; highlightSuggestion()">
-      <span class="suggestion-ticker">${r.ticker}</span>
-      <span class="suggestion-name">${r.name}</span>
-      ${r.exchange ? `<span class="suggestion-exchange">${r.exchange}</span>` : ""}
-    </div>`,
-    )
-    .join("");
 }
 
 function highlightSuggestion() {

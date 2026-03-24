@@ -26,7 +26,7 @@ async function showView(view, title) {
   const container = document.getElementById("app-content");
   container.innerHTML = html;
 
-  // 🔴 ESTO ES LO QUE FALTABA
+  // ESTO ES LO QUE FALTABA
   const loadedView = container.querySelector(".tool-view");
   if (loadedView) {
     loadedView.classList.add("active");
