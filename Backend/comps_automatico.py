@@ -207,7 +207,7 @@ def blue_font():  return Font(name="Arial", size=9, color="0000FF")
 def title_font(): return Font(name="Arial", bold=True, size=13, color=DELOITTE)
 def sub_font():   return Font(name="Arial", size=9, italic=True, color="666666")
 def hdr_fill():   return PatternFill("solid", start_color=DELOITTE)
-def sum_fill():   return PatternFill("solid", start_color=LBLUE)
+def sum_fill():   return PatternFill("solid", bold=True, start_color="FFFFFF")
 def alt_fill(i):  return PatternFill("solid", start_color=GRAY if i % 2 == 0 else WHITE)
 
 thin = Border(
@@ -406,7 +406,7 @@ def generar_excel(df: pd.DataFrame):
         ws2.cell(row=r_num, column=1, value=label).font = dat_font()
         cell = ws2.cell(row=r_num, column=2, value=val)
         cell.font = blue_font()
-        cell.fill = PatternFill("solid", start_color=YELLOW)
+        cell.fill = PatternFill("solid", start_color=DELOITTE)
         cell.number_format = fmt_str
         cell.border = thin
 
@@ -536,7 +536,7 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
         ws2.cell(row=r_num, column=1, value=label).font = dat_font()
         cell = ws2.cell(row=r_num, column=2, value=val)
         cell.font = blue_font()
-        cell.fill = PatternFill("solid", start_color=YELLOW)
+        cell.fill = PatternFill("solid", start_color=DELOITTE)
         cell.number_format = fmt_str
         cell.border = thin
 
