@@ -38,7 +38,16 @@ from Backend.comps_automatico import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+import math
 
+def clean_inf(obj):
+    if isinstance(obj, dict):
+        return {k: clean_inf(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [clean_inf(v) for v in obj]
+    if isinstance(obj, float) and (math.isinf(obj) or math.isnan(obj)):
+        return None
+    return obj
 
 class CompsRequest(BaseModel):
     mensaje: str
@@ -280,7 +289,7 @@ def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenu
             continue
 
         # 5. EV/EBITDA > 75x
-        if ebitda and ebitda > 0:
+        if ebitda is not None and ebitda > 0:
             ev_ebitda = ev / ebitda
             if ev_ebitda > 75:
                 print(f"   ⚠️ Skip {ticker} — EV/EBITDA {ev_ebitda:.1f}x > 75x")
@@ -323,8 +332,8 @@ def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenu
     result = list(revenue_map.values())
     result.sort(key=lambda e: e.get("Revenue ($mm)", 0), reverse=True)
     print(f"   🧹 Resultado: {len(result)} comps limpios (de {len(empresas)} candidatos)")
+    result = clean_inf(result)
     return result
-
 
 # ─────────────────────────────────────────────
 # INDUSTRY → JSON SECTORS MAP (para discover_comps)
@@ -547,6 +556,7 @@ def generar_comps(request: CompsRequest):
         result["empresas_universe"] = universe_pre_filter
         result["target_industry"] = target_industry
         result["discovery"] = {"yahoo_industry_key": industry_key, "sources": "Yahoo Industry + empresas.json"}
+        
         return result
 
     except HTTPException:
