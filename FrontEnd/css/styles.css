@@ -10,7 +10,16 @@
   --error: #8b1a1a;
   --white: #ffffff;
 }
+.nav-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 
+.nav-badge.coming {
+  background: #999;
+  color: white;
+}
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
