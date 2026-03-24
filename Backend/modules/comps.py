@@ -192,20 +192,42 @@ def get_similar_industries(industry: str) -> list[str]:
             return values
     return [industry]
 
-MIN_COMPS = 10
+MIN_COMPS = 5
 
 def filter_by_industry(empresas: list[dict], target_industry: str) -> list[dict]:
     if not target_industry:
         return empresas
     similar = get_similar_industries(target_industry)
     similar_set = set(similar)
+    
     exact = [e for e in empresas if e.get("Industria") == target_industry]
     if len(exact) >= MIN_COMPS:
+        print(f"   🎯 Industry filter: {len(exact)} exact matches for '{target_industry}'")
         return exact
+    
     sim = [e for e in empresas if e.get("Industria") in similar_set]
     if len(sim) >= MIN_COMPS:
+        print(f"   🎯 Industry filter: {len(sim)} similar matches for '{target_industry}'")
         return sim
-    return sorted(empresas, key=lambda e: (0 if e.get("Industria") in similar_set else 1))[:30]
+    
+    target_sector = None
+    if exact:
+        target_sector = exact[0].get("Sector")
+    elif sim:
+        target_sector = sim[0].get("Sector")
+    
+    if target_sector:
+        same_sector = [e for e in empresas if e.get("Sector") == target_sector]
+        if len(same_sector) >= MIN_COMPS:
+            print(f"   🎯 Industry filter: {len(same_sector)} same-sector matches (sector='{target_sector}')")
+            return same_sector
+    
+    print(f"   ⚠️ Industry filter: no good matches for '{target_industry}', returning all {len(empresas)}")
+    return sorted(empresas, key=lambda e: (
+        0 if e.get("Industria") == target_industry else
+        1 if e.get("Industria") in similar_set else
+        2
+    ))
 
 
 # ─────────────────────────────────────────────
@@ -244,7 +266,7 @@ COUNTRY_TO_REGION = {"Argentina": "LATAM", "Brazil": "LATAM", "Mexico": "LATAM"}
 # CLEAN & DEDUP (caps consistentes con sanitize_empresa)
 # ─────────────────────────────────────────────
 
-def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenue: float = 0) -> list[dict]:
+def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenue: float = 0, rango_min_pct: float = 0.30, rango_max_pct: float = 3.0) -> list[dict]:
     """
     Limpia y deduplica la lista de empresas para comps.
     
@@ -305,10 +327,10 @@ def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenu
 
         clean.append(e)
 
-    # 7. Revenue range relativo al target
+    # 7. Revenue range relativo al target (usa los rangos del usuario)
     if target_revenue and target_revenue > 0:
-        min_rev = target_revenue * 0.02
-        max_rev = target_revenue * 50
+        min_rev = target_revenue * rango_min_pct
+        max_rev = target_revenue * rango_max_pct
         before = len(clean)
         clean = [e for e in clean if min_rev <= e.get("Revenue ($mm)", 0) <= max_rev]
         filtered = before - len(clean)
@@ -479,6 +501,25 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
             fallback_sector = target_data.get("sector", "")
             if fallback_sector:
                 json_tickers = get_universe_by_sector(fallback_sector)[:30]
+
+    # ── SOURCE C: Ticker-based peer backup (when Yahoo Industry fails) ──
+    if len(yahoo_tickers) < 5 and target_ticker:
+        try:
+            t_info = yf.Ticker(target_ticker.upper()).info or {}
+            sector_yf = t_info.get("sector", "")
+            if sector_yf:
+                sector_key = sector_yf.lower().replace(" ", "-").replace("&", "and")
+                try:
+                    sec = yf.Sector(sector_key)
+                    tc = sec.top_companies
+                    if tc is not None and not tc.empty:
+                        sector_peers = list(tc.index)[:30]
+                        print(f"   🔍 Source C: yf.Sector('{sector_key}'): {len(sector_peers)} peers")
+                        all_tickers.update(sector_peers)
+                except Exception as e:
+                    print(f"   ⚠️ yf.Sector failed: {e}")
+        except Exception as e:
+            print(f"   ⚠️ Source C failed: {e}")
     
     # Aplicar hard cap al JSON
     if len(json_tickers) > MAX_JSON_TICKERS:
@@ -545,7 +586,7 @@ def generar_comps(request: CompsRequest):
             print(f"   🌎 Región {region}: {len(empresas_region)} | Resto: {len(empresas_resto)}")
 
         universe_pre_filter = list(empresas)  # guardar universe ANTES de filtrar
-        empresas = clean_and_dedup(empresas, empresa, revenue)
+        empresas = clean_and_dedup(empresas, empresa, revenue, request.rango_min_pct / 100, request.rango_max_pct / 100)
         print(f"   📊 Final: {len(empresas)} comps (de {len(universe_pre_filter)} universe) para {empresa}")
 
         result = build_comps_response(
@@ -611,7 +652,7 @@ def descargar_excel(request: CompsRequest):
         universe = sorted(rev_map.values(), key=lambda x: x.get("Revenue ($mm)", 0) or 0, reverse=True)
 
         # Comps FILTRADOS (con revenue range) para Hoja 2
-        filtrados = clean_and_dedup(resultados, empresa, revenue)
+        filtrados = clean_and_dedup(resultados, empresa, revenue, request.rango_min_pct / 100, request.rango_max_pct / 100)
 
         if not filtrados:
             raise HTTPException(status_code=500, detail="Sin datos")
