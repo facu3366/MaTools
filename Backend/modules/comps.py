@@ -552,11 +552,18 @@ def generar_comps(request: CompsRequest):
             empresas, empresa, sector, revenue,
             request.rango_min_pct / 100, request.rango_max_pct / 100
         )
+
         result["n_empresas_universe"] = len(universe_pre_filter)
         result["empresas_universe"] = universe_pre_filter
         result["target_industry"] = target_industry
-        result["discovery"] = {"yahoo_industry_key": industry_key, "sources": "Yahoo Industry + empresas.json"}
-        
+        result["discovery"] = {
+            "yahoo_industry_key": industry_key,
+            "sources": "Yahoo Industry + empresas.json"
+        }
+
+        # limpio inf / nan antes de devolver
+        result = clean_inf(result)
+
         return result
 
     except HTTPException:
