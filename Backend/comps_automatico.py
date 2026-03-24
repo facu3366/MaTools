@@ -405,8 +405,8 @@ def generar_excel(df: pd.DataFrame):
     for r_num, label, val, fmt_str in param_rows:
         ws2.cell(row=r_num, column=1, value=label).font = dat_font()
         cell = ws2.cell(row=r_num, column=2, value=val)
-        cell.font = blue_font()
-        cell.fill = PatternFill("solid", start_color=DELOITTE)
+        cell.font = Font(name="Arial", bold=True, size=9, color="FFFFFFFF")
+        cell.fill = PatternFill(fill_type="solid", start_color=DELOITTE, end_color=DELOITTE)
         cell.number_format = fmt_str
         cell.border = thin
 
