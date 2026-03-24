@@ -287,7 +287,7 @@ function renderCharts(data) {
           label: "Comps",
           data: scatter,
           backgroundColor: scatter.map((e) =>
-            e.label === selectedTicker ? "#b8860b" : "#999",
+            e.label === selectedTicker ? "#b8860b" : "#86BC25",
           ),
           pointRadius: scatter.map((e) => (e.label === selectedTicker ? 6 : 3)),
         },
@@ -446,9 +446,11 @@ async function fetchRevenueCard(ticker, name) {
     `;
   }
 }
-function toggleColumn(col, show) {
+function toggleColumn(col) {
+  COLUMN_STATE[col] = !COLUMN_STATE[col];
+
   document.querySelectorAll(`[data-col="${col}"]`).forEach((el) => {
-    el.style.display = show ? "" : "none";
+    el.style.display = COLUMN_STATE[col] ? "" : "none";
   });
 }
 // ── GENERAR COMPS ─────────────────────────────────────────────
@@ -615,6 +617,9 @@ function getRegionFromCountry(pais) {
 
   return "OTHER";
 }
+
+let COLUMN_STATE = {};
+
 // ── RENDER COMPS RESULT ───────────────────────────────────────
 function renderCompsTable(empresas) {
   const selectedRegion =
@@ -668,7 +673,13 @@ function toggleCompsView(view) {
   // actualizar tabla
   document.querySelector(".comps-table tbody").innerHTML =
     renderCompsTable(empresas);
-
+  Object.keys(COLUMN_STATE).forEach((col) => {
+    if (!COLUMN_STATE[col]) {
+      document.querySelectorAll(`[data-col="${col}"]`).forEach((el) => {
+        el.style.display = "none";
+      });
+    }
+  });
   // actualizar gráficos
   renderCharts({
     empresas_filtradas: empresas,
