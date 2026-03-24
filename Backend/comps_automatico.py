@@ -22,7 +22,7 @@ import tempfile
 # ─────────────────────────────────────────────
 # 1. CONFIGURACIÓN DEL DEAL
 # ─────────────────────────────────────────────
-
+DELOITTE_GREEN = "86BC25"
 DEAL_CONFIG = {
     "empresa_target": "Swiss Medical",
     "sector":         "Health Insurance",
@@ -642,9 +642,12 @@ def _generar_excel_buffer(df: pd.DataFrame, buffer, df_universe: pd.DataFrame = 
 
             series = Series(yvalues, xvalues, title=ticker)
 
-            # 👇 esto hace que el ticker aparezca en el gráfico
             series.dLbls = DataLabelList()
             series.dLbls.showSerName = True
+
+            series.marker = Marker(symbol="circle")
+            series.marker.size = 6
+            series.marker.graphicalProperties.solidFill = DELOITTE_GREEN
 
             scatter.series.append(series)
 
