@@ -867,8 +867,9 @@ async function downloadCompsExcel() {
     "Target";
   const region = document.getElementById("comps-region")?.value || "GLOBAL";
   const revenue =
-    parseFloat(document.getElementById("comps-revenue").value) || 1000;
-
+    parseFloat(
+      document.getElementById("comps-revenue").value.replace(/,/g, ""),
+    ) || 1000;
   const sector = document.getElementById("comps-sector").value;
 
   try {
