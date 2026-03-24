@@ -742,7 +742,7 @@ function renderCompsResult(data) {
 
       <div class="result-header">
         <div class="result-title">
-          Comps — ${data.empresa_target} · ${data.sector} ${ttmBadge}
+          Comps — ${data.empresa_target} · ${data.sector} TTM
         </div>
         <div class="result-date">${new Date().toLocaleDateString("es-AR")}</div>
       </div>
