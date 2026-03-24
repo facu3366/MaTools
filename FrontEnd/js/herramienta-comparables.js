@@ -15,6 +15,9 @@ let selectedTicker = null;
 let EMPRESA_LIST = [];
 let empresasLoaded = false;
 
+let CURRENT_COMPS_DATA = null;
+let CURRENT_VIEW = "filtradas"; // default
+
 async function loadEmpresas() {
   // Intento 1: endpoint del backend (funciona siempre en Railway)
   try {
@@ -613,8 +616,68 @@ function getRegionFromCountry(pais) {
   return "OTHER";
 }
 // ── RENDER COMPS RESULT ───────────────────────────────────────
+function renderCompsTable(empresas) {
+  const selectedRegion =
+    document.getElementById("comps-region")?.value || "GLOBAL";
+
+  return empresas
+    .sort((a, b) => {
+      const ra = getRegionFromCountry(getPaisSafe(a));
+      const rb = getRegionFromCountry(getPaisSafe(b));
+
+      if (ra === selectedRegion && rb !== selectedRegion) return -1;
+      if (ra !== selectedRegion && rb === selectedRegion) return 1;
+
+      return (b["Revenue ($mm)"] || 0) - (a["Revenue ($mm)"] || 0);
+    })
+    .map(
+      (e) => `
+      <tr>
+        <td class="t-ticker">${e.Ticker}</td>
+        <td class="t-name">${e.Empresa || ""}</td>
+        <td class="t-region">${getRegionFromCountry(getPaisSafe(e))}</td>
+
+        <td class="t-num">${fmtNum(e["Revenue ($mm)"])}</td>
+        <td class="t-num">${fmtNum(e["EBITDA ($mm)"])}</td>
+        <td class="t-num">${fmtNum(e["EV ($mm)"])}</td>
+
+        <td class="t-mult">${fmtMult(e["EV/Revenue"])}</td>
+        <td class="t-mult">${fmtMult(e["EV/EBITDA"])}</td>
+
+        <td class="t-mult" data-col="pe">${fmtMult(e["P/E"])}</td>
+        <td class="t-num" data-col="mktcap">${fmtNum(e["Mkt Cap ($mm)"])}</td>
+        <td class="t-pct" data-col="growth">${fmtPct(e["Rev Growth %"])}</td>
+
+        <td class="t-pct">${fmtPct(e["EBITDA Mg%"])}</td>
+        <td class="t-ttm">${e.ttm_method === "quarterly" ? "✓ Q4" : "⚠ FY"}</td>
+      </tr>`,
+    )
+    .join("");
+}
+
+function toggleCompsView(view) {
+  if (!CURRENT_COMPS_DATA) return;
+
+  CURRENT_VIEW = view;
+
+  const empresas =
+    view === "universe"
+      ? CURRENT_COMPS_DATA.empresas_universe
+      : CURRENT_COMPS_DATA.empresas_filtradas;
+
+  // actualizar tabla
+  document.querySelector(".comps-table tbody").innerHTML =
+    renderCompsTable(empresas);
+
+  // actualizar gráficos
+  renderCharts({
+    empresas_filtradas: empresas,
+  });
+}
 
 function renderCompsResult(data) {
+  CURRENT_COMPS_DATA = data;
+  CURRENT_VIEW = "filtradas";
   const filtradas = data.empresas_filtradas || [];
   const stats = data.stats_filtradas?.metrics || {};
   const quality = data.ttm_quality || {};
@@ -663,7 +726,6 @@ function renderCompsResult(data) {
     </tr>`,
     )
     .join("");
-
   document.getElementById("result-comps").innerHTML = `
     <div class="result-box">
 
@@ -684,13 +746,13 @@ function renderCompsResult(data) {
         </div>
 
         <div class="kpi-row">
-          <div class="kpi">
-            <div class="kpi-label">Universe</div>
+          <div class="kpi" onclick="toggleCompsView('universe')" style="cursor:pointer;">
+            <div class="kpi-label">Total de la industria</div>
             <div class="kpi-value">${data.n_empresas_universe}</div>
           </div>
 
-          <div class="kpi">
-            <div class="kpi-label">Filtradas</div>
+          <div class="kpi" onclick="toggleCompsView('filtradas')" style="cursor:pointer;">
+            <div class="kpi-label">Empresas que cumplen con el filtro de revenue</div>
             <div class="kpi-value">${data.n_empresas_filtradas}</div>
           </div>
         </div>
