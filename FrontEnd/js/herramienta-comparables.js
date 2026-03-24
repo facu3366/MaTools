@@ -265,7 +265,7 @@ function getPaisSafe(e) {
 }
 
 function renderCharts(data) {
-  const empresas = data.empresas_filtradas || [];
+  const empresas = data.empresas_filtradas || data.empresas || [];
 
   document.getElementById("comps-charts").style.display = "block";
 
@@ -329,8 +329,22 @@ function renderCharts(data) {
         {
           label: "EV/EBITDA",
           data: empresas.map((e) => e["EV/EBITDA"]),
+          backgroundColor: empresas.map((e) =>
+            e.Ticker === selectedTicker ? "#b8860b" : "#86BC25",
+          ),
+          borderColor: "#86BC25",
+          borderWidth: 1,
         },
       ],
+    },
+    options: {
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.raw.toFixed(1)}x`,
+          },
+        },
+      },
     },
   });
 }
