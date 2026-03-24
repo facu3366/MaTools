@@ -275,7 +275,7 @@ def generate_excel(df, fecha_reporte, fecha_export):
         val.font = Font(size=12, bold=True)
 
     # ─────────────────────────────
-    # TABLA TOP 10 (REAL DATA)
+    # TABLA TOP 10 (para gráficos)
     # ─────────────────────────────
     ws3["A7"] = "Top 10 Bancos"
     ws3["A7"].font = bold_font()
@@ -285,7 +285,7 @@ def generate_excel(df, fecha_reporte, fecha_export):
         ws3.cell(9+i, 2, row["Activos"])
 
     # ─────────────────────────────
-    # BAR CHART
+    # GRÁFICO BARRAS
     # ─────────────────────────────
     bar = BarChart()
     bar.title = "Top 10 por Activos"
@@ -293,7 +293,7 @@ def generate_excel(df, fecha_reporte, fecha_export):
     data = Reference(ws3, min_col=2, max_col=2, min_row=9, max_row=18)
     cats = Reference(ws3, min_col=1, max_col=1, min_row=9, max_row=18)
 
-    bar.add_data(data, titles_from_data=False)
+    bar.add_data(data)
     bar.set_categories(cats)
 
     bar.height = 8
@@ -302,15 +302,15 @@ def generate_excel(df, fecha_reporte, fecha_export):
     ws3.add_chart(bar, "D7")
 
     # ─────────────────────────────
-    # PIE CHART
+    # GRÁFICO PIE (Top 5)
     # ─────────────────────────────
     pie = PieChart()
     pie.title = "Market Share"
 
-    data = Reference(ws3, min_col=2, max_col=2, min_row=9, max_row=13)
-    cats = Reference(ws3, min_col=1, max_col=1, min_row=9, max_row=13)
+    data = Reference(ws3, min_col=2, min_row=9, max_row=13)
+    cats = Reference(ws3, min_col=1, min_row=9, max_row=13)
 
-    pie.add_data(data, titles_from_data=False)
+    pie.add_data(data)
     pie.set_categories(cats)
 
     ws3.add_chart(pie, "D20")
