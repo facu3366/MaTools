@@ -193,23 +193,22 @@ def calcular_wacc(dcf_data: dict, risk_free_rate: float = 4.5, equity_risk_premi
 # 5. ESTILOS
 # ─────────────────────────────────────────────
 
-NAVY = "FF00205B"
+NAVY = "00205B"
 DELOITTE = "FF86BC25"
-LBLUE = "FFDCE6F1"
-GRAY = "FFF5F5F5"
-WHITE = "FFFFFFFF"
-YELLOW = "FFFFFF00"
+LBLUE = "DCE6F1"
+GRAY = "F5F5F5"
+WHITE = "FFFFFF"
+YELLOW = "FF86BC25"
 
-def hdr_font():   return Font(name="Arial", bold=True, color="FFFFFFFF", size=9)
+def hdr_font():   return Font(name="Arial", bold=True, color="FFFFFF", size=9)
 def dat_font():   return Font(name="Arial", size=9)
 def bold_font():  return Font(name="Arial", bold=True, size=9)
-def blue_font():  return Font(name="Arial", size=9, color="FF0000FF")
+def blue_font():  return Font(name="Arial", size=9, color="0000FF")
 def title_font(): return Font(name="Arial", bold=True, size=13, color=DELOITTE)
-def sub_font():   return Font(name="Arial", size=9, italic=True, color="FF666666")
-
-def hdr_fill():   return PatternFill(fill_type="solid", start_color=DELOITTE, end_color=DELOITTE)
-def sum_fill():   return PatternFill(fill_type="solid", start_color=WHITE, end_color=WHITE)
-def alt_fill(i):  return PatternFill(fill_type="solid", start_color=GRAY if i % 2 == 0 else WHITE, end_color=GRAY if i % 2 == 0 else WHITE)
+def sub_font():   return Font(name="Arial", size=9, italic=True, color="666666")
+def hdr_fill():   return PatternFill("solid", start_color=DELOITTE)
+def sum_fill():   return PatternFill("solid", start_color=LBLUE)
+def alt_fill(i):  return PatternFill("solid", start_color=GRAY if i % 2 == 0 else WHITE)
 
 thin = Border(
     left=Side(style="thin"), right=Side(style="thin"),
