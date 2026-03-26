@@ -661,12 +661,17 @@ def generar_comps(request: CompsRequest):
         target_industry = None
         industry_key = None
         if empresa:
-            td = get_financials_ttm(empresa.upper())
-            if td:
-                target_industry = td.get("Industria")
+            # Use yfinance directly for target — avoid sanitize_empresa() rejection
+            try:
+                import yfinance as yf
+                _info = yf.Ticker(empresa.upper()).info or {}
+                target_industry = _info.get("industry")
+                sector_yf = _info.get("sector", "")
                 if target_industry:
                     industry_key = target_industry.lower().replace(" ", "-").replace("&", "and")
-                print(f"\n📊 Comps: {empresa} | Industria: {target_industry} | Key: {industry_key}")
+                print(f"\n📊 Comps: {empresa} | Industria: {target_industry} | Sector YF: {sector_yf} | Key: {industry_key}")
+            except Exception as e:
+                print(f"⚠️ Target lookup failed: {e}")
 
         empresas = discover_comps(empresa, target_industry, industry_key)
 
