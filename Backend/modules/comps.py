@@ -639,6 +639,18 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
 # ENDPOINTS
 # ─────────────────────────────────────────────
 
+
+@router.get("/comps/ai-status")
+def ai_status():
+    """Diagnostic endpoint — remove after debugging"""
+    import os
+    return {
+        "HAS_AI_FILTER": HAS_AI_FILTER,
+        "ANTHROPIC_KEY_SET": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        "ANTHROPIC_KEY_PREFIX": (os.environ.get("ANTHROPIC_API_KEY") or "")[:10] + "...",
+    }
+
+
 @router.post("/comps")
 def generar_comps(request: CompsRequest):
     try:
