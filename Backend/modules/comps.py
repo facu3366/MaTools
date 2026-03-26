@@ -1,21 +1,11 @@
 """
-📊 COMPS MODULE v11 — AI-POWERED FILTERING
+📊 COMPS MODULE v12 — AI-POWERED FILTERING (FIXED)
 =============================================================
-NEW in v11: AI Comp Validator using Claude Haiku
-- After static industry filtering, AI evaluates business model similarity
-- Catches garbage comps that static rules miss (Tesla ≠ Walmart)
-- Graceful degradation: if AI fails, falls back to static filter
-- Cost: ~$0.001 per request
-
-Source A: yf.Industry(key) → Yahoo Finance peers (dynamic)
-Source A2: Alternative industry keys when A fails
-Source B: empresas.json → filtered by INDUSTRY_TO_JSON_SECTORS
-Source C: yf.Sector() → backup when A fails
-Source D: INDUSTRY_PEERS → manual curated fallback (last resort)
-
-Filter 1: keyword-scoring filter_by_industry (static)
-Filter 2: AI Comp Validator (semantic) ← NEW
-Revenue: dynamic range from user input
+FIX in v12:
+- INDUSTRY_PEERS always injected (removed < 5 gate that blocked auto peers)
+- discover_comps sends ALL candidates to AI filter (no pre-filtering by static industry)
+- AI filter is the ONLY intelligent filter — static filter removed to avoid conflicts
+- Target industry detected via direct yfinance call (bypasses sanitize_empresa)
 """
 
 from fastapi import APIRouter, HTTPException
@@ -43,7 +33,7 @@ from Backend.comps_automatico import (
     DEAL_CONFIG
 )
 
-# ── NEW: AI Filter ──
+# ── AI Filter ──
 try:
     from Backend.modules.ai_filter import ai_filter_comps_cached
     HAS_AI_FILTER = True
@@ -56,10 +46,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# ─────────────────────────────────────────────
-# NaN/Inf CLEANER
-# ─────────────────────────────────────────────
-
 def clean_inf(obj):
     if isinstance(obj, dict):
         return {k: clean_inf(v) for k, v in obj.items()}
@@ -69,10 +55,6 @@ def clean_inf(obj):
         return None
     return obj
 
-
-# ─────────────────────────────────────────────
-# REQUEST MODEL
-# ─────────────────────────────────────────────
 
 class CompsRequest(BaseModel):
     mensaje: str
@@ -134,163 +116,85 @@ def discover_industry_peers(industry_key: str) -> list[str]:
 
 
 # ─────────────────────────────────────────────
-# INDUSTRY GROUPS (para filter_by_industry)
+# INDUSTRY_PEERS — ALWAYS INJECTED
 # ─────────────────────────────────────────────
 
-INDUSTRY_GROUPS = {
-    "Internet Retail": ["Internet Retail", "Specialty Retail", "Broadline Retail"],
-    "Broadline Retail": ["Broadline Retail", "Internet Retail", "Specialty Retail"],
-    "Software - Application": ["Software - Application", "Software - Infrastructure", "Information Technology Services"],
-    "Software - Infrastructure": ["Software - Infrastructure", "Software - Application", "Information Technology Services"],
-    "Information Technology Services": ["Information Technology Services", "Software - Application", "Software - Infrastructure", "Consulting Services"],
-    "Semiconductors": ["Semiconductors", "Semiconductor Equipment & Materials", "Electronic Components"],
-    "Semiconductor Equipment & Materials": ["Semiconductor Equipment & Materials", "Semiconductors"],
-    "Internet Content & Information": ["Internet Content & Information", "Internet Retail", "Electronic Gaming & Multimedia"],
-    "Electronic Gaming & Multimedia": ["Electronic Gaming & Multimedia", "Internet Content & Information", "Entertainment"],
-    "Consumer Electronics": ["Consumer Electronics", "Internet Retail", "Communication Equipment"],
-    "Telecom Services": ["Telecom Services", "Communication Equipment"],
-    "Communication Equipment": ["Communication Equipment", "Telecom Services"],
-    "Credit Services": ["Credit Services", "Financial Data & Stock Exchanges", "Capital Markets"],
-    "Financial Data & Stock Exchanges": ["Financial Data & Stock Exchanges", "Capital Markets", "Credit Services"],
-    "Capital Markets": ["Capital Markets", "Financial Data & Stock Exchanges", "Asset Management"],
-    "Asset Management": ["Asset Management", "Capital Markets"],
-    "Banks - Diversified": ["Banks - Diversified", "Banks - Regional"],
-    "Banks - Regional": ["Banks - Regional", "Banks - Diversified"],
-    "Insurance - Diversified": ["Insurance - Diversified", "Insurance - Life", "Insurance Brokers", "Insurance - Property & Casualty"],
-    "Insurance - Life": ["Insurance - Life", "Insurance - Diversified"],
-    "Insurance Brokers": ["Insurance Brokers", "Insurance - Diversified"],
-    "Health Care Plans": ["Health Care Plans", "Insurance - Diversified", "Medical Care Facilities"],
-    "Oil & Gas Integrated": ["Oil & Gas Integrated", "Oil & Gas E&P", "Oil & Gas Refining & Marketing"],
-    "Oil & Gas E&P": ["Oil & Gas E&P", "Oil & Gas Integrated", "Oil & Gas Midstream"],
-    "Oil & Gas Refining & Marketing": ["Oil & Gas Refining & Marketing", "Oil & Gas Integrated"],
-    "Oil & Gas Midstream": ["Oil & Gas Midstream", "Oil & Gas E&P", "Oil & Gas Integrated"],
-    "Oil & Gas Equipment & Services": ["Oil & Gas Equipment & Services", "Oil & Gas E&P"],
-    "Drug Manufacturers - General": ["Drug Manufacturers - General", "Drug Manufacturers - Specialty & Generic", "Biotechnology"],
-    "Drug Manufacturers - Specialty & Generic": ["Drug Manufacturers - Specialty & Generic", "Drug Manufacturers - General", "Biotechnology"],
-    "Biotechnology": ["Biotechnology", "Drug Manufacturers - General", "Drug Manufacturers - Specialty & Generic"],
-    "Medical Devices": ["Medical Devices", "Medical Instruments & Supplies", "Health Care Equipment & Services"],
-    "Medical Care Facilities": ["Medical Care Facilities", "Health Care Plans", "Medical Devices"],
-    "Medical Instruments & Supplies": ["Medical Instruments & Supplies", "Medical Devices", "Diagnostics & Research"],
-    "Diagnostics & Research": ["Diagnostics & Research", "Medical Instruments & Supplies", "Biotechnology"],
-    "Medical Distribution": ["Medical Distribution", "Medical Instruments & Supplies", "Health Care Plans"],
-    "Discount Stores": ["Discount Stores", "Department Stores", "Grocery Stores"],
-    "Grocery Stores": ["Grocery Stores", "Discount Stores"],
-    "Home Improvement Retail": ["Home Improvement Retail", "Specialty Retail", "Building Products & Equipment"],
-    "Specialty Retail": ["Specialty Retail", "Internet Retail", "Apparel Retail"],
-    "Apparel Retail": ["Apparel Retail", "Specialty Retail", "Footwear & Accessories"],
-    "Luxury Goods": ["Luxury Goods", "Apparel Retail", "Footwear & Accessories"],
-    "Restaurants": ["Restaurants", "Packaged Foods", "Food Distribution"],
-    "Packaged Foods": ["Packaged Foods", "Beverages - Non-Alcoholic", "Household & Personal Products"],
-    "Beverages - Non-Alcoholic": ["Beverages - Non-Alcoholic", "Packaged Foods", "Beverages - Brewers"],
-    "Auto Manufacturers": ["Auto Manufacturers", "Auto Parts", "Recreational Vehicles", "Farm & Heavy Construction Machinery"],
-    "Auto Parts": ["Auto Parts", "Auto Manufacturers", "Specialty Industrial Machinery"],
-    "Recreational Vehicles": ["Recreational Vehicles", "Auto Manufacturers", "Leisure"],
-    "Aerospace & Defense": ["Aerospace & Defense", "Specialty Industrial Machinery"],
-    "Specialty Industrial Machinery": ["Specialty Industrial Machinery", "Diversified Industrials", "Farm & Heavy Construction Machinery"],
-    "Farm & Heavy Construction Machinery": ["Farm & Heavy Construction Machinery", "Specialty Industrial Machinery"],
-    "Railroads": ["Railroads", "Trucking", "Integrated Freight & Logistics"],
-    "Trucking": ["Trucking", "Integrated Freight & Logistics", "Railroads"],
-    "Integrated Freight & Logistics": ["Integrated Freight & Logistics", "Trucking", "Air Freight & Logistics"],
-    "Airlines": ["Airlines", "Airports & Air Services"],
-    "Waste Management": ["Waste Management", "Environmental Services"],
-    "REIT - Industrial": ["REIT - Industrial", "REIT - Diversified", "REIT - Office"],
-    "REIT - Residential": ["REIT - Residential", "REIT - Diversified"],
-    "REIT - Retail": ["REIT - Retail", "REIT - Diversified"],
-    "REIT - Office": ["REIT - Office", "REIT - Industrial", "REIT - Diversified"],
-    "REIT - Specialty": ["REIT - Specialty", "REIT - Diversified", "REIT - Industrial"],
-    "Real Estate Services": ["Real Estate Services", "Real Estate - Development", "REIT - Diversified"],
-    "Utilities - Regulated Electric": ["Utilities - Regulated Electric", "Utilities - Diversified", "Utilities - Renewable"],
-    "Utilities - Renewable": ["Utilities - Renewable", "Utilities - Regulated Electric", "Solar"],
-    "Solar": ["Solar", "Utilities - Renewable"],
-    "Lodging": ["Lodging", "Resorts & Casinos", "Travel Services"],
-    "Resorts & Casinos": ["Resorts & Casinos", "Lodging", "Entertainment"],
-    "Travel Services": ["Travel Services", "Lodging", "Internet Content & Information"],
-    "Entertainment": ["Entertainment", "Electronic Gaming & Multimedia", "Media - Diversified"],
-    "Footwear & Accessories": ["Footwear & Accessories", "Apparel Retail", "Luxury Goods", "Apparel Manufacturers"],
-    "Apparel Manufacturers": ["Apparel Manufacturers", "Footwear & Accessories", "Apparel Retail", "Luxury Goods"],
-    "Residential Construction": ["Residential Construction", "Building Products & Equipment", "Home Improvement Retail"],
-    "Building Products & Equipment": ["Building Products & Equipment", "Residential Construction", "Specialty Industrial Machinery"],
-    "Household & Personal Products": ["Household & Personal Products", "Packaged Foods", "Beverages - Non-Alcoholic"],
+INDUSTRY_PEERS = {
+    "Auto Manufacturers": [
+        "TM", "GM", "F", "STLA", "HMC", "VWAGY", "BMWYY", "MBGAF",
+        "RIVN", "LCID", "NIO", "XPEV", "LI", "BYDDY", "RACE", "TTM",
+    ],
+    "Auto Parts": [
+        "APTV", "BWA", "LEA", "ALV", "MGA", "GNTX", "DAN", "VC", "AXL", "SMP",
+    ],
+    "Airlines": [
+        "DAL", "UAL", "LUV", "AAL", "ALK", "JBLU", "RYAAY", "CPA", "GOL", "AZUL",
+    ],
+    "Restaurants": [
+        "MCD", "SBUX", "YUM", "CMG", "DPZ", "QSR", "DRI", "TXRH", "WING", "SHAK", "WEN", "ARCO",
+    ],
+    "Residential Construction": [
+        "DHI", "LEN", "PHM", "NVR", "TOL", "KBH", "MDC", "MHO", "TMHC", "GRBK",
+    ],
+    "Home Improvement Retail": ["HD", "LOW", "FND", "SHW", "WSM", "RH"],
+    "Discount Stores": ["WMT", "TGT", "COST", "DG", "DLTR", "BJ", "OLLI", "FIVE"],
+    "Grocery Stores": ["KR", "ACI", "SFM", "GO", "WMK"],
+    "Utilities - Regulated Electric": [
+        "NEE", "DUK", "SO", "D", "AEP", "EXC", "SRE", "XEL", "WEC", "ES", "ED", "ETR", "PPL",
+    ],
+    "Entertainment": ["DIS", "CMCSA", "NFLX", "WBD", "PARA", "LYV", "AMC"],
+    "Insurance - Property & Casualty": ["PGR", "ALL", "TRV", "CB", "HIG", "WRB", "ACGL", "MKL"],
+    "Apparel Manufacturers": ["NKE", "ADDYY", "PVH", "RL", "HBI", "VFC", "LULU", "UAA", "SKX", "CROX"],
+    "Recreational Vehicles": ["THO", "WGO", "CWH", "PII", "HOG", "MBUU"],
+    "Drug Manufacturers - General": ["JNJ", "LLY", "PFE", "MRK", "ABBV", "BMY", "NVS", "AZN", "SNY", "GSK", "NVO"],
+    "Biotechnology": ["AMGN", "GILD", "VRTX", "REGN", "BIIB", "MRNA", "ALNY", "BMRN", "INCY"],
+    "Consumer Electronics": ["AAPL", "SONY", "SSNLF", "LOGI", "SONO", "GPRO"],
+    "Footwear & Accessories": ["NKE", "ADDYY", "SKX", "CROX", "DECK", "ONON", "BIRK"],
+    "Health Care Plans": ["UNH", "ELV", "CI", "HUM", "CNC", "MOH"],
+    "Internet Retail": ["AMZN", "BABA", "JD", "PDD", "MELI", "SE", "CPNG", "ETSY"],
+    "Software - Application": ["CRM", "ADBE", "NOW", "INTU", "WDAY", "HUBS", "VEEV", "DDOG", "ZS", "CRWD"],
+    "Software - Infrastructure": ["MSFT", "ORCL", "SNOW", "MDB", "NET", "DDOG", "ESTC", "CFLT"],
+    "Semiconductors": ["NVDA", "AMD", "INTC", "QCOM", "AVGO", "TXN", "MU", "MRVL", "ADI", "NXPI"],
+    "Banks - Diversified": ["JPM", "BAC", "WFC", "C", "GS", "MS", "USB", "PNC", "TFC"],
+    "Banks - Regional": ["FITB", "RF", "CFG", "HBAN", "MTB", "ZION", "KEY", "CMA", "FHN"],
+    "Oil & Gas Integrated": ["XOM", "CVX", "SHEL", "TTE", "BP", "COP", "EOG"],
+    "Oil & Gas E&P": ["COP", "EOG", "PXD", "DVN", "FANG", "OXY", "HES", "MPC"],
 }
 
-def get_similar_industries(industry: str) -> list[str]:
-    if not industry:
-        return []
-    if industry in INDUSTRY_GROUPS:
-        return INDUSTRY_GROUPS[industry]
-    il = industry.lower()
-    for key, values in INDUSTRY_GROUPS.items():
-        if key.lower() in il or il in key.lower():
-            return values
-    return [industry]
+INDUSTRY_KEY_ALTERNATIVES = {
+    "auto-manufacturers": ["automobiles", "automobile-manufacturers", "automotive"],
+    "airlines": ["passenger-airlines"],
+    "utilities---regulated-electric": ["utilities-regulated-electric", "electric-utilities"],
+    "insurance---property-and-casualty": ["insurance-property-and-casualty", "property-casualty-insurance"],
+    "residential-construction": ["homebuilders", "home-builders"],
+    "consumer-electronics": ["consumer-electronics", "electronics"],
+}
 
+INDUSTRY_TO_JSON_SECTORS = {
+    "Internet Retail":          [("Consumer", 15), ("Technology", 10)],
+    "Broadline Retail":         [("Consumer", 20)],
+    "Software - Application":           [("Technology", 25)],
+    "Software - Infrastructure":        [("Technology", 25)],
+    "Information Technology Services":  [("Technology", 25)],
+    "Internet Content & Information":   [("Technology", 20)],
+    "Semiconductors":                       [("Technology", 20)],
+    "Credit Services":                      [("Financials", 25)],
+    "Capital Markets":                      [("Financials", 25)],
+    "Banks - Diversified":                  [("Financials", 25)],
+    "Banks - Regional":                     [("Financials", 25)],
+    "Health Care Plans":                [("Health Insurance", 25)],
+    "Drug Manufacturers - General":     [("Health Insurance", 25)],
+    "Biotechnology":                    [("Health Insurance", 25)],
+    "Oil & Gas Integrated":             [("Energy", 25)],
+    "Oil & Gas E&P":                    [("Energy", 25)],
+    "Aerospace & Defense":              [("Industrials", 25)],
+    "Auto Manufacturers":               [("Consumer", 15), ("Industrials", 10)],
+    "Restaurants":              [("Consumer", 20)],
+    "Entertainment":            [("Consumer", 15), ("Technology", 10)],
+}
 
-# ─────────────────────────────────────────────
-# FILTER BY INDUSTRY — KEYWORD SCORING
-# ─────────────────────────────────────────────
-
-MIN_COMPS = 5
-
-def filter_by_industry(empresas: list[dict], target_industry: str) -> list[dict]:
-    if not target_industry:
-        return empresas
-    similar = get_similar_industries(target_industry)
-    similar_set = set(similar)
-
-    exact = [e for e in empresas if e.get("Industria") == target_industry]
-    if len(exact) >= MIN_COMPS:
-        print(f"   🎯 Industry filter: {len(exact)} exact matches for '{target_industry}'")
-        return exact
-
-    sim = [e for e in empresas if e.get("Industria") in similar_set]
-    if len(sim) >= MIN_COMPS:
-        print(f"   🎯 Industry filter: {len(sim)} similar matches for '{target_industry}'")
-        return sim
-
-    target_sector = None
-    if exact:
-        target_sector = exact[0].get("Sector")
-    elif sim:
-        target_sector = sim[0].get("Sector")
-    else:
-        for e in empresas:
-            if e.get("Industria") == target_industry:
-                target_sector = e.get("Sector")
-                break
-
-    if target_sector:
-        same_sector = [e for e in empresas if e.get("Sector") == target_sector]
-        target_words = set(target_industry.lower().replace("-", " ").replace("&", " ").split())
-        noise = {"and", "the", "of", "in", "-", "&", "services", "general", "specialty"}
-        target_words -= noise
-
-        def industry_relevance(emp):
-            ind = (emp.get("Industria") or "").lower().replace("-", " ").replace("&", " ")
-            ind_words = set(ind.split()) - noise
-            if emp.get("Industria") == target_industry:
-                return 100
-            if emp.get("Industria") in similar_set:
-                return 80
-            overlap = len(target_words & ind_words)
-            if overlap > 0:
-                return 10 + (overlap * 20)
-            return 0
-
-        scored = [(e, industry_relevance(e)) for e in same_sector]
-        relevant = [(e, s) for e, s in scored if s > 0]
-
-        if relevant:
-            relevant.sort(key=lambda x: x[1], reverse=True)
-            result = [e for e, s in relevant]
-            print(f"   🎯 Industry filter: {len(result)} keyword-relevant from sector '{target_sector}'")
-            return result
-
-    print(f"   ⚠️ Industry filter: no match for '{target_industry}', returning all {len(empresas)}")
-    return sorted(empresas, key=lambda e: (
-        0 if e.get("Industria") == target_industry else
-        1 if e.get("Industria") in similar_set else
-        2
-    ))
+MAX_JSON_TICKERS = 40
+MAX_TOTAL_TICKERS = 80
 
 
 # ─────────────────────────────────────────────
@@ -377,140 +281,16 @@ def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenu
             existing_ticker = revenue_map[rev_key].get("Ticker", "")
             if "." in existing_ticker and "." not in ticker:
                 revenue_map[rev_key] = e
-            elif "." not in existing_ticker and "." not in ticker and len(ticker) < len(existing_ticker):
-                revenue_map[rev_key] = e
-
+    
     result = list(revenue_map.values())
     result.sort(key=lambda e: e.get("Revenue ($mm)", 0), reverse=True)
-    print(f"   🧹 Resultado: {len(result)} comps limpios (de {len(empresas)} candidatos)")
+    print(f"   🧹 Clean & dedup: {len(result)} comps (de {len(empresas)} candidatos)")
     result = clean_inf(result)
     return result
 
 
 # ─────────────────────────────────────────────
-# INDUSTRY → JSON SECTORS MAP
-# ─────────────────────────────────────────────
-
-INDUSTRY_TO_JSON_SECTORS = {
-    "Internet Retail":          [("Consumer", 15), ("Technology", 10)],
-    "Broadline Retail":         [("Consumer", 20)],
-    "Specialty Retail":         [("Consumer", 20)],
-    "Apparel Retail":           [("Consumer", 15)],
-    "Discount Stores":          [("Consumer", 15)],
-    "Grocery Stores":           [("Consumer", 15)],
-    "Home Improvement Retail":  [("Consumer", 15)],
-    "Luxury Goods":             [("Consumer", 15)],
-    "Software - Application":           [("Technology", 25)],
-    "Software - Infrastructure":        [("Technology", 25)],
-    "Information Technology Services":  [("Technology", 25)],
-    "Internet Content & Information":   [("Technology", 20)],
-    "Electronic Gaming & Multimedia":   [("Technology", 20)],
-    "Consumer Electronics":             [("Technology", 20)],
-    "Semiconductors":                       [("Technology", 20)],
-    "Semiconductor Equipment & Materials":  [("Technology", 15)],
-    "Telecom Services":         [("Technology", 15)],
-    "Communication Equipment":  [("Technology", 15)],
-    "Credit Services":                      [("Financials", 25)],
-    "Financial Data & Stock Exchanges":     [("Financials", 20)],
-    "Capital Markets":                      [("Financials", 25)],
-    "Asset Management":                     [("Financials", 20)],
-    "Banks - Diversified":                  [("Financials", 25)],
-    "Banks - Regional":                     [("Financials", 25)],
-    "Insurance - Diversified":              [("Financials", 20), ("Health Insurance", 10)],
-    "Insurance - Life":                     [("Financials", 20)],
-    "Insurance Brokers":                    [("Financials", 15)],
-    "Health Care Plans":                [("Health Insurance", 25)],
-    "Medical Devices":                  [("Health Insurance", 20)],
-    "Medical Care Facilities":          [("Health Insurance", 20)],
-    "Drug Manufacturers - General":     [("Health Insurance", 25)],
-    "Biotechnology":                    [("Health Insurance", 25)],
-    "Diagnostics & Research":           [("Health Insurance", 15)],
-    "Medical Distribution":             [("Health Insurance", 15)],
-    "Oil & Gas Integrated":             [("Energy", 25)],
-    "Oil & Gas E&P":                    [("Energy", 25)],
-    "Oil & Gas Refining & Marketing":   [("Energy", 20)],
-    "Oil & Gas Midstream":              [("Energy", 20)],
-    "Oil & Gas Equipment & Services":   [("Energy", 15)],
-    "Aerospace & Defense":              [("Industrials", 25)],
-    "Specialty Industrial Machinery":   [("Industrials", 20)],
-    "Railroads":                        [("Industrials", 15)],
-    "Trucking":                         [("Industrials", 15)],
-    "Integrated Freight & Logistics":   [("Industrials", 15)],
-    "Airlines":                         [("Industrials", 15)],
-    "Waste Management":                 [("Industrials", 15)],
-    "Auto Manufacturers":               [("Consumer", 15), ("Industrials", 10)],
-    "Farm & Heavy Construction Machinery": [("Industrials", 15)],
-    "REIT - Industrial":        [("Real Estate", 20)],
-    "REIT - Residential":       [("Real Estate", 20)],
-    "REIT - Retail":            [("Real Estate", 20)],
-    "REIT - Office":            [("Real Estate", 20)],
-    "REIT - Specialty":         [("Real Estate", 20)],
-    "Real Estate Services":     [("Real Estate", 20)],
-    "Restaurants":              [("Consumer", 20)],
-    "Packaged Foods":           [("Consumer", 20)],
-    "Beverages - Non-Alcoholic": [("Consumer", 15)],
-    "Lodging":                  [("Consumer", 15)],
-    "Resorts & Casinos":        [("Consumer", 15)],
-    "Travel Services":          [("Consumer", 15)],
-    "Entertainment":            [("Consumer", 15), ("Technology", 10)],
-    "Utilities - Regulated Electric":   [("Energy", 20)],
-    "Utilities - Renewable":            [("Energy", 20)],
-    "Solar":                            [("Energy", 15)],
-}
-
-MAX_JSON_TICKERS = 40
-MAX_TOTAL_TICKERS = 80
-
-
-# ─────────────────────────────────────────────
-# INDUSTRY_PEERS — Manual fallback
-# ─────────────────────────────────────────────
-
-INDUSTRY_PEERS = {
-    "Auto Manufacturers": [
-        "TM", "GM", "F", "STLA", "HMC", "VWAGY", "BMWYY", "MBGAF",
-        "TSLA", "RIVN", "LCID", "NIO", "XPEV", "LI", "BYDDY", "RACE", "TTM",
-    ],
-    "Auto Parts": [
-        "APTV", "BWA", "LEA", "ALV", "MGA", "GNTX", "DAN", "VC", "AXL", "SMP",
-    ],
-    "Airlines": [
-        "DAL", "UAL", "LUV", "AAL", "ALK", "JBLU", "RYAAY", "CPA", "GOL", "AZUL",
-    ],
-    "Restaurants": [
-        "MCD", "SBUX", "YUM", "CMG", "DPZ", "QSR", "DRI", "TXRH", "WING", "SHAK", "WEN", "ARCO",
-    ],
-    "Residential Construction": [
-        "DHI", "LEN", "PHM", "NVR", "TOL", "KBH", "MDC", "MHO", "TMHC", "GRBK",
-    ],
-    "Home Improvement Retail": ["HD", "LOW", "FND", "SHW", "WSM", "RH"],
-    "Discount Stores": ["WMT", "TGT", "COST", "DG", "DLTR", "BJ", "OLLI", "FIVE"],
-    "Grocery Stores": ["KR", "ACI", "SFM", "GO", "WMK"],
-    "Utilities - Regulated Electric": [
-        "NEE", "DUK", "SO", "D", "AEP", "EXC", "SRE", "XEL", "WEC", "ES", "ED", "ETR", "PPL",
-    ],
-    "Entertainment": ["DIS", "CMCSA", "NFLX", "WBD", "PARA", "LYV", "AMC"],
-    "Insurance - Property & Casualty": ["PGR", "ALL", "TRV", "CB", "HIG", "WRB", "ACGL", "MKL"],
-    "Apparel Manufacturers": ["NKE", "ADDYY", "PVH", "RL", "HBI", "VFC", "LULU", "UAA", "SKX", "CROX"],
-    "Recreational Vehicles": ["THO", "WGO", "CWH", "PII", "HOG", "MBUU"],
-    "Drug Manufacturers - General": ["JNJ", "LLY", "PFE", "MRK", "ABBV", "BMY", "NVS", "AZN", "SNY", "GSK", "NVO"],
-    "Biotechnology": ["AMGN", "GILD", "VRTX", "REGN", "BIIB", "MRNA", "ALNY", "BMRN", "INCY"],
-    "Consumer Electronics": ["AAPL", "SONY", "SSNLF", "LOGI", "SONO", "GPRO"],
-    "Footwear & Accessories": ["NKE", "ADDYY", "SKX", "CROX", "DECK", "ONON", "BIRK"],
-}
-
-INDUSTRY_KEY_ALTERNATIVES = {
-    "auto-manufacturers": ["automobiles", "automobile-manufacturers", "automotive"],
-    "airlines": ["passenger-airlines"],
-    "utilities---regulated-electric": ["utilities-regulated-electric", "electric-utilities"],
-    "insurance---property-and-casualty": ["insurance-property-and-casualty", "property-casualty-insurance"],
-    "residential-construction": ["homebuilders", "home-builders"],
-    "consumer-electronics": ["consumer-electronics", "electronics"],
-}
-
-
-# ─────────────────────────────────────────────
-# DISCOVER COMPS v11 — WITH AI FILTER
+# DISCOVER COMPS v12 — FIXED
 # ─────────────────────────────────────────────
 
 def discover_comps(target_ticker: str, target_industry: str, industry_key: str) -> list[dict]:
@@ -532,24 +312,23 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
                 print(f"   🔍 Source A2: alt key '{alt_key}' → {len(alt_peers)} peers")
                 break
 
-    # ── SOURCE D: Manual curated peers ──
+    # ── SOURCE D: Manual curated peers — ALWAYS ADDED (no gate) ──
     n_manual = 0
-    if len(all_tickers) < 5 and target_industry and target_industry in INDUSTRY_PEERS:
+    if target_industry and target_industry in INDUSTRY_PEERS:
         manual = INDUSTRY_PEERS[target_industry]
         all_tickers.update(manual)
         n_manual = len(manual)
-        print(f"   🔍 Source D: INDUSTRY_PEERS['{target_industry}'] → {n_manual} manual peers")
+        print(f"   🔍 Source D: INDUSTRY_PEERS['{target_industry}'] → {n_manual} manual peers (ALWAYS)")
 
-    if len(all_tickers) < 5 and target_industry:
-        similar = get_similar_industries(target_industry)
-        for sim_ind in similar:
-            if sim_ind in INDUSTRY_PEERS and sim_ind != target_industry:
-                manual_sim = INDUSTRY_PEERS[sim_ind]
-                all_tickers.update(manual_sim)
-                print(f"   🔍 Source D (similar): INDUSTRY_PEERS['{sim_ind}'] → {len(manual_sim)} peers")
+    # Also add similar industries' peers
+    if target_industry:
+        for key, peers in INDUSTRY_PEERS.items():
+            if key != target_industry and target_industry.lower() in key.lower():
+                all_tickers.update(peers)
+                print(f"   🔍 Source D (partial match): '{key}' → {len(peers)} peers")
 
-    # ── SOURCE C: yf.Sector() backup ──
-    if len(all_tickers) < 10 and target_ticker:
+    # ── SOURCE C: yf.Sector() — adds broad candidates for AI to filter ──
+    if target_ticker:
         try:
             t_info = yf.Ticker(target_ticker.upper()).info or {}
             sector_yf = t_info.get("sector", "")
@@ -559,7 +338,7 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
                     sec = yf.Sector(sector_key)
                     tc = sec.top_companies
                     if tc is not None and not tc.empty:
-                        sector_peers = list(tc.index)[:20]
+                        sector_peers = list(tc.index)[:30]
                         print(f"   🔍 Source C: yf.Sector('{sector_key}'): {len(sector_peers)} peers")
                         all_tickers.update(sector_peers)
                 except Exception as e:
@@ -575,8 +354,6 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
             sector_tickers = get_universe_by_sector(sector_name)
             json_tickers.extend(sector_tickers[:max_from_sector])
     elif target_industry:
-        similar = get_similar_industries(target_industry)
-        print(f"   ⚠️ Industria '{target_industry}' sin mapping directo. Similar: {similar[:3]}")
         all_empresas = load_empresas()
         target_data = next((e for e in all_empresas if e.get("ticker", "").upper() == target_ticker.upper()), None)
         if target_data:
@@ -586,39 +363,46 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
 
     if len(json_tickers) > MAX_JSON_TICKERS:
         json_tickers = json_tickers[:MAX_JSON_TICKERS]
-
     all_tickers.update(json_tickers)
     n_json = len(json_tickers)
 
-    all_tickers = list(all_tickers)
-    if len(all_tickers) > MAX_TOTAL_TICKERS:
-        all_tickers = all_tickers[:MAX_TOTAL_TICKERS]
+    # Hard cap
+    all_tickers_list = list(all_tickers)
+    if len(all_tickers_list) > MAX_TOTAL_TICKERS:
+        all_tickers_list = all_tickers_list[:MAX_TOTAL_TICKERS]
 
-    print(f"   📊 Sources: Yahoo={n_yahoo} + JSON={n_json} + Manual={n_manual} → {len(all_tickers)} únicos")
+    print(f"   📊 Sources: Yahoo={n_yahoo} + JSON={n_json} + Manual={n_manual} → {len(all_tickers_list)} únicos")
 
-    if not all_tickers:
+    if not all_tickers_list:
         return []
 
     # ── FETCH PARALELO ──
-    print(f"   ⬇ Bajando {len(all_tickers)} tickers | PARALLEL")
-    empresas = fetch_many_parallel(all_tickers, max_workers=10)
+    print(f"   ⬇ Bajando {len(all_tickers_list)} tickers | PARALLEL")
+    empresas = fetch_many_parallel(all_tickers_list, max_workers=10)
     if not empresas:
         return []
-    print(f"   ✅ {len(empresas)}/{len(all_tickers)} obtenidas")
+    print(f"   ✅ {len(empresas)}/{len(all_tickers_list)} obtenidas")
 
-    # ── FILTRO POR INDUSTRIA (static keyword-based) ──
-    if target_industry:
-        empresas = filter_by_industry(empresas, target_industry)
-
-    # ── AI FILTER (semantic — catches what static filters miss) ──
+    # ── AI FILTER — replaces static industry filter ──
     if HAS_AI_FILTER and target_industry and len(empresas) > 5:
         try:
-            target_data = next(
-                (e for e in empresas if e.get("Ticker", "").upper() == target_ticker.upper()),
-                None
-            )
-            target_name = target_data.get("Empresa", target_ticker) if target_data else target_ticker
-            target_rev = target_data.get("Revenue ($mm)", 0) if target_data else 0
+            # Get target info for AI context
+            target_name = target_ticker
+            target_rev = 0
+            for e in empresas:
+                if e.get("Ticker", "").upper() == target_ticker.upper():
+                    target_name = e.get("Empresa", target_ticker)
+                    target_rev = e.get("Revenue ($mm)", 0)
+                    break
+            
+            # If target not in candidates (e.g. sanitized out), use yfinance info
+            if target_rev == 0:
+                try:
+                    _ti = yf.Ticker(target_ticker.upper()).info or {}
+                    target_name = _ti.get("shortName", target_ticker)
+                    target_rev = round((_ti.get("totalRevenue") or 0) / 1e6, 1)
+                except:
+                    pass
 
             pre_ai_count = len(empresas)
             empresas = ai_filter_comps_cached(
@@ -631,25 +415,34 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
             print(f"   🧠 AI Filter: {pre_ai_count} → {len(empresas)} comps approved")
         except Exception as e:
             print(f"   ⚠️ AI Filter error (using unfiltered): {e}")
+    elif not HAS_AI_FILTER and target_industry:
+        # Fallback: basic industry keyword filter when AI is not available
+        print(f"   ⚠️ No AI filter — using basic industry match")
+        exact = [e for e in empresas if e.get("Industria") == target_industry]
+        if len(exact) >= 5:
+            empresas = exact
 
     return empresas
 
 
 # ─────────────────────────────────────────────
-# ENDPOINTS
+# DIAGNOSTIC ENDPOINT
 # ─────────────────────────────────────────────
-
 
 @router.get("/comps/ai-status")
 def ai_status():
-    """Diagnostic endpoint — remove after debugging"""
     import os
     return {
         "HAS_AI_FILTER": HAS_AI_FILTER,
         "ANTHROPIC_KEY_SET": bool(os.environ.get("ANTHROPIC_API_KEY")),
         "ANTHROPIC_KEY_PREFIX": (os.environ.get("ANTHROPIC_API_KEY") or "")[:10] + "...",
+        "version": "v12",
     }
 
+
+# ─────────────────────────────────────────────
+# ENDPOINTS
+# ─────────────────────────────────────────────
 
 @router.post("/comps")
 def generar_comps(request: CompsRequest):
@@ -661,9 +454,8 @@ def generar_comps(request: CompsRequest):
         target_industry = None
         industry_key = None
         if empresa:
-            # Use yfinance directly for target — avoid sanitize_empresa() rejection
+            # Use yfinance directly — avoid sanitize_empresa() rejection
             try:
-                import yfinance as yf
                 _info = yf.Ticker(empresa.upper()).info or {}
                 target_industry = _info.get("industry")
                 sector_yf = _info.get("sector", "")
@@ -695,10 +487,10 @@ def generar_comps(request: CompsRequest):
         result["n_empresas_universe"] = len(universe_pre_filter)
         result["empresas_universe"] = universe_pre_filter
         result["target_industry"] = target_industry
-        result["ai_filter_active"] = HAS_AI_FILTER  # ← NEW: tells frontend AI is active
+        result["ai_filter_active"] = HAS_AI_FILTER
         result["discovery"] = {
             "yahoo_industry_key": industry_key,
-            "sources": "Yahoo Industry + JSON + Manual Peers" + (" + AI Filter" if HAS_AI_FILTER else ""),
+            "sources": "Yahoo Industry + JSON + Manual Peers + Sector" + (" + AI Filter" if HAS_AI_FILTER else ""),
         }
 
         result = clean_inf(result)
@@ -721,11 +513,13 @@ def descargar_excel(request: CompsRequest):
         target_industry = None
         industry_key = None
         if empresa:
-            td = get_financials_ttm(empresa.upper())
-            if td:
-                target_industry = td.get("Industria")
+            try:
+                _info = yf.Ticker(empresa.upper()).info or {}
+                target_industry = _info.get("industry")
                 if target_industry:
                     industry_key = target_industry.lower().replace(" ", "-").replace("&", "and")
+            except:
+                pass
 
         resultados = discover_comps(empresa, target_industry, industry_key)
         resultados = [r for r in resultados if r.get("Revenue ($mm)") is not None]
