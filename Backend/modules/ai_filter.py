@@ -1,28 +1,7 @@
 """
 🧠 AI COMP VALIDATOR — DealDesk
 ================================
-Filtro inteligente de comparables usando Claude Haiku.
-
-PROBLEMA: Yahoo Finance clasifica Tesla como "Consumer Cyclical" junto con Walmart.
-          Los mappings estáticos (INDUSTRY_GROUPS) nunca cubren todos los edge cases.
-
-SOLUCIÓN: Después de juntar candidatos, la IA evalúa cuáles son comparables REALES
-          basándose en modelo de negocio, no en clasificación de sector.
-
-COSTO: ~$0.001 por request con Haiku. 1000 análisis = $1.
-
-FALLBACK: Si la API falla, devuelve todos los candidatos sin filtrar.
-          La demo NUNCA se cae por culpa de este módulo.
-
-USO:
-    from Backend.modules.ai_filter import ai_filter_comps
-    
-    filtered = await ai_filter_comps(
-        target_ticker="TSLA",
-        target_name="Tesla",
-        target_industry="Auto Manufacturers",
-        candidates=list_of_dicts,
-    )
+Filtro inteligente de comparables usando Claude Sonnet.
 """
 
 import os
@@ -39,16 +18,22 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
 # CONFIG
 # ─────────────────────────────────────────────
 
-MODEL = "claude-haiku-4-5-20251001"  # Cheapest, fastest — perfect for classification
-MAX_CANDIDATES_TO_SEND = 40          # Don't send 80 companies to the AI — waste of tokens
+MODELS_TO_TRY = [
+    "claude-sonnet-4-20250514",
+    "claude-haiku-4-5-20251001",
+    "claude-3-5-haiku-20241022",
+    "claude-3-haiku-20240307",
+]
+
+MAX_CANDIDATES_TO_SEND = 40
 MAX_TOKENS_RESPONSE = 1500
-TIMEOUT_SECONDS = 12                 # If Haiku doesn't answer in 12s, skip AI filter
+TIMEOUT_SECONDS = 20
 
 # ─────────────────────────────────────────────
 # PROMPT TEMPLATE
 # ─────────────────────────────────────────────
 
-FILTER_PROMPT = """You are a senior M&A analyst. Your job is to filter a list of candidate comparable companies.
+FILTER_PROMPT = """You are the top-ranked Associate at Goldman Sachs M&A. Your Managing Director just handed you a list of candidate comparable companies for a live deal. If you include a bad comp, the MD will destroy you in front of the entire team. If you miss a good comp, you're equally dead. Your reputation depends on this.
 
 TARGET COMPANY:
 - Ticker: {target_ticker}
@@ -59,19 +44,24 @@ TARGET COMPANY:
 CANDIDATE COMPANIES:
 {candidates_text}
 
-TASK: Return ONLY the tickers that are legitimate comparable companies for an M&A valuation.
+YOUR TASK: Filter ruthlessly. Return ONLY legitimate comparable companies.
 
-RULES:
-1. Comparable = similar BUSINESS MODEL, not just same sector classification
-2. A car manufacturer is NOT comparable to a supermarket even if both are "Consumer"
-3. A health insurer is NOT comparable to a pharma company even if both are "Healthcare"
-4. Revenue scale matters: a $500M company is not a good comp for a $200B company (unless no alternatives)
-5. Keep at least 5 comps, maximum 25
-6. When in doubt, INCLUDE the company (false negatives are worse than false positives)
+THE MD'S RULES (non-negotiable):
+1. SAME CORE BUSINESS — the company must make money the same way the target does. Same products, same customers, same value chain position.
+2. If the target MANUFACTURES CARS → only include companies that MANUFACTURE cars or vehicles. Not retailers. Not food. Not aerospace. Not auto parts stores.
+3. If the target SELLS SOFTWARE → only include software companies. Not hardware. Not IT consulting. Not telecom.
+4. If the target is a HEALTH INSURER → only include health insurers and managed care. Not pharma. Not medical devices. Not hospitals.
+5. If the target is an E-COMMERCE PLATFORM → only include e-commerce and digital marketplace companies. Not brick-and-mortar retail.
+6. If the target is a BANK → only include banks. Not insurance. Not asset managers. Not payment processors.
+7. REJECT companies from different industries even if Yahoo Finance classifies them in the same sector. Coca-Cola is NOT a comp for Tesla. Boeing is NOT a comp for Toyota. Walmart is NOT a comp for Ford. Home Depot is NOT a comp for GM.
+8. Auto parts RETAILERS (AutoZone, O'Reilly) are NOT comparable to auto MANUFACTURERS.
+9. Defense contractors (Lockheed, RTX, Northrop) are NOT comparable to auto manufacturers.
+10. Consumer staples (P&G, Coca-Cola, PepsiCo) are NOT comparable to auto manufacturers or tech companies.
+11. Revenue scale: prefer companies within 0.2x-5x of target revenue, but include smaller/larger if business model is identical and no alternatives exist.
+12. Return between 8 and 20 comps. Quality over quantity. Every ticker you return must be defensible to the MD.
 
-Return ONLY a JSON array of ticker strings. No explanation, no markdown, no backticks.
-Example: ["AAPL","MSFT","GOOGL"]
-"""
+Return ONLY a JSON array of ticker strings. No explanation. No markdown. No backticks. Just the array.
+Example: ["TM","GM","F","STLA","HMC"]"""
 
 
 def _build_candidates_text(candidates: list[dict]) -> str:
@@ -88,7 +78,35 @@ def _build_candidates_text(candidates: list[dict]) -> str:
 
 
 # ─────────────────────────────────────────────
-# SYNC VERSION (for current FastAPI sync endpoints)
+# CALL AI WITH MODEL FALLBACK
+# ─────────────────────────────────────────────
+
+def _call_ai(prompt: str) -> Optional[str]:
+    """Try multiple model strings until one works. Returns raw text or None."""
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+
+    for model in MODELS_TO_TRY:
+        try:
+            print(f"   🧠 [AI Filter] Trying model: {model}")
+            response = client.messages.create(
+                model=model,
+                max_tokens=MAX_TOKENS_RESPONSE,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = response.content[0].text.strip()
+            print(f"   🧠 [AI Filter] SUCCESS with {model} — response length: {len(raw)}")
+            return raw
+        except Exception as e:
+            print(f"   ⚠️ [AI Filter] Model {model} failed: {type(e).__name__}: {e}")
+            continue
+
+    return None
+
+
+# ─────────────────────────────────────────────
+# MAIN FILTER FUNCTION
 # ─────────────────────────────────────────────
 
 def ai_filter_comps(
@@ -99,37 +117,25 @@ def ai_filter_comps(
     candidates: list[dict],
 ) -> list[dict]:
     """
-    Filters candidate comps using Claude Haiku.
-    
-    Returns filtered list. If AI fails for ANY reason, returns original list.
-    This function NEVER raises exceptions — graceful degradation always.
-    
-    Args:
-        target_ticker: e.g. "TSLA"
-        target_name: e.g. "Tesla, Inc."  
-        target_industry: e.g. "Auto Manufacturers"
-        target_revenue: in $mm USD
-        candidates: list of dicts from fetch_many_parallel()
-    
-    Returns:
-        Filtered list of candidate dicts
+    Filters candidate comps using Claude.
+    NEVER raises exceptions — graceful degradation always.
     """
-    # ── GUARD CLAUSES ──
     if not ANTHROPIC_KEY:
-        logger.warning("[AI Filter] No ANTHROPIC_API_KEY — skipping AI filter")
-        return candidates
-    
-    if len(candidates) <= 5:
-        logger.info(f"[AI Filter] Only {len(candidates)} candidates — no filtering needed")
-        return candidates
-    
-    if not target_industry:
-        logger.warning("[AI Filter] No target industry — skipping AI filter")
+        print("   ⚠️ [AI Filter] No ANTHROPIC_API_KEY — skipping")
         return candidates
 
-    # ── BUILD PROMPT ──
+    if len(candidates) <= 5:
+        print(f"   🧠 [AI Filter] Only {len(candidates)} candidates — no filtering needed")
+        return candidates
+
+    if not target_industry:
+        print("   ⚠️ [AI Filter] No target industry — skipping")
+        return candidates
+
+    print(f"   🧠 [AI Filter] Starting: {target_ticker} ({target_name}) | {target_industry} | {len(candidates)} candidates")
+
     candidates_text = _build_candidates_text(candidates)
-    
+
     prompt = FILTER_PROMPT.format(
         target_ticker=target_ticker,
         target_name=target_name,
@@ -138,81 +144,61 @@ def ai_filter_comps(
         candidates_text=candidates_text,
     )
 
-    # ── CALL HAIKU ──
     try:
-        import anthropic
-        
         t0 = time.time()
-        client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-        
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS_RESPONSE,
-            messages=[{"role": "user", "content": prompt}],
-            timeout=TIMEOUT_SECONDS,
-        )
-        
+        raw_text = _call_ai(prompt)
         elapsed = time.time() - t0
-        raw_text = response.content[0].text.strip()
-        
-        # ── PARSE RESPONSE ──
-        # Clean up common LLM formatting issues
+
+        if raw_text is None:
+            print(f"   ⚠️ [AI Filter] All models failed. Using unfiltered list.")
+            return candidates
+
         clean = raw_text
         if clean.startswith("```"):
-            clean = clean.split("\n", 1)[-1]  # remove first line
+            clean = clean.split("\n", 1)[-1]
         if clean.endswith("```"):
             clean = clean.rsplit("```", 1)[0]
         clean = clean.strip()
-        
+
+        start_idx = clean.find("[")
+        end_idx = clean.rfind("]")
+        if start_idx != -1 and end_idx != -1:
+            clean = clean[start_idx:end_idx + 1]
+
         approved_tickers = json.loads(clean)
-        
+
         if not isinstance(approved_tickers, list):
-            logger.warning(f"[AI Filter] Response is not a list: {type(approved_tickers)}")
+            print(f"   ⚠️ [AI Filter] Response is not a list: {type(approved_tickers)}")
             return candidates
-        
+
         approved_set = set(t.upper() for t in approved_tickers if isinstance(t, str))
-        
-        # ── FILTER ──
+
         filtered = [c for c in candidates if c.get("Ticker", "").upper() in approved_set]
-        
         removed = len(candidates) - len(filtered)
-        
-        logger.info(
-            f"[AI Filter] {target_ticker} | {len(candidates)} candidates → "
-            f"{len(filtered)} approved, {removed} removed | "
-            f"{elapsed:.1f}s | model={MODEL}"
-        )
-        
-        # ── SANITY CHECK ──
-        # If AI removed too many (left < 5), something went wrong — return all
-        if len(filtered) < 5 and len(candidates) >= 5:
-            logger.warning(
-                f"[AI Filter] Only {len(filtered)} left after filter (had {len(candidates)}). "
-                f"Falling back to unfiltered list."
-            )
-            return candidates
-        
-        # Log what got removed for debugging
+
+        print(f"   🧠 [AI Filter] RESULT: {len(candidates)} → {len(filtered)} approved, {removed} removed | {elapsed:.1f}s")
+
         if removed > 0:
-            removed_tickers = [
-                c.get("Ticker") for c in candidates 
-                if c.get("Ticker", "").upper() not in approved_set
-            ]
-            logger.info(f"[AI Filter] Removed: {removed_tickers[:10]}{'...' if len(removed_tickers) > 10 else ''}")
-        
+            removed_tickers = [c.get("Ticker") for c in candidates if c.get("Ticker", "").upper() not in approved_set]
+            print(f"   🧠 [AI Filter] Removed: {removed_tickers[:20]}")
+
+        if len(filtered) < 5 and len(candidates) >= 5:
+            print(f"   ⚠️ [AI Filter] Only {len(filtered)} left — falling back to unfiltered")
+            return candidates
+
         return filtered
-        
+
     except json.JSONDecodeError as e:
-        logger.warning(f"[AI Filter] JSON parse error: {e}. Raw: {raw_text[:200]}")
+        print(f"   ⚠️ [AI Filter] JSON parse error: {e}. Raw: {raw_text[:300] if raw_text else 'None'}")
         return candidates
-    
+
     except Exception as e:
-        logger.warning(f"[AI Filter] Failed ({type(e).__name__}: {e}). Using unfiltered list.")
+        print(f"   ⚠️ [AI Filter] Failed ({type(e).__name__}: {e}). Using unfiltered list.")
         return candidates
 
 
 # ─────────────────────────────────────────────
-# CACHE (optional — avoid re-filtering same target)
+# CACHE
 # ─────────────────────────────────────────────
 
 _ai_filter_cache = {}
@@ -224,24 +210,19 @@ def ai_filter_comps_cached(
     target_revenue: float,
     candidates: list[dict],
 ) -> list[dict]:
-    """
-    Same as ai_filter_comps but with a simple in-memory cache.
-    Cache key = (target_ticker, frozenset of candidate tickers).
-    """
     candidate_key = frozenset(c.get("Ticker", "") for c in candidates)
     cache_key = (target_ticker, candidate_key)
-    
+
     if cache_key in _ai_filter_cache:
         cached_tickers = _ai_filter_cache[cache_key]
         filtered = [c for c in candidates if c.get("Ticker") in cached_tickers]
-        logger.info(f"[AI Filter] CACHE HIT for {target_ticker}: {len(filtered)} comps")
+        print(f"   🧠 [AI Filter] CACHE HIT for {target_ticker}: {len(filtered)} comps")
         return filtered
-    
+
     result = ai_filter_comps(
         target_ticker, target_name, target_industry, target_revenue, candidates
     )
-    
-    # Store approved tickers in cache
+
     _ai_filter_cache[cache_key] = set(c.get("Ticker") for c in result)
-    
+
     return result
