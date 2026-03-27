@@ -22,7 +22,7 @@ from Backend.modules.empresas import router as empresas_router
 from Backend.modules.financials import router as financials_router
 # from Backend.modules.precedents import router as precedents_router  # DESHABILITADO
 from Backend.modules.bcra_export import router as bcra_export_router
-from Backend.modules.research import router as research_router
+from Backend.modules.deal_intel import router as deal_intel_router
 
 try:
     from Backend.modules.ask_ai import router as ask_router
@@ -96,6 +96,7 @@ app.include_router(financials_router)
 app.include_router(bcra_router)
 app.include_router(bcra_export_router)
 app.include_router(research_router)
+app.include_router(deal_intel_router)
 
 if HAS_ASK:
     app.include_router(ask_router)

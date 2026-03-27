@@ -809,6 +809,18 @@ function renderCompsResult(data) {
           </table>
         </div>
 
+        <!-- DEAL INTELLIGENCE -->
+        <button class="btn-secondary" id="btn-deal-intel" 
+          onclick="fetchDealIntel(
+            '${data.empresa_target}',
+            '${data.empresa_target}',
+            '${data.target_industry || ""}',
+            ${data.revenue_target || 0},
+            ${JSON.stringify(filtradas).replace(/'/g, "\\'")}
+          )" style="background:#111;color:#f5f0e8;margin-right:10px;">
+          🧠 DEAL INTELLIGENCE
+        </button>
+
         <!-- BOTON EXCEL (LO RECUPERAMOS) -->
         <button class="btn-secondary" onclick="downloadCompsExcel()">
           ⬇ DESCARGAR EXCEL
@@ -831,7 +843,14 @@ function renderCompsResult(data) {
   toggleColumn("growth", false);
 
   renderCharts(data);
+  // Store for deal intel
+  window._lastCompsData = data;
 }
+
+<button class="btn-secondary" id="btn-deal-intel" 
+          onclick="triggerDealIntel()" style="background:#111;color:#f5f0e8;margin-right:10px;">
+          🧠 DEAL INTELLIGENCE
+        </button>
 
 // ── FORMAT HELPERS ────────────────────────────────────────────
 
@@ -925,4 +944,17 @@ async function downloadCompsExcel() {
 
   btn.innerHTML = original;
   btn.disabled = false;
+}
+
+function triggerDealIntel() {
+  const d = window._lastCompsData;
+  if (!d) return alert("Generá comps primero");
+  const comps = d.empresas_filtradas || d.empresas || [];
+  fetchDealIntel(
+    d.empresa_target || selectedTicker || "",
+    d.empresa_target || selectedTicker || "",
+    d.target_industry || "",
+    d.revenue_target || 0,
+    comps
+  );
 }
