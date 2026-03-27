@@ -810,16 +810,11 @@ function renderCompsResult(data) {
         </div>
 
         <!-- DEAL INTELLIGENCE -->
-        <button class="btn-secondary" id="btn-deal-intel" 
-          onclick="fetchDealIntel(
-            '${data.empresa_target}',
-            '${data.empresa_target}',
-            '${data.target_industry || ""}',
-            ${data.revenue_target || 0},
-            ${JSON.stringify(filtradas).replace(/'/g, "\\'")}
-          )" style="background:#111;color:#f5f0e8;margin-right:10px;">
-          🧠 DEAL INTELLIGENCE
-        </button>
+      <button class="btn-secondary" id="btn-deal-intel" 
+        onclick="triggerDealIntel()"
+        style="background:#111;color:#f5f0e8;margin-right:10px;">
+        🧠 DEAL INTELLIGENCE
+      </button>
 
         <!-- BOTON EXCEL (LO RECUPERAMOS) -->
         <button class="btn-secondary" onclick="downloadCompsExcel()">
@@ -943,8 +938,23 @@ async function downloadCompsExcel() {
 
 function triggerDealIntel() {
   const d = window._lastCompsData;
-  if (!d) return alert("Generá comps primero");
+
+  if (!d) {
+    console.error("❌ No hay comps data");
+    return alert("Generá comps primero");
+  }
+
   const comps = d.empresas_filtradas || d.empresas || [];
+
+  console.log("🧠 DEAL INTEL TRIGGER");
+  console.log("Empresa:", d.empresa_target);
+  console.log("Industry:", d.target_industry);
+  console.log("Revenue:", d.revenue_target);
+  console.log("Comps RAW:", comps);
+
+  console.log("Tipo comps:", typeof comps);
+  console.log("Cantidad comps:", comps.length);
+
   fetchDealIntel(
     d.empresa_target || selectedTicker || "",
     d.empresa_target || selectedTicker || "",
