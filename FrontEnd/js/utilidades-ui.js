@@ -1,5 +1,5 @@
-const API = window.location.origin;
-// helpers visuales
+const API = window.API || window.location.origin;
+window.API = API; // helpers visuales
 function fmt(v, d = 1) {
   return v == null
     ? "—"
