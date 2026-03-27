@@ -41,90 +41,51 @@ const SIGNAL_CONFIG = {
 };
 
 // ── FETCH DEAL INTELLIGENCE (called after comps load) ──
-async function fetchDealIntel(
-  targetTicker,
-  targetName,
-  targetIndustry,
-  targetRevenue,
-  comps,
-) {
-  if (DEAL_INTEL_LOADING) return;
-  DEAL_INTEL_LOADING = true;
-
-  console.log("🧠 DEAL INTEL INPUT:");
-  console.log({
-    targetTicker,
-    targetName,
-    targetIndustry,
-    targetRevenue,
-    comps,
-    comps_count: comps?.length,
-  });
-
-  // Show loading indicator
-  const btn = document.getElementById("btn-deal-intel");
-  if (btn) {
-    btn.innerHTML = "🧠 ANALIZANDO...";
-    btn.disabled = true;
-  }
-
+async function fetchDealIntel(nombre, ticker, industria, revenue, comparables) {
   try {
-    const res = await fetch(`${API}/comps/deal-intel`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        target_ticker: targetTicker,
-        target_name: targetName,
-        target_industry: targetIndustry || "Unknown",
-        target_revenue: targetRevenue || 0,
-        comps: comps,
-      }),
+    // limpio comparables por si viene algo raro
+    const compsClean = (comparables || []).map((c) => {
+      return {
+        ticker: c.ticker || "",
+        revenue: c.revenue || null,
+        ev: c.ev || null,
+        ebitda: c.ebitda || null,
+      };
     });
 
-    console.log("🧠 RESPONSE STATUS:", res.status);
+    const body = {
+      nombre: nombre,
+      ticker: ticker,
+      industria: industria,
+      revenue: revenue,
+      comparables: compsClean,
+    };
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // debug clave
+    console.log("📤 BODY QUE SE ENVÍA:");
+    console.log(JSON.stringify(body, null, 2));
 
-    const data = await res.json();
+    const res = await fetch(`${API}/deal-intel`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
 
-    console.log("🧠 RESPONSE DATA:", data);
+    const text = await res.text();
 
-    const briefs = data.briefs || [];
+    // debug respuesta cruda
+    console.log("📥 RESPONSE RAW:");
+    console.log(text);
 
-    console.log("🧠 BRIEFS COUNT:", briefs.length);
+    const data = JSON.parse(text);
 
-    if (!briefs.length) {
-      console.warn("⚠️ NO DEAL INTEL GENERATED");
-    }
-
-    // Store in state
-    DEAL_INTEL_DATA = {};
-    for (const brief of briefs) {
-      DEAL_INTEL_DATA[brief.ticker] = brief;
-    }
-
-    // Render briefs into existing table
-    renderDealIntelRows();
-
-    if (btn) {
-      btn.innerHTML = briefs.length
-        ? "🧠 DEAL INTELLIGENCE ✓"
-        : "🧠 SIN RESULTADOS";
-
-      btn.disabled = false;
-      btn.style.background = briefs.length ? "#2d6a4f" : "#999";
-    }
-  } catch (err) {
-    console.error("💥 Deal Intel error:", err);
-
-    if (btn) {
-      btn.innerHTML = "🧠 ERROR";
-      btn.disabled = false;
-      btn.style.background = "#8b1a1a";
-    }
+    return data;
+  } catch (e) {
+    console.error("❌ ERROR EN fetchDealIntel:", e);
+    throw e;
   }
-
-  DEAL_INTEL_LOADING = false;
 }
 // ── RENDER EXPANDABLE DEAL BRIEF ROWS ──
 function renderDealIntelRows() {
