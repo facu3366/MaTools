@@ -935,25 +935,33 @@ async function downloadCompsExcel() {
   btn.innerHTML = original;
   btn.disabled = false;
 }
-
 function triggerDealIntel() {
   const d = window._lastCompsData;
 
   if (!d) {
-    console.error(" No hay comps data");
+    console.error("No hay comps data");
     return alert("Generá comps primero");
   }
 
-  const comps = d.empresas_filtradas || d.empresas || [];
+  // Tomo comps (filtradas o todas)
+  let comps = d.empresas_filtradas || d.empresas || [];
+
+  // ⚠️ LIMPIO + REDUZCO DATA (clave para evitar timeout)
+  comps = comps.slice(0, 15).map((c) => ({
+    ticker: c.Ticker,
+    ev: c["EV ($mm)"],
+    revenue: c["Revenue ($mm)"],
+    ebitda: c["EBITDA ($mm)"],
+    evRev: c["EV/Rev"],
+    evEbitda: c["EV/EBITDA"],
+    margin: c["EBITDA Mg"],
+  }));
 
   console.log("🧠 DEAL INTEL TRIGGER");
   console.log("Empresa:", d.empresa_target);
   console.log("Industry:", d.target_industry);
   console.log("Revenue:", d.revenue_target);
-  console.log("Comps RAW:", comps);
-
-  console.log("Tipo comps:", typeof comps);
-  console.log("Cantidad comps:", comps.length);
+  console.log("Comps LIMPIOS:", comps);
 
   fetchDealIntel(
     d.empresa_target || selectedTicker || "",
