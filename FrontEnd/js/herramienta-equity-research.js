@@ -471,3 +471,4 @@ window.researchShowSuggestions = researchShowSuggestions;
 window.researchHandleKey = researchHandleKey;
 window.researchSelectEmpresa = researchSelectEmpresa;
 window.runResearch = runResearch;
+window.showSuggestions = researchShowSuggestions;
