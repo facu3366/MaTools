@@ -847,11 +847,6 @@ function renderCompsResult(data) {
   window._lastCompsData = data;
 }
 
-<button class="btn-secondary" id="btn-deal-intel" 
-          onclick="triggerDealIntel()" style="background:#111;color:#f5f0e8;margin-right:10px;">
-          🧠 DEAL INTELLIGENCE
-        </button>
-
 // ── FORMAT HELPERS ────────────────────────────────────────────
 
 function fmtNum(val) {
@@ -955,6 +950,6 @@ function triggerDealIntel() {
     d.empresa_target || selectedTicker || "",
     d.target_industry || "",
     d.revenue_target || 0,
-    comps
+    comps,
   );
 }
