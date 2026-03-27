@@ -940,7 +940,7 @@ function triggerDealIntel() {
   const d = window._lastCompsData;
 
   if (!d) {
-    console.error("❌ No hay comps data");
+    console.error(" No hay comps data");
     return alert("Generá comps primero");
   }
 
