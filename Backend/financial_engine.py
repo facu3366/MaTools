@@ -1,14 +1,13 @@
 """
-📊 FINANCIAL ENGINE v6 — CACHE + PARALLEL + OUTLIER KILL
+📊 FINANCIAL ENGINE v7 — GROWTH COMPANY FIX
 =========================================================
-CAMBIOS vs v5:
-1. FIX CRÍTICO: FX conversion ahora se ejecuta DESPUÉS de definir todas las variables
-2. NUEVO: sanitize_empresa() — filtra outliers ANTES de que lleguen al Excel
-3. NUEVO: Gross Margin > 100% = descarte automático
-4. Cache y parallel fetch sin cambios
+CAMBIOS vs v6:
+1. sanitize_empresa: EBITDA negativo ahora se permite si revenue > $1B
+   (growth companies como RIVN, LCID, NIO son comps legítimos de Tesla)
+2. Revenue threshold para moneda local subido a 2M mm (sin cambio)
+3. Todo lo demás igual: cache, parallel, FX, outlier kill
 
-RESULTADO: BUKA.JK, NYKAA.NS, NPN.JO, y cualquier empresa con datos
-en moneda local o múltiplos absurdos se eliminan automáticamente.
+RESULTADO: RIVN, LCID, NIO ya no se eliminan automáticamente.
 """
 
 import yfinance as yf
@@ -104,6 +103,8 @@ def sanitize_empresa(data: dict) -> Optional[dict]:
     - Gross Margin <= 100% (imposible por definición)
     - Net Margin no puede ser > 500% (señal de moneda local sin convertir)
     - Revenue no puede ser > 2,000,000 mm (señal de moneda local)
+    
+    v7: EBITDA negativo permitido si revenue > $500M (growth companies)
     """
     if not data:
         return None
@@ -140,10 +141,13 @@ def sanitize_empresa(data: dict) -> Optional[dict]:
             logger.warning(f"[{ticker}] DESCARTADO: EV/EBITDA {ev_ebitda:.1f}x > 75x")
             return None
     
-    # EBITDA negativo — no sirve para valuation por múltiplos
+    # EBITDA negativo — v7: keep if large company (growth stage EV companies)
     if ebitda is not None and ebitda < 0:
-        logger.warning(f"[{ticker}] DESCARTADO: EBITDA negativo ({ebitda})")
-        return None
+        if rev < 500:
+            logger.warning(f"[{ticker}] DESCARTADO: EBITDA negativo ({ebitda}) y rev < $500M")
+            return None
+        else:
+            logger.info(f"[{ticker}] EBITDA negativo ({ebitda}) pero rev ${rev:,.0f}mm — keeping (growth company)")
     
     # Gross Margin > 100% = imposible
     gross = data.get("Gross ($mm)")
@@ -293,8 +297,6 @@ def get_financials_ttm(ticker: str) -> Optional[dict]:
                     if gross_mm:      gross_mm = round(gross_mm * fx_rate, 1)
                     if total_debt_mm: total_debt_mm = round(total_debt_mm * fx_rate, 1)
                     if cash_mm:       cash_mm = round(cash_mm * fx_rate, 1)
-                    # EV y Mkt Cap ya están en USD en yfinance (marketCap siempre es USD)
-                    # NO convertir ev_mm ni mkt_cap_mm
                     logger.info(f"[{ticker}] Converted from {fin_currency} → USD (rate={fx_rate})")
             except Exception as e:
                 logger.warning(f"[{ticker}] FX conversion failed: {e}")
@@ -315,7 +317,7 @@ def get_financials_ttm(ticker: str) -> Optional[dict]:
         result = {
             "Ticker": ticker,
             "Empresa": empresa,
-            "País": pais,  # ← CORREGIDO: con acento (antes era "Pais")
+            "País": pais,
             "Sector": sector,
             "Industria": industry,
             "Descripción": desc,

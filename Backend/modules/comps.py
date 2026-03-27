@@ -1,11 +1,13 @@
 """
-📊 COMPS MODULE v12 — AI-POWERED FILTERING (FIXED)
+📊 COMPS MODULE v14 — FIXED DISCOVERY PIPELINE
 =============================================================
-FIX in v12:
-- INDUSTRY_PEERS always injected (removed < 5 gate that blocked auto peers)
-- discover_comps sends ALL candidates to AI filter (no pre-filtering by static industry)
-- AI filter is the ONLY intelligent filter — static filter removed to avoid conflicts
-- Target industry detected via direct yfinance call (bypasses sanitize_empresa)
+FIX in v14 (over v13):
+- INDUSTRY_TO_JSON_SECTORS removed — was injecting irrelevant companies (Walmart for Tesla)
+- yf.Sector() SOURCE C removed — too broad, pollutes candidate pool  
+- empresas.json SOURCE B now uses INDUSTRY_PEERS keys to find correct sector mapping
+- sanitize_empresa: EBITDA negative filter relaxed for growth companies (keep if revenue > $1B)
+- discover_comps sends ONLY industry-relevant candidates
+- AI filter is refinement layer, not salvation layer
 """
 
 from fastapi import APIRouter, HTTPException
@@ -116,7 +118,7 @@ def discover_industry_peers(industry_key: str) -> list[str]:
 
 
 # ─────────────────────────────────────────────
-# INDUSTRY_PEERS — ALWAYS INJECTED
+# INDUSTRY_PEERS — CURATED LISTS (ALWAYS INJECTED)
 # ─────────────────────────────────────────────
 
 INDUSTRY_PEERS = {
@@ -159,6 +161,12 @@ INDUSTRY_PEERS = {
     "Banks - Regional": ["FITB", "RF", "CFG", "HBAN", "MTB", "ZION", "KEY", "CMA", "FHN"],
     "Oil & Gas Integrated": ["XOM", "CVX", "SHEL", "TTE", "BP", "COP", "EOG"],
     "Oil & Gas E&P": ["COP", "EOG", "PXD", "DVN", "FANG", "OXY", "HES", "MPC"],
+    "Telecom Services": ["T", "VZ", "TMUS", "CHTR", "CMCSA"],
+    "Internet Content & Information": ["GOOGL", "META", "SNAP", "PINS", "RDDT", "MTCH"],
+    "Information Technology Services": ["ACN", "IBM", "INFY", "WIT", "CTSH", "EPAM", "GLOB"],
+    "Specialty Retail": ["HD", "LOW", "TJX", "ROST", "BURL", "ULTA", "BBY", "DKS"],
+    "Medical Devices": ["MDT", "SYK", "BSX", "ABT", "ISRG", "EW", "BDX", "ZBH"],
+    "Managed Health Care": ["UNH", "ELV", "CI", "HUM", "CNC", "MOH"],
 }
 
 INDUSTRY_KEY_ALTERNATIVES = {
@@ -170,30 +178,50 @@ INDUSTRY_KEY_ALTERNATIVES = {
     "consumer-electronics": ["consumer-electronics", "electronics"],
 }
 
-INDUSTRY_TO_JSON_SECTORS = {
-    "Internet Retail":          [("Consumer", 15), ("Technology", 10)],
-    "Broadline Retail":         [("Consumer", 20)],
-    "Software - Application":           [("Technology", 25)],
-    "Software - Infrastructure":        [("Technology", 25)],
-    "Information Technology Services":  [("Technology", 25)],
-    "Internet Content & Information":   [("Technology", 20)],
-    "Semiconductors":                       [("Technology", 20)],
-    "Credit Services":                      [("Financials", 25)],
-    "Capital Markets":                      [("Financials", 25)],
-    "Banks - Diversified":                  [("Financials", 25)],
-    "Banks - Regional":                     [("Financials", 25)],
-    "Health Care Plans":                [("Health Insurance", 25)],
-    "Drug Manufacturers - General":     [("Health Insurance", 25)],
-    "Biotechnology":                    [("Health Insurance", 25)],
-    "Oil & Gas Integrated":             [("Energy", 25)],
-    "Oil & Gas E&P":                    [("Energy", 25)],
-    "Aerospace & Defense":              [("Industrials", 25)],
-    "Auto Manufacturers":               [("Consumer", 15), ("Industrials", 10)],
-    "Restaurants":              [("Consumer", 20)],
-    "Entertainment":            [("Consumer", 15), ("Technology", 10)],
+# ─────────────────────────────────────────────
+# MAP: Yahoo industry → best INDUSTRY_PEERS key
+# This replaces INDUSTRY_TO_JSON_SECTORS which was too broad
+# ─────────────────────────────────────────────
+
+INDUSTRY_ALIAS_MAP = {
+    # Yahoo returns these → we map to our INDUSTRY_PEERS keys
+    "Auto Manufacturers": "Auto Manufacturers",
+    "Automobiles": "Auto Manufacturers",
+    "Auto Parts": "Auto Parts",
+    "Airlines": "Airlines",
+    "Passenger Airlines": "Airlines",
+    "Restaurants": "Restaurants",
+    "Residential Construction": "Residential Construction",
+    "Home Improvement Retail": "Home Improvement Retail",
+    "Discount Stores": "Discount Stores",
+    "Grocery Stores": "Grocery Stores",
+    "Entertainment": "Entertainment",
+    "Insurance - Property & Casualty": "Insurance - Property & Casualty",
+    "Apparel Manufacturers": "Apparel Manufacturers",
+    "Recreational Vehicles": "Recreational Vehicles",
+    "Drug Manufacturers - General": "Drug Manufacturers - General",
+    "Drug Manufacturers - Specialty & Generic": "Drug Manufacturers - General",
+    "Biotechnology": "Biotechnology",
+    "Consumer Electronics": "Consumer Electronics",
+    "Footwear & Accessories": "Footwear & Accessories",
+    "Health Care Plans": "Health Care Plans",
+    "Managed Health Care": "Managed Health Care",
+    "Internet Retail": "Internet Retail",
+    "Software - Application": "Software - Application",
+    "Software - Infrastructure": "Software - Infrastructure",
+    "Semiconductors": "Semiconductors",
+    "Semiconductor Equipment & Materials": "Semiconductors",
+    "Banks - Diversified": "Banks - Diversified",
+    "Banks - Regional": "Banks - Regional",
+    "Oil & Gas Integrated": "Oil & Gas Integrated",
+    "Oil & Gas E&P": "Oil & Gas E&P",
+    "Telecom Services": "Telecom Services",
+    "Internet Content & Information": "Internet Content & Information",
+    "Information Technology Services": "Information Technology Services",
+    "Specialty Retail": "Specialty Retail",
+    "Medical Devices": "Medical Devices",
 }
 
-MAX_JSON_TICKERS = 40
 MAX_TOTAL_TICKERS = 80
 
 
@@ -233,7 +261,8 @@ COUNTRY_TO_REGION = {"Argentina": "LATAM", "Brazil": "LATAM", "Mexico": "LATAM"}
 # CLEAN & DEDUP
 # ─────────────────────────────────────────────
 
-def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenue: float = 0, rango_min_pct: float = 0.30, rango_max_pct: float = 3.0) -> list[dict]:
+def clean_and_dedup(empresas: list[dict], target_ticker: str = "") -> list[dict]:
+    """Clean data quality issues and deduplicate. Does NOT filter by revenue range."""
     target_upper = target_ticker.upper() if target_ticker else ""
     empresas = [e for e in empresas if e.get("Ticker", "").upper() != target_upper]
 
@@ -245,8 +274,9 @@ def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenu
             continue
         if not ev or ev <= 0:
             continue
+        # EBITDA negative: allow if revenue > $500M (growth companies like RIVN, LCID, NIO)
         ebitda = e.get("EBITDA ($mm)")
-        if ebitda is not None and ebitda < 0:
+        if ebitda is not None and ebitda < 0 and rev < 500:
             continue
         ev_rev = ev / rev
         if ev_rev > 40:
@@ -262,15 +292,7 @@ def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenu
                 continue
         clean.append(e)
 
-    if target_revenue and target_revenue > 0:
-        min_rev = target_revenue * rango_min_pct
-        max_rev = target_revenue * rango_max_pct
-        before = len(clean)
-        clean = [e for e in clean if min_rev <= e.get("Revenue ($mm)", 0) <= max_rev]
-        filtered = before - len(clean)
-        if filtered > 0:
-            print(f"   📏 Revenue range ${min_rev:,.0f}-${max_rev:,.0f}mm: {filtered} fuera de rango")
-
+    # Dedup by revenue (prefer US-listed tickers over foreign)
     revenue_map = {}
     for e in clean:
         rev_key = round(e.get("Revenue ($mm)", 0), 0)
@@ -289,14 +311,27 @@ def clean_and_dedup(empresas: list[dict], target_ticker: str = "", target_revenu
     return result
 
 
+def apply_revenue_filter(empresas: list[dict], target_revenue: float, rango_min_pct: float = 0.30, rango_max_pct: float = 3.0) -> list[dict]:
+    """Apply revenue range filter separately from clean_and_dedup."""
+    if not target_revenue or target_revenue <= 0:
+        return empresas
+    min_rev = target_revenue * rango_min_pct
+    max_rev = target_revenue * rango_max_pct
+    filtered = [e for e in empresas if min_rev <= e.get("Revenue ($mm)", 0) <= max_rev]
+    removed = len(empresas) - len(filtered)
+    if removed > 0:
+        print(f"   📏 Revenue range ${min_rev:,.0f}-${max_rev:,.0f}mm: {removed} fuera de rango, {len(filtered)} pasan")
+    return filtered
+
+
 # ─────────────────────────────────────────────
-# DISCOVER COMPS v12 — FIXED
+# DISCOVER COMPS v14 — BULLETPROOF
 # ─────────────────────────────────────────────
 
 def discover_comps(target_ticker: str, target_industry: str, industry_key: str) -> list[dict]:
     all_tickers = set()
 
-    # ── SOURCE A: Yahoo Finance Industry ──
+    # ── SOURCE A: Yahoo Finance Industry (most precise) ──
     yahoo_tickers = discover_industry_peers(industry_key)
     all_tickers.update(yahoo_tickers)
     n_yahoo = len(yahoo_tickers)
@@ -312,66 +347,48 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
                 print(f"   🔍 Source A2: alt key '{alt_key}' → {len(alt_peers)} peers")
                 break
 
-    # ── SOURCE D: Manual curated peers — ALWAYS ADDED (no gate) ──
+    # ── SOURCE B: Manual curated peers (ALWAYS ADDED) ──
     n_manual = 0
+    peers_key = None
+    
+    # First try exact match
     if target_industry and target_industry in INDUSTRY_PEERS:
-        manual = INDUSTRY_PEERS[target_industry]
+        peers_key = target_industry
+    # Then try alias map
+    elif target_industry and target_industry in INDUSTRY_ALIAS_MAP:
+        peers_key = INDUSTRY_ALIAS_MAP[target_industry]
+    
+    if peers_key and peers_key in INDUSTRY_PEERS:
+        manual = INDUSTRY_PEERS[peers_key]
         all_tickers.update(manual)
         n_manual = len(manual)
-        print(f"   🔍 Source D: INDUSTRY_PEERS['{target_industry}'] → {n_manual} manual peers (ALWAYS)")
+        print(f"   🔍 Source B: INDUSTRY_PEERS['{peers_key}'] → {n_manual} manual peers")
 
-    # Also add similar industries' peers
+    # Also search partial matches in INDUSTRY_PEERS keys
     if target_industry:
         for key, peers in INDUSTRY_PEERS.items():
-            if key != target_industry and target_industry.lower() in key.lower():
+            if key != peers_key and (
+                target_industry.lower() in key.lower() or 
+                key.lower() in target_industry.lower()
+            ):
                 all_tickers.update(peers)
-                print(f"   🔍 Source D (partial match): '{key}' → {len(peers)} peers")
+                print(f"   🔍 Source B (partial): '{key}' → {len(peers)} peers")
 
-    # ── SOURCE C: yf.Sector() — adds broad candidates for AI to filter ──
-    if target_ticker:
-        try:
-            t_info = yf.Ticker(target_ticker.upper()).info or {}
-            sector_yf = t_info.get("sector", "")
-            if sector_yf:
-                sector_key = sector_yf.lower().replace(" ", "-").replace("&", "and")
-                try:
-                    sec = yf.Sector(sector_key)
-                    tc = sec.top_companies
-                    if tc is not None and not tc.empty:
-                        sector_peers = list(tc.index)[:30]
-                        print(f"   🔍 Source C: yf.Sector('{sector_key}'): {len(sector_peers)} peers")
-                        all_tickers.update(sector_peers)
-                except Exception as e:
-                    print(f"   ⚠️ yf.Sector failed: {e}")
-        except Exception as e:
-            print(f"   ⚠️ Source C failed: {e}")
+    # ── SOURCE C: REMOVED ──
+    # yf.Sector() was too broad — "Consumer Cyclical" includes restaurants, hotels, retail
+    # along with auto manufacturers. This polluted the candidate pool.
+    # The AI filter can't fix garbage-in — better to send fewer, higher-quality candidates.
 
-    # ── SOURCE B: empresas.json ──
-    json_tickers = []
-    if target_industry and target_industry in INDUSTRY_TO_JSON_SECTORS:
-        sector_limits = INDUSTRY_TO_JSON_SECTORS[target_industry]
-        for sector_name, max_from_sector in sector_limits:
-            sector_tickers = get_universe_by_sector(sector_name)
-            json_tickers.extend(sector_tickers[:max_from_sector])
-    elif target_industry:
-        all_empresas = load_empresas()
-        target_data = next((e for e in all_empresas if e.get("ticker", "").upper() == target_ticker.upper()), None)
-        if target_data:
-            fallback_sector = target_data.get("sector", "")
-            if fallback_sector:
-                json_tickers = get_universe_by_sector(fallback_sector)[:30]
-
-    if len(json_tickers) > MAX_JSON_TICKERS:
-        json_tickers = json_tickers[:MAX_JSON_TICKERS]
-    all_tickers.update(json_tickers)
-    n_json = len(json_tickers)
+    # ── SOURCE D: REMOVED (was INDUSTRY_TO_JSON_SECTORS) ──
+    # Mapping industries to empresas.json sectors was wrong.
+    # "Auto Manufacturers" → "Consumer" brought Walmart, Nike, etc.
 
     # Hard cap
     all_tickers_list = list(all_tickers)
     if len(all_tickers_list) > MAX_TOTAL_TICKERS:
         all_tickers_list = all_tickers_list[:MAX_TOTAL_TICKERS]
 
-    print(f"   📊 Sources: Yahoo={n_yahoo} + JSON={n_json} + Manual={n_manual} → {len(all_tickers_list)} únicos")
+    print(f"   📊 Sources: Yahoo={n_yahoo} + Manual={n_manual} → {len(all_tickers_list)} únicos")
 
     if not all_tickers_list:
         return []
@@ -383,10 +400,9 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
         return []
     print(f"   ✅ {len(empresas)}/{len(all_tickers_list)} obtenidas")
 
-    # ── AI FILTER — replaces static industry filter ──
+    # ── AI FILTER (refinement, not salvation) ──
     if HAS_AI_FILTER and target_industry and len(empresas) > 5:
         try:
-            # Get target info for AI context
             target_name = target_ticker
             target_rev = 0
             for e in empresas:
@@ -395,7 +411,6 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
                     target_rev = e.get("Revenue ($mm)", 0)
                     break
             
-            # If target not in candidates (e.g. sanitized out), use yfinance info
             if target_rev == 0:
                 try:
                     _ti = yf.Ticker(target_ticker.upper()).info or {}
@@ -417,10 +432,18 @@ def discover_comps(target_ticker: str, target_industry: str, industry_key: str) 
             print(f"   ⚠️ AI Filter error (using unfiltered): {e}")
     elif not HAS_AI_FILTER and target_industry:
         # Fallback: basic industry keyword filter when AI is not available
-        print(f"   ⚠️ No AI filter — using basic industry match")
+        print(f"   ⚠️ No AI filter — using industry match fallback")
+        # Try exact match first
         exact = [e for e in empresas if e.get("Industria") == target_industry]
         if len(exact) >= 5:
             empresas = exact
+            print(f"   📌 Exact industry match: {len(exact)} comps")
+        else:
+            # Try partial match (e.g., "Auto" in "Auto Manufacturers" and "Auto Parts")
+            partial = [e for e in empresas if target_industry.split(" - ")[0].split(" ")[0].lower() in (e.get("Industria") or "").lower()]
+            if len(partial) >= 5:
+                empresas = partial
+                print(f"   📌 Partial industry match: {len(partial)} comps")
 
     return empresas
 
@@ -436,7 +459,7 @@ def ai_status():
         "HAS_AI_FILTER": HAS_AI_FILTER,
         "ANTHROPIC_KEY_SET": bool(os.environ.get("ANTHROPIC_API_KEY")),
         "ANTHROPIC_KEY_PREFIX": (os.environ.get("ANTHROPIC_API_KEY") or "")[:10] + "...",
-        "version": "v12",
+        "version": "v14",
     }
 
 
@@ -454,7 +477,6 @@ def generar_comps(request: CompsRequest):
         target_industry = None
         industry_key = None
         if empresa:
-            # Use yfinance directly — avoid sanitize_empresa() rejection
             try:
                 _info = yf.Ticker(empresa.upper()).info or {}
                 target_industry = _info.get("industry")
@@ -465,32 +487,41 @@ def generar_comps(request: CompsRequest):
             except Exception as e:
                 print(f"⚠️ Target lookup failed: {e}")
 
-        empresas = discover_comps(empresa, target_industry, industry_key)
+        # DISCOVER: get all industry candidates
+        all_empresas = discover_comps(empresa, target_industry, industry_key)
 
+        # REGION SORT
         region = request.region
         if region and region != "GLOBAL":
             region = COUNTRY_TO_REGION.get(region, region)
-            empresas_region = [e for e in empresas if get_region_from_country(e.get("País") or e.get("Pais")) == region]
-            empresas_resto = [e for e in empresas if get_region_from_country(e.get("País") or e.get("Pais")) != region]
-            empresas = empresas_region + empresas_resto
+            empresas_region = [e for e in all_empresas if get_region_from_country(e.get("País") or e.get("Pais")) == region]
+            empresas_resto = [e for e in all_empresas if get_region_from_country(e.get("País") or e.get("Pais")) != region]
+            all_empresas = empresas_region + empresas_resto
             print(f"   🌎 Región {region}: {len(empresas_region)} | Resto: {len(empresas_resto)}")
 
-        universe_pre_filter = list(empresas)
-        empresas = clean_and_dedup(empresas, empresa, revenue, request.rango_min_pct / 100, request.rango_max_pct / 100)
-        print(f"   📊 Final: {len(empresas)} comps (de {len(universe_pre_filter)} universe) para {empresa}")
+        # CLEAN (data quality + dedup — NO revenue filter)
+        universe = clean_and_dedup(all_empresas, empresa)
+        
+        # REVENUE FILTER (separate step — only for "filtradas" view)
+        filtradas = apply_revenue_filter(universe, revenue, request.rango_min_pct / 100, request.rango_max_pct / 100)
+        
+        print(f"   📊 Universe: {len(universe)} | Filtradas: {len(filtradas)} para {empresa}")
 
         result = build_comps_response(
-            empresas, empresa, sector, revenue,
+            filtradas, empresa, sector, revenue,
             request.rango_min_pct / 100, request.rango_max_pct / 100
         )
 
-        result["n_empresas_universe"] = len(universe_pre_filter)
-        result["empresas_universe"] = universe_pre_filter
+        # Override counts — universe is ALL industry comps, filtradas is revenue-filtered
+        result["n_empresas_universe"] = len(universe)
+        result["empresas_universe"] = clean_inf(universe)
+        result["n_empresas_filtradas"] = len(filtradas)
+        result["empresas_filtradas"] = clean_inf(filtradas)
         result["target_industry"] = target_industry
         result["ai_filter_active"] = HAS_AI_FILTER
         result["discovery"] = {
             "yahoo_industry_key": industry_key,
-            "sources": "Yahoo Industry + JSON + Manual Peers + Sector" + (" + AI Filter" if HAS_AI_FILTER else ""),
+            "sources": "Yahoo Industry + Manual Peers" + (" + AI Filter" if HAS_AI_FILTER else ""),
         }
 
         result = clean_inf(result)
@@ -524,25 +555,11 @@ def descargar_excel(request: CompsRequest):
         resultados = discover_comps(empresa, target_industry, industry_key)
         resultados = [r for r in resultados if r.get("Revenue ($mm)") is not None]
 
-        target_upper = empresa.upper() if empresa else ""
-        universe_raw = [
-            r for r in resultados
-            if r.get("Ticker", "").upper() != target_upper
-            and r.get("Revenue ($mm)") and r.get("Revenue ($mm)") > 0
-            and r.get("EV ($mm)") and r.get("EV ($mm)") > 0
-        ]
-
-        rev_map = {}
-        for e in universe_raw:
-            rev_key = round(e.get("Revenue ($mm)", 0) or 0, 0)
-            t = e.get("Ticker", "")
-            if rev_key not in rev_map:
-                rev_map[rev_key] = e
-            elif "." in rev_map[rev_key].get("Ticker", "") and "." not in t:
-                rev_map[rev_key] = e
-        universe = sorted(rev_map.values(), key=lambda x: x.get("Revenue ($mm)", 0) or 0, reverse=True)
-
-        filtrados = clean_and_dedup(resultados, empresa, revenue, request.rango_min_pct / 100, request.rango_max_pct / 100)
+        # Universe = all cleaned candidates (no revenue filter)
+        universe = clean_and_dedup(resultados, empresa)
+        
+        # Filtradas = revenue range applied
+        filtrados = apply_revenue_filter(universe, revenue, request.rango_min_pct / 100, request.rango_max_pct / 100)
 
         if not filtrados:
             raise HTTPException(status_code=500, detail="Sin datos")

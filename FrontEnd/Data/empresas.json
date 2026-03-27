@@ -6,7 +6,7 @@
   { "name": "Meta Platforms", "alias": ["meta", "facebook", "fb"], "ticker": "META", "sector": "Technology" },
   { "name": "Amazon", "alias": ["amazon", "amzn"], "ticker": "AMZN", "sector": "Technology" },
   { "name": "Broadcom", "alias": ["broadcom", "avgo"], "ticker": "AVGO", "sector": "Technology" },
-  { "name": "Tesla", "alias": ["tesla", "tsla"], "ticker": "TSLA", "sector": "Technology" },
+  { "name": "Tesla", "alias": ["tesla", "tsla"], "ticker": "TSLA", "sector": "Consumer" },
   { "name": "Salesforce", "alias": ["salesforce", "crm"], "ticker": "CRM", "sector": "Technology" },
   { "name": "Oracle", "alias": ["oracle", "orcl"], "ticker": "ORCL", "sector": "Technology" },
   { "name": "Adobe", "alias": ["adobe", "adbe"], "ticker": "ADBE", "sector": "Technology" },
