@@ -153,7 +153,7 @@ def generate_deal_intelligence(
         return []
 
     # ─────────────────────────────
-    # Tier 1 (comparables reales)
+    # Tier 1
     # ─────────────────────────────
     tier1 = set()
 
@@ -171,22 +171,15 @@ def generate_deal_intelligence(
     # PROMPT
     # ─────────────────────────────
     def build_prompt(target_name, target_ticker, target_industry):
-        return f"""
+        prompt = f"""
 Return ONLY a valid JSON array of exactly 10-15 objects. 
-Role: Senior M&A Associate at Deloitte.
 Target: {target_name} ({target_ticker})
 Industry: {target_industry}
 
-Task: Identify and classify potential acquirers/comparables into 3 Tiers:
-
-1. TIER_1 (Direct Competitors)
-2. TIER_2 (Strategic/Vertical)
-3. TIER_3 (Financial Sponsors)
-
-Each JSON object MUST follow:
+Each object:
 {{
-  "ticker": "TICKER",
-  "name": "Company Name",
+  "ticker": "...",
+  "name": "...",
   "tier": "TIER_1" | "TIER_2" | "TIER_3",
   "deal_thesis": "...",
   "strategic_rationale": "..."
@@ -194,62 +187,116 @@ Each JSON object MUST follow:
 
 Rules:
 - No markdown
-- No explanations
-- DO NOT include Tier1 companies
-
-Return ONLY JSON array.
+- No explanation
+- JSON only
 """
+        return prompt
 
-    # ─────────────────────────────
-    # PARSER ROBUSTO (CLAVE)
-    # ─────────────────────────────
-    def extract(text):
-        if not text:
-            return []
-
-        clean = text.strip()
-        clean = clean.replace("```json", "").replace("```", "")
-
-        # 🔥 extraer objetos individuales (NO JSON completo)
-        matches = re.findall(r"\{[^{}]*\}", clean)
-
-        results = []
-
-        for m in matches:
-            try:
-                obj = json.loads(m)
-                if isinstance(obj, dict) and obj.get("ticker"):
-                    results.append(obj)
-            except:
-                continue
-
-        print(f"✅ Extracted objects (robust): {len(results)}")
-        return results
-
-    # ─────────────────────────────
-    # EXECUTION (SIN RETRY)
-    # ─────────────────────────────
     prompt = build_prompt(target_name, target_ticker, target_industry)
 
+    print("\n🧾 PROMPT PREVIEW (first 400 chars):")
+    print(prompt[:400])
+    print("—" * 40)
+
+    # ─────────────────────────────
+    # CALL AI
+    # ─────────────────────────────
     raw = _call_ai(prompt)
-    print(f"\n🧠 RAW:\n{raw[:500] if raw else 'EMPTY'}\n")
 
-    data = extract(raw)
+    print("\n🧠 RAW RESPONSE TYPE:", type(raw))
+    print("🧠 RAW LENGTH:", len(raw) if raw else 0)
 
-    if not data:
-        print("❌ AI FAILED")
+    if not raw:
+        print("❌ EMPTY RESPONSE FROM AI")
+        return []
+
+    print("\n🧠 RAW PREVIEW (first 500 chars):")
+    print(raw[:500])
+    print("—" * 40)
+
+    # ─────────────────────────────
+    # CLEAN
+    # ─────────────────────────────
+    clean = raw.strip()
+    clean = clean.replace("```json", "").replace("```", "")
+
+    print("\n🧹 CLEANED PREVIEW:")
+    print(clean[:500])
+    print("—" * 40)
+
+    # ─────────────────────────────
+    # PARSER DEBUG STEP 1 (JSON directo)
+    # ─────────────────────────────
+    try:
+        data = json.loads(clean)
+        print(f"✅ DIRECT JSON PARSE OK: {len(data)} objects")
+    except Exception as e:
+        print("❌ DIRECT JSON PARSE FAILED")
+        print("Error:", str(e))
+        data = None
+
+    # ─────────────────────────────
+    # PARSER DEBUG STEP 2 (regex {})
+    # ─────────────────────────────
+    matches = re.findall(r"\{[^{}]*\}", clean)
+    print(f"\n🔍 REGEX OBJECT MATCHES: {len(matches)}")
+
+    parsed_objects = []
+
+    for i, m in enumerate(matches):
+        try:
+            obj = json.loads(m)
+            parsed_objects.append(obj)
+        except Exception as e:
+            print(f"❌ Failed parsing object {i}: {m[:80]}")
+
+    print(f"✅ REGEX PARSED OBJECTS: {len(parsed_objects)}")
+
+    # ─────────────────────────────
+    # PARSER DEBUG STEP 3 (ticker split)
+    # ─────────────────────────────
+    chunks = re.split(r'"ticker"\s*:\s*"', clean)
+    print(f"\n🧩 TICKER SPLIT CHUNKS: {len(chunks)}")
+
+    rebuilt = []
+
+    for i, chunk in enumerate(chunks[1:]):
+        try:
+            obj_str = '{"ticker":"' + chunk
+            obj_str = obj_str.split("}")[0] + "}"
+            obj = json.loads(obj_str)
+            rebuilt.append(obj)
+        except Exception:
+            continue
+
+    print(f"✅ REBUILT OBJECTS: {len(rebuilt)}")
+
+    # ─────────────────────────────
+    # FINAL SOURCE SELECTION
+    # ─────────────────────────────
+    if isinstance(data, list) and len(data) > 0:
+        final_data = data
+        print("🟢 USING DIRECT JSON")
+    elif len(parsed_objects) > 0:
+        final_data = parsed_objects
+        print("🟡 USING REGEX OBJECTS")
+    elif len(rebuilt) > 0:
+        final_data = rebuilt
+        print("🟠 USING REBUILT OBJECTS")
+    else:
+        print("❌ ALL PARSERS FAILED")
         return []
 
     # ─────────────────────────────
-    # FILTRO FINAL
+    # FILTER
     # ─────────────────────────────
     results = []
 
-    for obj in data:
+    for obj in final_data:
         ticker = str(obj.get("ticker", "")).upper().strip()
-        tier = str(obj.get("tier", "")).strip()
 
         if not ticker:
+            print("⚠️ Skipping object without ticker:", obj)
             continue
 
         if ticker in tier1:
@@ -259,24 +306,29 @@ Return ONLY JSON array.
         results.append({
             "ticker": ticker,
             "name": obj.get("name", ""),
-            "tier": tier,
+            "tier": obj.get("tier", ""),
             "deal_thesis": obj.get("deal_thesis", ""),
             "strategic_rationale": obj.get("strategic_rationale", ""),
         })
 
-    # dedup
+    # ─────────────────────────────
+    # DEDUP
+    # ─────────────────────────────
     seen = set()
-    clean = []
+    clean_final = []
+
     for r in results:
         if r["ticker"] in seen:
+            print(f"⚠️ Duplicate removed: {r['ticker']}")
             continue
         seen.add(r["ticker"])
-        clean.append(r)
+        clean_final.append(r)
 
-    print(f"\n🧠 FINAL ({len(clean)}): {clean}")
+    print(f"\n🧠 FINAL COUNT: {len(clean_final)}")
+    print("🧠 FINAL DATA:", clean_final)
     print("="*60 + "\n")
 
-    return clean
+    return clean_final
 # ─────────────────────────────────────────────
 # API ENDPOINT
 # ─────────────────────────────────────────────
