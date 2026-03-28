@@ -327,7 +327,9 @@ async function runResearch() {
 }
 
 function updateTime() {
-  document.getElementById("current-time").textContent =
+  const el = document.getElementById("current-time");
+  if (!el) return;
+  el.textContent =
     new Date().toLocaleTimeString("es-AR", {
       hour: "2-digit",
       minute: "2-digit",
@@ -467,8 +469,7 @@ window.exportPDF = exportPDF;
 window.exportExcel = exportExcel;
 updateTime();
 setInterval(updateTime, 60000);
-window.researchShowSuggestions = researchShowSuggestions;
 window.researchHandleKey = researchHandleKey;
 window.researchSelectEmpresa = researchSelectEmpresa;
 window.runResearch = runResearch;
-window.showSuggestions = researchShowSuggestions;
+

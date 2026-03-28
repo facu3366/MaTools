@@ -963,7 +963,6 @@ function triggerDealIntel() {
   console.log("Revenue:", d.revenue_target);
   console.log("Comps LIMPIOS:", comps);
 
-  // Reemplazá el final de triggerDealIntel() — después del fetchDealIntel(...)
 fetchDealIntel(
   d.empresa_target || selectedTicker || "",
   selectedTicker || d.empresa_target || "",
@@ -979,3 +978,4 @@ fetchDealIntel(
   }
 }).catch(err => console.error("Deal Intel:", err));
 
+}

@@ -911,4 +911,4 @@ async function exportBcraExcel() {
   }
 }
 
-document.getElementById("bcra-loading-screen").style.display = "none";
+

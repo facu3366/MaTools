@@ -1,6 +1,8 @@
 // reloj superior
 function updateTime() {
-  document.getElementById("current-time").textContent =
+  const el = document.getElementById("current-time");
+  if (!el) return;
+  el.textContent =
     new Date().toLocaleTimeString("es-AR", {
       hour: "2-digit",
       minute: "2-digit",
