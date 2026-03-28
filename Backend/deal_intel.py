@@ -130,6 +130,7 @@ def _call_ai(prompt: str) -> str | None:
 # ─────────────────────────────────────────────
 import json
 import re
+
 def generate_deal_intelligence(
     target_ticker: str,
     target_name: str,
@@ -147,13 +148,16 @@ def generate_deal_intelligence(
 
     print("   🧠 [Deal Intel] Generating Tier 2 & 3 buyers (NO Tier 1)...")
 
+    # ─────────────────────────────
+    # CALL AI
+    # ─────────────────────────────
     def call_ai(prompt):
         try:
             r = model.generate_content(
                 prompt,
                 generation_config={
                     "temperature": 0.2,
-                    "max_output_tokens": 600,  # 🔥 MÁS BAJO
+                    "max_output_tokens": 700,
                     "response_mime_type": "application/json",
                 },
             )
@@ -162,88 +166,123 @@ def generate_deal_intelligence(
             print(f"   ❌ Gemini error: {e}")
             return None
 
+    # ─────────────────────────────
+    # PARSER ROBUSTO
+    # ─────────────────────────────
     def extract(text):
-        import re, json
-
         if not text:
             return []
+
+        text = text.strip()
+
+        if "```" in text:
+            text = text.replace("```json", "").replace("```", "")
 
         matches = re.findall(r"\{.*?\}", text, re.DOTALL)
 
         out = []
         for m in matches:
             try:
-                out.append(json.loads(m))
+                obj = json.loads(m)
+                if isinstance(obj, dict):
+                    out.append(obj)
             except:
                 continue
 
         return out
 
     # ─────────────────────────────
-    # PROMPT PRINCIPAL
+    # PROMPT PRINCIPAL (BALANCEADO)
     # ─────────────────────────────
     prompt_main = f"""
-Return EXACTLY 3 buyers in JSON.
+Return a JSON array with exactly 3 buyers.
 
-Target: {target_name}
+Target: {target_name} ({target_ticker})
+Industry: {target_industry}
 
 Rules:
 - Only TIER_2 or TIER_3
-- Max 12 words per field
+- Each field max 15 words
+- Be specific (no generic text)
 - No explanations
+- No markdown
+- Valid JSON only
 
 Format:
 [
   {{
-    "ticker": "XXX",
+    "ticker": "WMT",
     "tier": "TIER_2",
-    "deal_thesis": "Short sentence.",
-    "strategic_rationale": "Short sentence."
+    "deal_thesis": "LATAM expansion and logistics scale.",
+    "strategic_rationale": "Distribution and cross-sell synergies."
   }}
 ]
 """
 
     raw = call_ai(prompt_main)
+    print(f"\n🧠 RAW:\n{str(raw)[:400]}\n")
+
     data = extract(raw)
 
     # ─────────────────────────────
-    # 🔥 RETRY SI FALLA
+    # RETRY INTELIGENTE
     # ─────────────────────────────
     if not data:
-        print("   ⚠️ retrying with ultra-compact prompt")
+        print("   ⚠️ retrying with compact prompt")
 
         prompt_retry = f"""
-JSON only.
+Return ONLY valid JSON.
 
 3 buyers.
-Very short text.
+Very short fields.
 
 [
-{{"ticker":"WMT","tier":"TIER_2","deal_thesis":"Scale.","strategic_rationale":"Synergies."}}
+{{"ticker":"WMT","tier":"TIER_2","deal_thesis":"Scale LATAM","strategic_rationale":"Logistics synergies"}},
+{{"ticker":"AMZN","tier":"TIER_2","deal_thesis":"Market expansion","strategic_rationale":"Cross-sell growth"}},
+{{"ticker":"KKR","tier":"TIER_3","deal_thesis":"PE buyout","strategic_rationale":"Value creation"}}
 ]
 """
         raw = call_ai(prompt_retry)
+        print(f"\n🧠 RETRY RAW:\n{str(raw)[:400]}\n")
+
         data = extract(raw)
 
     if not data:
-        print("   ⚠️ still no valid output")
+        print("   ⚠️ no valid output after retry")
         return []
 
+    # ─────────────────────────────
+    # NORMALIZACIÓN
+    # ─────────────────────────────
     results = []
 
     for obj in data:
-        ticker = str(obj.get("ticker", "")).upper()
-        tier = obj.get("tier", "TIER_2")
+        ticker = str(obj.get("ticker", "")).upper().strip()
+        tier = str(obj.get("tier", "TIER_2")).strip()
 
-        if not ticker or tier not in ["TIER_2", "TIER_3"]:
+        if not ticker:
+            continue
+
+        if tier not in ["TIER_2", "TIER_3"]:
             continue
 
         results.append({
             "ticker": ticker,
             "tier": tier,
-            "deal_thesis": obj.get("deal_thesis", ""),
-            "strategic_rationale": obj.get("strategic_rationale", ""),
+            "deal_thesis": str(obj.get("deal_thesis", "")).strip(),
+            "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
         })
+
+    # ─────────────────────────────
+    # LIMIT + ORDEN (DEMO READY)
+    # ─────────────────────────────
+    results = results[:3]
+
+    tier_order = {"TIER_2": 0, "TIER_3": 1}
+    results.sort(key=lambda x: tier_order.get(x["tier"], 99))
+
+    if len(results) < 3:
+        print(f"   ⚠️ only {len(results)} buyers generated (expected 3)")
 
     print(f"   🧠 [Deal Intel] Generated {len(results)} buyers")
 
