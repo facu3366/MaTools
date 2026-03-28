@@ -75,28 +75,29 @@ def _build_candidates_text(candidates: list[dict]) -> str:
 # CALL AI WITH MODEL FALLBACK
 # ─────────────────────────────────────────────
 
-def _call_ai(prompt: str) -> Optional[str]:
-    """Try multiple model strings until one works. Returns raw text or None."""
-    import anthropic
+from anthropic import Anthropic
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+client = Anthropic(api_key=ANTHROPIC_KEY)
 
-    for model in MODELS_TO_TRY:
-        try:
-            print(f"   🧠 [AI Filter] Trying model: {model}")
-            response = client.messages.create(
-                model=model,
-                max_tokens=MAX_TOKENS_RESPONSE,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = response.content[0].text.strip()
-            print(f"   🧠 [AI Filter] SUCCESS with {model} — response length: {len(raw)}")
-            return raw
-        except Exception as e:
-            print(f"   ⚠️ [AI Filter] Model {model} failed: {type(e).__name__}: {e}")
-            continue
+def _call_ai(prompt: str) -> str | None:
+    try:
+        response = client.messages.create(
+            model="claude-3-haiku-20240307",
+            max_tokens=1200,
+            temperature=0.3,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
 
-    return None
+        return response.content[0].text
+
+    except Exception as e:
+        print(f"   ⚠️ [AI] Anthropic failed: {e}")
+        return None
 
 
 # ─────────────────────────────────────────────
