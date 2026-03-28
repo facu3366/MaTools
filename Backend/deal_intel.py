@@ -100,8 +100,13 @@ def _build_comps_text(comps: list[dict]) -> str:
 import google.generativeai as genai
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-print("\n📦 MODELOS DISPONIBLES EN TU API KEY:\n")
-
+try:
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    GEMINI_OK = True
+except Exception as e:
+    print(f"⚠️ Gemini init failed: {e}")
+    model = None
+    GEMINI_OK = False
 
 def _call_ai(prompt: str) -> str | None:
     if not model:
