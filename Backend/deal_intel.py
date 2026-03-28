@@ -97,55 +97,33 @@ def _build_comps_text(comps: list[dict]) -> str:
 # CALL AI
 # ─────────────────────────────────────────────
 
-from anthropic import Anthropic
+import google.generativeai as genai
 
-client = Anthropic(api_key=ANTHROPIC_KEY)
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+
+model = genai.GenerativeModel("gemini-1.5-flash")
+
 
 def _call_ai(prompt: str) -> str | None:
-    from anthropic import Anthropic
+    try:
+        print("   🧠 Calling Gemini 1.5 Flash")
 
-    client = Anthropic(api_key=ANTHROPIC_KEY)
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.3,
+                "max_output_tokens": 1200,
+            },
+        )
 
-    # Lista amplia de modelos posibles (viejos + nuevos)
-    models = [
-        # Claude 4.x (si tenés acceso)
-        "claude-4-5-20251001",
-        "claude-opus-4-6",
-        "claude-sonnet-4-5",
-        "claude-haiku-4-5",
+        text = response.text
 
-        # Claude 3.x (los más comunes)
-        "claude-3-opus-20240229",
-        "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307",
+        print("   ✅ SUCCESS with Gemini")
+        return text
 
-        # Alias simplificados (a veces funcionan según cuenta)
-        "claude-3-opus",
-        "claude-3-sonnet",
-        "claude-3-haiku",
-    ]
-
-    for model in models:
-        try:
-            print(f"   🧠 Trying model: {model}")
-
-            response = client.messages.create(
-                model=model,
-                max_tokens=1200,
-                temperature=0.3,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            text = response.content[0].text
-
-            print(f"   ✅ SUCCESS with {model}")
-            return text
-
-        except Exception as e:
-            print(f"   ❌ Failed {model}: {e}")
-
-    print("   ⚠️ ALL MODELS FAILED")
-    return None
+    except Exception as e:
+        print(f"   ❌ Gemini failed: {e}")
+        return None
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
 # ─────────────────────────────────────────────
