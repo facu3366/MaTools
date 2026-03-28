@@ -1001,54 +1001,48 @@ function triggerDealIntel() {
 function renderDealIntelTable(briefs) {
   const container = document.getElementById("result-comps");
 
-  const html = `
-    <div style="margin-top:20px;padding:15px;border-top:1px solid #333;">
-      <h3 style="margin-bottom:10px;">🧠 Deal Intelligence</h3>
+  const rows = briefs
+    .map(
+      (b) => `
+      <tr>
+        <td class="t-ticker">${b.ticker}</td>
+        <td class="t-mult">${b.tier || "—"}</td>
+        <td class="t-name">${b.deal_thesis || "—"}</td>
+        <td class="t-name">${b.risks || "—"}</td>
+      </tr>
+    `,
+    )
+    .join("");
 
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead>
-          <tr style="background:#111;color:#f5f0e8;">
-            <th style="padding:8px;text-align:left;">Ticker</th>
-            <th style="padding:8px;">Tier</th>
-            <th style="padding:8px;">Thesis</th>
-            <th style="padding:8px;">Risk</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${briefs
-            .map(
-              (b) => `
-            <tr style="border-bottom:1px solid #333;">
-              <td style="padding:8px;">${b.ticker}</td>
-              <td style="padding:8px;">${b.tier || "-"}</td>
-              <td style="padding:8px;">${b.deal_thesis || "-"}</td>
-              <td style="padding:8px;">${b.risks || "-"}</td>
-            </tr>
-          `,
-            )
-            .join("")}
-        </tbody>
-      </table>
+  const html = `
+    <div class="result-box" style="margin-top:20px;">
+
+      <div class="result-header">
+        <div class="result-title">
+          🧠 Deal Intelligence
+        </div>
+      </div>
+
+      <div class="result-body">
+        <div class="comps-table-wrapper">
+          <table class="comps-table">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Tier</th>
+                <th>Deal Thesis</th>
+                <th>Risks</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   `;
 
   container.insertAdjacentHTML("beforeend", html);
-}
-function showToast(msg, type = "error") {
-  const el = document.createElement("div");
-
-  el.innerText = msg;
-  el.style.position = "fixed";
-  el.style.bottom = "20px";
-  el.style.right = "20px";
-  el.style.padding = "12px 16px";
-  el.style.background = type === "error" ? "#c0392b" : "#27ae60";
-  el.style.color = "#fff";
-  el.style.borderRadius = "6px";
-  el.style.zIndex = 9999;
-  el.style.fontSize = "13px";
-
-  document.body.appendChild(el);
-
-  setTimeout(() => el.remove(), 3000);
 }

@@ -143,80 +143,104 @@ def generate_deal_intelligence(
     if not comps:
         return []
 
-    print(f"   🧠 [Deal Intel] Generating briefs (1-by-1 mode)...")
+    # 🔥 limitar para no romper quota
+    comps = comps[:5]
 
-    results = []
+    tickers = [c.get("Ticker", "").upper() for c in comps]
 
-    for comp in comps[:5]:  # limitamos igual
-        ticker = comp.get("Ticker", "")
+    print(f"   🧠 [Deal Intel] Generating briefs (BATCH mode) for {len(tickers)} comps...")
 
-        prompt = f"""
-You are an investment banking analyst.
+    prompt = f"""
+Return ONLY valid JSON array.
 
-Analyze if {ticker} could acquire {target_name} ({target_ticker}),
-a {target_industry} company.
-
-Return ONLY JSON:
-
-{{
-  "TICKER MUST BE EXACTLY: {ticker}"
-  "tier": "STRATEGIC_BUYER or FINANCIAL",
-  "deal_thesis": "...",
-  "risks": "...",
-  "expansion_signal": "HIGH/MEDIUM/LOW",
-  "expansion_note": "...",
-  "approach_rec": "PRIORITY or SECONDARY"
-}}
+Format:
+[
+  {{
+    "ticker": "AMZN",
+    "tier": "STRATEGIC_BUYER",
+    "deal_thesis": "...",
+    "risks": "...",
+    "expansion_signal": "HIGH",
+    "expansion_note": "...",
+    "approach_rec": "PRIORITY"
+  }}
+]
 
 Rules:
-- Keep deal_thesis under 30 words
-- Keep risks under 15 words
-- No markdown
-- ticker must equal EXACTLY"
-- Valid JSON only
+- ticker must be EXACTLY one of: {tickers}
+- no extra keys
+- no explanations
+- no markdown
+- valid JSON only
+
+Target:
+{target_name} ({target_ticker})
+Industry: {target_industry}
+
+Companies:
+{tickers}
 """
 
+    try:
+        raw = _call_ai(prompt)
+
+        if not raw:
+            print("   ⚠️ empty AI response")
+            return []
+
+        print(f"\n🧠 RAW:\n{raw[:1000]}\n")
+
+        clean = raw.strip()
+
+        # limpiar fences
+        if "```" in clean:
+            clean = clean.split("```")[1] if "```json" in clean else clean.replace("```", "")
+
+        # intentar parse directo
         try:
-            raw = _call_ai(prompt)
-
-            if not raw:
-                continue
-
-            print(f"\n🧠 RAW {ticker}:\n{raw}\n")
-
-            # limpiar
-            clean = raw.strip()
-
-            if clean.startswith("```"):
-                clean = clean.split("\n", 1)[-1]
-            if clean.endswith("```"):
-                clean = clean.rsplit("```", 1)[0]
-
-            clean = clean.strip()
-
-            # extraer objeto
-            start = clean.find("{")
-            end = clean.rfind("}")
+            data = json.loads(clean)
+        except:
+            # 🔥 fallback: extraer array manual
+            start = clean.find("[")
+            end = clean.rfind("]")
 
             if start != -1 and end != -1:
                 clean = clean[start:end+1]
+                data = json.loads(clean)
+            else:
+                print("   ⚠️ could not recover JSON")
+                return []
 
-            obj = json.loads(clean)
-            obj["ticker"] = ticker
-            results.append(obj)
+        results = []
+        for obj in data:
+            ticker = str(obj.get("ticker", "")).upper()
 
-        except Exception as e:
-            print(f"   ⚠️ {ticker} failed: {e}")
-            continue
+            if ticker not in tickers:
+                continue
 
-    print(f"   🧠 [Deal Intel] Generated {len(results)} briefs")
+            results.append({
+                "ticker": ticker,
+                "tier": obj.get("tier", "STRATEGIC_BUYER"),
+                "deal_thesis": obj.get("deal_thesis", ""),
+                "risks": obj.get("risks", ""),
+                "expansion_signal": obj.get("expansion_signal", "MEDIUM"),
+                "expansion_note": obj.get("expansion_note", ""),
+                "approach_rec": obj.get("approach_rec", "SECONDARY"),
+            })
 
-    # map back
-    brief_map = {b.get("ticker", "").upper(): b for b in results}
+        print(f"   🧠 [Deal Intel] Generated {len(results)} briefs")
+
+    except Exception as e:
+        print(f"   ❌ Deal Intel failed: {e}")
+        results = []
+
+    # 👉 asegurar output completo (aunque falle AI)
+    brief_map = {b["ticker"]: b for b in results}
 
     final = []
     for comp in comps:
         ticker = comp.get("Ticker", "").upper()
+
         b = brief_map.get(ticker, {})
 
         final.append({
@@ -230,7 +254,6 @@ Rules:
         })
 
     return final
-
 # ─────────────────────────────────────────────
 # API ENDPOINT
 # ─────────────────────────────────────────────
