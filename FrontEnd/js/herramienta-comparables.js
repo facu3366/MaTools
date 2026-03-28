@@ -962,20 +962,50 @@ function triggerDealIntel() {
   console.log("Industry:", d.target_industry);
   console.log("Revenue:", d.revenue_target);
   console.log("Comps LIMPIOS:", comps);
+  function renderDealIntelRows() {
+    if (!window.DEAL_INTEL_DATA) return;
 
-fetchDealIntel(
-  d.empresa_target || selectedTicker || "",
-  selectedTicker || d.empresa_target || "",
-  d.target_industry || "",
-  d.revenue_target || 0,
-  comps,
-).then((data) => {                          // ← agregar esto
-  if (data?.briefs) {
-    DEAL_INTEL_DATA = {};
-    data.briefs.forEach(b => { DEAL_INTEL_DATA[b.ticker.toUpperCase()] = b; });
-    window.DEAL_INTEL_DATA = DEAL_INTEL_DATA;
-    renderDealIntelRows();
+    const rows = document.querySelectorAll(".comps-table tbody tr");
+
+    rows.forEach((row) => {
+      const ticker = row.children[0]?.innerText?.trim().toUpperCase();
+      const intel = window.DEAL_INTEL_DATA[ticker];
+
+      if (!intel) return;
+
+      let cell = row.querySelector(".deal-intel-cell");
+
+      if (!cell) {
+        cell = document.createElement("td");
+        cell.className = "deal-intel-cell";
+        row.appendChild(cell);
+      }
+
+      cell.innerHTML = `
+      <div style="font-size:11px;line-height:1.3">
+        <strong>${intel.tier}</strong><br>
+        ${intel.deal_thesis || ""}
+      </div>
+    `;
+    });
   }
-}).catch(err => console.error("Deal Intel:", err));
-
+  fetchDealIntel(
+    d.empresa_target || selectedTicker || "",
+    selectedTicker || d.empresa_target || "",
+    d.target_industry || "",
+    d.revenue_target || 0,
+    comps,
+  )
+    .then((data) => {
+      // ← agregar esto
+      if (data?.briefs) {
+        DEAL_INTEL_DATA = {};
+        data.briefs.forEach((b) => {
+          DEAL_INTEL_DATA[b.ticker.toUpperCase()] = b;
+        });
+        window.DEAL_INTEL_DATA = DEAL_INTEL_DATA;
+        renderDealIntelRows();
+      }
+    })
+    .catch((err) => console.error("Deal Intel:", err));
 }
