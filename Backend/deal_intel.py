@@ -98,14 +98,14 @@ def _build_comps_text(comps: list[dict]) -> str:
 # ─────────────────────────────────────────────
 
 import google.generativeai as genai
+
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 print("\n📦 MODELOS DISPONIBLES EN TU API KEY:\n")
 
 for m in genai.list_models():
     print(m.name)
 
 print("\n✅ FIN LISTA MODELOS\n")
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-
 try:
     model = genai.GenerativeModel("gemini-2.5-flash")
     GEMINI_OK = True
