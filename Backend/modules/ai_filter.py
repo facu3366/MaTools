@@ -18,12 +18,6 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
 # CONFIG
 # ─────────────────────────────────────────────
 
-MODELS_TO_TRY = [
-    "claude-sonnet-4-20250514",
-    "claude-haiku-4-5-20251001",
-    "claude-3-5-haiku-20241022",
-    "claude-3-haiku-20240307",
-]
 
 MAX_CANDIDATES_TO_SEND = 40
 MAX_TOKENS_RESPONSE = 1500

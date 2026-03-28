@@ -97,30 +97,29 @@ def _build_comps_text(comps: list[dict]) -> str:
 # CALL AI
 # ─────────────────────────────────────────────
 
-MODELS_TO_TRY = [
-    "claude-sonnet-4-20250514",
-    "claude-haiku-4-5-20251001",
-]
+from anthropic import Anthropic
 
-def _call_ai(prompt: str) -> Optional[str]:
-    import anthropic
-    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+client = Anthropic(api_key=ANTHROPIC_KEY)
 
-    for model in MODELS_TO_TRY:
-        try:
-            print(f"   🧠 [Deal Intel] Trying model: {model}")
-            response = client.messages.create(
-                model=model,
-                max_tokens=4000,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = response.content[0].text.strip()
-            print(f"   🧠 [Deal Intel] SUCCESS with {model} — {len(raw)} chars")
-            return raw
-        except Exception as e:
-            print(f"   ⚠️ [Deal Intel] Model {model} failed: {type(e).__name__}: {e}")
-            continue
-    return None
+def _call_ai(prompt: str) -> str | None:
+    try:
+        response = client.messages.create(
+            model="claude-3-haiku-20240307",
+            max_tokens=1200,
+            temperature=0.3,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
+
+        return response.content[0].text
+
+    except Exception as e:
+        print(f"   ⚠️ [AI] Anthropic failed: {e}")
+        return None
 
 
 # ─────────────────────────────────────────────
