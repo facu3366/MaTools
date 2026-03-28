@@ -107,7 +107,7 @@ print("\n✅ FIN LISTA MODELOS\n")
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 try:
-    model = genai.GenerativeModel("gemini-1.5-flash-latest")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     GEMINI_OK = True
 except Exception as e:
     print(f"⚠️ Gemini init failed: {e}")
