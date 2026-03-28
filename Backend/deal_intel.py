@@ -102,25 +102,30 @@ from anthropic import Anthropic
 client = Anthropic(api_key=ANTHROPIC_KEY)
 
 def _call_ai(prompt: str) -> str | None:
-    try:
-        response = client.messages.create(
-            model="claude-4-5-20251001",
-            max_tokens=1200,
-            temperature=0.3,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
+    models = [
+        "claude-4-5-20251001",  # el que querés
+        "claude-3-sonnet",      # fallback sólido
+        "claude-3-haiku"        # fallback barato
+    ]
 
-        return response.content[0].text
+    for model in models:
+        try:
+            print(f"   🧠 Trying model: {model}")
 
-    except Exception as e:
-        print(f"   ⚠️ [AI] Anthropic failed: {e}")
-        return None
+            response = client.messages.create(
+                model=model,
+                max_tokens=1200,
+                temperature=0.3,
+                messages=[{"role": "user", "content": prompt}]
+            )
 
+            print(f"   ✅ Success with {model}")
+            return response.content[0].text
+
+        except Exception as e:
+            print(f"   ⚠️ Failed {model}: {e}")
+
+    return None
 
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
