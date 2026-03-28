@@ -242,39 +242,43 @@ def generate_deal_intelligence(
     # ─────────────────────────────
     # PROMPT BASE (USADO EN MAIN Y RETRY)
     # ─────────────────────────────
-    def build_prompt():
-        return f"""
-Return ONLY valid JSON.
+def build_prompt():
+    comps_text = _build_comps_text(comps)
 
-You MUST return exactly 3 companies.
-
-Each object MUST follow EXACTLY this structure:
-{{"ticker":"XXX","tier":"TIER_2","deal_thesis":"text","strategic_rationale":"text"}}
-
+    return f"""
 Target: {target_name} ({target_ticker})
 Industry: {target_industry}
 
-DO NOT include these companies:
+Universe (reference only, do NOT duplicate these exact companies):
+{comps_text}
+
+Excluded tickers (STRICTLY FORBIDDEN):
 {tier1_text}
 
+Task: Identify and classify potential acquirers/comparables into 2 Tiers:
+
+2. TIER_2 (Strategic/Vertical): Generalists, companies with shared business units, or those that could generate economies of scale/synergies.
+3. TIER_3 (Financial Sponsors): Private Equity firms or major Institutional Investors interested in this sector.
+
+Each JSON object MUST follow this structure:
+{{
+  "ticker": "TICKER",
+  "name": "Company Name",
+  "tier": "TIER_2" | "TIER_3",
+  "deal_thesis": "1-2 sentences explaining the strategic fit (20-40 words).",
+  "strategic_rationale": "Detailed explanation of synergies or investment thesis (30-60 words)."
+}}
+
 Rules:
-- NEVER include target
-- NEVER include excluded tickers
-- Only TIER_2 or TIER_3 (TIER_1 is forbidden)
-- At least 2 must be TIER_2
-- Avoid dominant global competitors
-- Focus on realistic acquirers
+- Strictly NO prose or markdown.
+- Must include at least 3 companies TOTAL.
+- Ensure professional tone.
+- Focus on LATAM relevance if applicable.
+- DO NOT include any ticker from excluded list.
+- Avoid obvious direct competitors.
 
-- deal_thesis: 1–2 sentences (20–40 words)
-- strategic_rationale: 30–60 words
-
-- No explanations
-- No markdown
-- No extra text
-
-Return ONLY JSON array.
+Return ONLY the JSON array.
 """
-
     # ─────────────────────────────
     # MAIN CALL
     # ─────────────────────────────
@@ -380,3 +384,5 @@ def get_deal_intelligence(request: DealIntelRequest):
         "n_briefs": len(briefs),
         "briefs": briefs,
     }
+
+
