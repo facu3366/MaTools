@@ -130,7 +130,6 @@ def _call_ai(prompt: str) -> str | None:
 # ─────────────────────────────────────────────
 import json
 import re
-
 def generate_deal_intelligence(
     target_ticker: str,
     target_name: str,
@@ -148,145 +147,105 @@ def generate_deal_intelligence(
 
     print("   🧠 [Deal Intel] Generating Tier 2 & 3 buyers (NO Tier 1)...")
 
+    def call_ai(prompt):
+        try:
+            r = model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": 0.2,
+                    "max_output_tokens": 600,  # 🔥 MÁS BAJO
+                    "response_mime_type": "application/json",
+                },
+            )
+            return r.text if r else None
+        except Exception as e:
+            print(f"   ❌ Gemini error: {e}")
+            return None
+
+    def extract(text):
+        import re, json
+
+        if not text:
+            return []
+
+        matches = re.findall(r"\{.*?\}", text, re.DOTALL)
+
+        out = []
+        for m in matches:
+            try:
+                out.append(json.loads(m))
+            except:
+                continue
+
+        return out
+
     # ─────────────────────────────
-    # CONTEXTO (NO OUTPUT)
+    # PROMPT PRINCIPAL
     # ─────────────────────────────
-    context_companies = []
+    prompt_main = f"""
+Return EXACTLY 3 buyers in JSON.
 
-    for c in comps[:10]:
-        ticker = c.get("Ticker", "") or c.get("ticker", "")
-        name = c.get("Empresa", ticker) or c.get("company", ticker)
-        industry = c.get("Industria", "N/A") or c.get("industry", "N/A")
-        rev = c.get("Revenue ($mm)", 0) or c.get("revenue", 0)
+Target: {target_name}
 
-        context_companies.append(
-            f"- {ticker}: {name} | {industry} | Revenue ${rev}M"
-        )
+Rules:
+- Only TIER_2 or TIER_3
+- Max 12 words per field
+- No explanations
 
-    comps_text = "\n".join(context_companies)
-
-    # ─────────────────────────────
-    # PROMPT OPTIMIZADO
-    # ─────────────────────────────
-    prompt = f"""
-You are a senior M&A consultant at Deloitte working on a live sell-side mandate.
-
-TARGET:
-{target_name} ({target_ticker})
-Industry: {target_industry}
-Revenue: ${target_revenue}M
-
-IMPORTANT:
-- Tier 1 competitors are already identified externally.
-- DO NOT return Tier 1 companies.
-
-TASK:
-Identify potential buyers:
-
-- TIER_2: Strategic buyers (adjacency, synergies, scale, cross-sell, geography)
-- TIER_3: Financial sponsors (Private Equity, buyout, roll-up)
-
-CONTEXT:
-{comps_text}
-
-OUTPUT RULES:
-- Return MAX 4 companies
-- Keep text concise
-- No markdown
-- Valid JSON only
-
-FORMAT:
+Format:
 [
   {{
-    "ticker": "ABC",
+    "ticker": "XXX",
     "tier": "TIER_2",
-    "deal_thesis": "Short explanation.",
-    "strategic_rationale": "Short value creation logic."
+    "deal_thesis": "Short sentence.",
+    "strategic_rationale": "Short sentence."
   }}
 ]
 """
 
-    # ─────────────────────────────
-    # CALL AI
-    # ─────────────────────────────
-    try:
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": 0.2,
-                "max_output_tokens": 1000,
-                "response_mime_type": "application/json",
-            },
-        )
-
-        raw = response.text if response else None
-
-    except Exception as e:
-        print(f"   ❌ Gemini call failed: {e}")
-        return []
-
-    if not raw:
-        print("   ⚠️ empty AI response")
-        return []
-
-    print(f"\n🧠 RAW:\n{raw[:500]}\n")
+    raw = call_ai(prompt_main)
+    data = extract(raw)
 
     # ─────────────────────────────
-    # PARSER ROBUSTO (ANTI-TRUNCADO)
+    # 🔥 RETRY SI FALLA
     # ─────────────────────────────
-    def _safe_extract_objects(text: str):
-        clean = text.strip()
+    if not data:
+        print("   ⚠️ retrying with ultra-compact prompt")
 
-        if "```" in clean:
-            clean = clean.replace("```json", "").replace("```", "").strip()
+        prompt_retry = f"""
+JSON only.
 
-        start = clean.find("[")
-        if start != -1:
-            clean = clean[start:]
+3 buyers.
+Very short text.
 
-        # extraer objetos JSON válidos
-        matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
-
-        objs = []
-        for m in matches:
-            try:
-                parsed = json.loads(m)
-                if isinstance(parsed, dict):
-                    objs.append(parsed)
-            except:
-                continue
-
-        return objs
-
-    data = _safe_extract_objects(raw)
+[
+{{"ticker":"WMT","tier":"TIER_2","deal_thesis":"Scale.","strategic_rationale":"Synergies."}}
+]
+"""
+        raw = call_ai(prompt_retry)
+        data = extract(raw)
 
     if not data:
-        print("   ⚠️ no valid JSON objects extracted")
+        print("   ⚠️ still no valid output")
         return []
 
-    # ─────────────────────────────
-    # NORMALIZACIÓN FINAL
-    # ─────────────────────────────
     results = []
 
     for obj in data:
-        ticker = str(obj.get("ticker", "")).upper().strip()
-        tier = str(obj.get("tier", "TIER_2")).strip()
+        ticker = str(obj.get("ticker", "")).upper()
+        tier = obj.get("tier", "TIER_2")
 
-        if not ticker:
-            continue
-
-        if tier not in ["TIER_2", "TIER_3"]:
+        if not ticker or tier not in ["TIER_2", "TIER_3"]:
             continue
 
         results.append({
             "ticker": ticker,
             "tier": tier,
-            "deal_thesis": str(obj.get("deal_thesis", "")).strip(),
-            "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
+            "deal_thesis": obj.get("deal_thesis", ""),
+            "strategic_rationale": obj.get("strategic_rationale", ""),
         })
 
-    print(f"   🧠 [Deal Intel] Generated {len(results)} Tier 2/3 buyers")
+    print(f"   🧠 [Deal Intel] Generated {len(results)} buyers")
 
     return results
 # ─────────────────────────────────────────────
