@@ -134,7 +134,6 @@ def _call_ai(prompt: str) -> str | None:
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
 # ─────────────────────────────────────────────
-
 def generate_deal_intelligence(
     target_ticker: str,
     target_name: str,
@@ -142,11 +141,6 @@ def generate_deal_intelligence(
     target_revenue: float,
     comps: list[dict],
 ) -> list[dict]:
-    """
-    Generate deal intelligence briefs for each comp.
-    Returns list of dicts with tier, deal_thesis, risks, etc.
-    Never raises — returns empty list on failure.
-    """
 
     if not model:
         print("   ⚠️ [Deal Intel] Gemini not available")
@@ -172,16 +166,22 @@ def generate_deal_intelligence(
         elapsed = time.time() - t0
 
         if raw_text is None:
-            print(f"   ⚠️ [Deal Intel] All models failed")
+            print("   ⚠️ [Deal Intel] All models failed")
             return []
 
         # ─────────────────────────────
-        # CLEAN + ROBUST PARSE
+        # LOG RAW OUTPUT (clave)
+        # ─────────────────────────────
+        print("\n🧠 RAW AI RESPONSE (first 1000 chars):\n")
+        print(raw_text[:1000])
+        print("\n🧠 END RAW\n")
+
+        # ─────────────────────────────
+        # CLEAN
         # ─────────────────────────────
 
         clean = raw_text.strip()
 
-        # remover markdown
         if clean.startswith("```"):
             clean = clean.split("\n", 1)[-1]
         if clean.endswith("```"):
@@ -189,39 +189,46 @@ def generate_deal_intelligence(
 
         clean = clean.strip()
 
-        # extraer JSON array
         start_idx = clean.find("[")
         end_idx = clean.rfind("]")
 
         if start_idx != -1 and end_idx != -1:
             clean = clean[start_idx:end_idx + 1]
 
-        # limpiar caracteres problemáticos
         clean = clean.replace("\n", " ").replace("\r", " ")
 
-        # intento 1
+        # ─────────────────────────────
+        # PARSE
+        # ─────────────────────────────
+
         try:
             briefs = json.loads(clean)
 
         except json.JSONDecodeError:
-            print("   ⚠️ retry JSON parse...")
+            print("   ⚠️ retry JSON parse (regex recovery)...")
 
-            # fixes comunes de LLM
-            clean = clean.replace("'", '"').replace('""', '"')
+            import re
 
-            try:
-                briefs = json.loads(clean)
-            except Exception as e:
-                print(f"   ⚠️ second parse failed: {e}")
+            matches = re.findall(r"\{.*?\}", clean)
+
+            briefs = []
+            for m in matches:
+                try:
+                    obj = json.loads(m)
+                    briefs.append(obj)
+                except:
+                    continue
+
+            if not briefs:
+                print("   ⚠️ no valid JSON objects recovered")
                 return []
 
         # ─────────────────────────────
 
         if not isinstance(briefs, list):
-            print(f"   ⚠️ [Deal Intel] Response is not a list")
+            print("   ⚠️ [Deal Intel] Response is not a list")
             return []
 
-        # Map briefs back to tickers
         brief_map = {b.get("ticker", "").upper(): b for b in briefs}
 
         result = []
