@@ -79,8 +79,13 @@ import google.generativeai as genai
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel("gemini-1.5-flash-latest")
-def _call_ai(prompt: str) -> str | None:
+try:
+    model = genai.GenerativeModel("gemini-1.5-flash-latest")
+    GEMINI_OK = True
+except Exception as e:
+    print(f"⚠️ Gemini init failed: {e}")
+    model = None
+    GEMINI_OK = Falsedef _call_ai(prompt: str) -> str | None:
     try:
         print("   🧠 Calling Gemini 1.5 Flash")
 
