@@ -154,7 +154,7 @@ def generate_deal_intelligence(
         return []
 
     # ─────────────────────────────
-    # EXCLUSION LIST (Tier 1 + Target)
+    # Tier 1 (para filtrar después)
     # ─────────────────────────────
     tier1 = set()
 
@@ -166,54 +166,40 @@ def generate_deal_intelligence(
         if t:
             tier1.add(t)
 
-    tier1_list = list(tier1)
-    tier1_text = ", ".join(tier1_list[:25])
-
-    print(f"🚫 Tier1 exclusion ({len(tier1_list)}): {tier1_text}")
+    print(f"🚫 Tier1 detected ({len(tier1)}): {list(tier1)}")
 
     # ─────────────────────────────
-    # PROMPT
+    # TU PROMPT (SIN MODIFICAR)
     # ─────────────────────────────
-    def build_prompt():
+    def build_prompt(target_name, target_ticker, target_industry, sector_context=None):
         return f"""
-Return ONLY a valid JSON array of 10-15 objects.
-
+Return ONLY a valid JSON array of exactly 10-15 objects. 
 Role: Senior M&A Associate at Deloitte.
-
 Target: {target_name} ({target_ticker})
 Industry: {target_industry}
 
-Known Tier 1 (DO NOT INCLUDE):
-{tier1_text}
+Task: Identify and classify potential acquirers/comparables into 3 Tiers:
 
-Task:
-Identify and classify additional relevant companies into:
+1. TIER_1 (Direct Competitors): Companies with the same core business and overlapping market share.
+2. TIER_2 (Strategic/Vertical): Generalists, companies with shared business units, or those that could generate economies of scale/synergies (e.g., supply chain integration, in-house production).
+3. TIER_3 (Financial Sponsors): Private Equity firms or major Institutional Investors interested in this sector.
 
-TIER_2 (Strategic / Vertical):
-Non-direct competitors with synergies or expansion logic.
-
-TIER_3 (Financial Sponsors):
-Private equity or institutional investors.
-
-Each JSON object MUST follow:
+Each JSON object MUST follow this structure:
 {{
   "ticker": "TICKER",
   "name": "Company Name",
-  "tier": "TIER_2" | "TIER_3",
-  "deal_thesis": "1-2 sentences (20-40 words).",
-  "strategic_rationale": "Detailed rationale (30-60 words)."
+  "tier": "TIER_1" | "TIER_2" | "TIER_3",
+  "deal_thesis": "1-2 sentences explaining the strategic fit (20-40 words).",
+  "strategic_rationale": "Detailed explanation of synergies or investment thesis (30-60 words)."
 }}
 
 Rules:
-- DO NOT include Tier 1
-- DO NOT include target
-- DO NOT output TIER_1
-- Include both TIER_2 and TIER_3
-- Minimum 3 per tier
-- No markdown
-- No explanations
+- Strictly NO prose or markdown.
+- Must include at least 3 companies for EACH Tier.
+- Ensure 'deal_thesis' and 'strategic_rationale' sound professional and data-driven.
+- Focus on LATAM relevance if applicable.
 
-Return ONLY JSON.
+Return ONLY the JSON array.
 """
 
     # ─────────────────────────────
@@ -227,7 +213,7 @@ Return ONLY JSON.
                 prompt,
                 generation_config={
                     "temperature": 0.35,
-                    "max_output_tokens": 900,
+                    "max_output_tokens": 1000,
                     "response_mime_type": "application/json",
                 },
             )
@@ -243,7 +229,7 @@ Return ONLY JSON.
             return None
 
     # ─────────────────────────────
-    # PARSER
+    # PARSER ROBUSTO
     # ─────────────────────────────
     def extract(text):
         if not text:
@@ -256,20 +242,20 @@ Return ONLY JSON.
 
         matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
 
-        out = []
+        objs = []
         for m in matches:
             try:
-                out.append(json.loads(m))
+                objs.append(json.loads(m))
             except:
                 continue
 
-        print(f"✅ Parsed: {len(out)} objects")
-        return out
+        print(f"✅ Parsed objects: {len(objs)}")
+        return objs
 
     # ─────────────────────────────
     # EXECUTION
     # ─────────────────────────────
-    prompt = build_prompt()
+    prompt = build_prompt(target_name, target_ticker, target_industry)
 
     raw = call_ai(prompt, "MAIN")
     data = extract(raw)
@@ -284,7 +270,7 @@ Return ONLY JSON.
         return []
 
     # ─────────────────────────────
-    # NORMALIZATION (SIN HARD FILTER AGRESIVO)
+    # FILTRO FINAL (SIN TOCAR PROMPT)
     # ─────────────────────────────
     results = []
 
@@ -295,11 +281,9 @@ Return ONLY JSON.
         if not ticker:
             continue
 
+        # ❗ clave: filtramos Tier 1 acá (no en prompt)
         if ticker in tier1:
-            print(f"❌ Removed Tier1: {ticker}")
-            continue
-
-        if tier not in ["TIER_2", "TIER_3"]:
+            print(f"❌ Removed Tier1 duplicate: {ticker}")
             continue
 
         results.append({
