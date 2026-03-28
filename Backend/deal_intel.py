@@ -107,7 +107,7 @@ def _call_ai(prompt: str) -> str | None:
         "claude-3-sonnet",      # fallback sólido
         "claude-3-haiku"        # fallback barato
     ]
-
+    print("🔑 KEY:", ANTHROPIC_KEY[:15] if ANTHROPIC_KEY else "NONE")
     for model in models:
         try:
             print(f"   🧠 Trying model: {model}")
