@@ -80,10 +80,27 @@ from anthropic import Anthropic
 client = Anthropic(api_key=ANTHROPIC_KEY)
 
 def _call_ai(prompt: str) -> str | None:
+    from anthropic import Anthropic
+
+    client = Anthropic(api_key=ANTHROPIC_KEY)
+
+    # Lista amplia de modelos posibles (viejos + nuevos)
     models = [
-        "claude-4-5-20251001",  # el que querés
-        "claude-3-sonnet",      # fallback sólido
-        "claude-3-haiku"        # fallback barato
+        # Claude 4.x (si tenés acceso)
+        "claude-4-5-20251001",
+        "claude-opus-4-6",
+        "claude-sonnet-4-5",
+        "claude-haiku-4-5",
+
+        # Claude 3.x (los más comunes)
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307",
+
+        # Alias simplificados (a veces funcionan según cuenta)
+        "claude-3-opus",
+        "claude-3-sonnet",
+        "claude-3-haiku",
     ]
 
     for model in models:
@@ -97,14 +114,16 @@ def _call_ai(prompt: str) -> str | None:
                 messages=[{"role": "user", "content": prompt}]
             )
 
-            print(f"   ✅ Success with {model}")
-            return response.content[0].text
+            text = response.content[0].text
+
+            print(f"   ✅ SUCCESS with {model}")
+            return text
 
         except Exception as e:
-            print(f"   ⚠️ Failed {model}: {e}")
+            print(f"   ❌ Failed {model}: {e}")
 
+    print("   ⚠️ ALL MODELS FAILED")
     return None
-
 # ─────────────────────────────────────────────
 # MAIN FILTER FUNCTION
 # ─────────────────────────────────────────────
