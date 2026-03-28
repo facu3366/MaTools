@@ -54,18 +54,17 @@ async function fetchDealIntel(nombre, ticker, industria, revenue, comparables) {
     });
 
     const body = {
-      nombre: nombre,
-      ticker: ticker,
-      industria: industria,
-      revenue: revenue,
-      comparables: compsClean,
+      target_name: nombre,
+      target_ticker: ticker,
+      target_industry: industria,
+      target_revenue: revenue,
+      comps: compsClean,
     };
-
     // debug clave
     console.log("📤 BODY QUE SE ENVÍA:");
     console.log(JSON.stringify(body, null, 2));
 
-    const res = await fetch(`${API}/deal-intel`, {
+    const res = await fetch(`${API}/comps/deal-intel`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
