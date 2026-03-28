@@ -1001,25 +1001,29 @@ function triggerDealIntel() {
 function renderDealIntelTable(briefs) {
   const container = document.getElementById("result-comps");
 
-  const rows = briefs
-    .map(
-      (b) => `
-      <tr>
-        <td class="t-ticker">${b.ticker}</td>
-        <td class="t-mult">${b.tier || "—"}</td>
-        <td class="t-name">${b.deal_thesis || "—"}</td>
-        <td class="t-name">${b.risks || "—"}</td>
-      </tr>
-    `,
-    )
-    .join("");
+  // separar tiers
+  const tier2 = briefs.filter((b) => b.tier === "TIER_2");
+  const tier3 = briefs.filter((b) => b.tier === "TIER_3");
+
+  const renderRows = (list) =>
+    list
+      .map(
+        (b) => `
+        <tr>
+          <td class="t-ticker">${b.ticker}</td>
+          <td class="t-name">${b.deal_thesis || "—"}</td>
+          <td class="t-name">${b.strategic_rationale || "—"}</td>
+        </tr>
+      `,
+      )
+      .join("");
 
   const html = `
     <div class="result-box" style="margin-top:20px;">
 
       <div class="result-header">
         <div class="result-title">
-          🧠 Deal Intelligence
+          🧠 Strategic Buyers (Tier 2)
         </div>
       </div>
 
@@ -1029,13 +1033,35 @@ function renderDealIntelTable(briefs) {
             <thead>
               <tr>
                 <th>Ticker</th>
-                <th>Tier</th>
                 <th>Deal Thesis</th>
-                <th>Risks</th>
+                <th>Strategic Rationale</th>
               </tr>
             </thead>
             <tbody>
-              ${rows}
+              ${renderRows(tier2)}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="result-header" style="margin-top:20px;">
+        <div class="result-title">
+          💰 Financial Sponsors (Tier 3)
+        </div>
+      </div>
+
+      <div class="result-body">
+        <div class="comps-table-wrapper">
+          <table class="comps-table">
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Deal Thesis</th>
+                <th>Strategic Rationale</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${renderRows(tier3)}
             </tbody>
           </table>
         </div>

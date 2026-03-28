@@ -136,6 +136,9 @@ def generate_deal_intelligence(
     comps: list[dict],
 ) -> list[dict]:
 
+    # ─────────────────────────────
+    # VALIDACIONES
+    # ─────────────────────────────
     if not model:
         print("   ⚠️ [Deal Intel] Gemini not available")
         return []
@@ -143,40 +146,74 @@ def generate_deal_intelligence(
     if not comps:
         return []
 
-    comps = comps[:5]
-    tickers = [c.get("Ticker", "").upper() for c in comps]
+    print(f"   🧠 [Deal Intel] Generating Tier 2 & 3 buyers (NO Tier 1)...")
 
-    print(f"   🧠 [Deal Intel] Generating briefs (BATCH mode) for {len(tickers)} comps...")
+    # ─────────────────────────────
+    # CONTEXTO (NO OUTPUT)
+    # ─────────────────────────────
+    context_companies = []
 
+    for c in comps[:10]:
+        ticker = c.get("Ticker", "")
+        name = c.get("Empresa", ticker)
+        industry = c.get("Industria", "N/A")
+        rev = c.get("Revenue ($mm)", 0)
+
+        context_companies.append(
+            f"- {ticker}: {name} | {industry} | Revenue ${rev}M"
+        )
+
+    comps_text = "\n".join(context_companies)
+
+    # ─────────────────────────────
+    # PROMPT (CLAVE)
+    # ─────────────────────────────
     prompt = f"""
-Return ONLY valid JSON array.
+You are a senior M&A consultant at Deloitte working on a live sell-side mandate.
 
-Format:
-[
-  {{
-    "ticker": "AMZN",
-    "tier": "STRATEGIC_BUYER",
-    "deal_thesis": "...",
-    "risks": "...",
-    "expansion_signal": "HIGH",
-    "expansion_note": "...",
-    "approach_rec": "PRIORITY"
-  }}
-]
-
-Rules:
-- ticker must be EXACTLY one of: {tickers}
-- no extra keys
-- no explanations
-- no markdown
-- valid JSON only
-
-Target:
+TARGET:
 {target_name} ({target_ticker})
 Industry: {target_industry}
+Revenue: ${target_revenue}M
 
-Companies:
-{tickers}
+IMPORTANT:
+- Tier 1 competitors are ALREADY identified externally.
+- DO NOT return Tier 1 companies.
+- Your job is to identify NEW potential buyers.
+
+TIER DEFINITIONS:
+- TIER_2: Strategic buyers (synergies, adjacency, scale, cross-sell, geography, technology, distribution)
+- TIER_3: Financial sponsors (Private Equity, buyout funds, roll-ups)
+
+CONTEXT (existing comps):
+{comps_text}
+
+TASK:
+Return a JSON array of potential buyers (NOT limited to comps).
+
+Each object must contain:
+- "ticker"
+- "tier": "TIER_2" or "TIER_3"
+- "deal_thesis": exactly 2 lines explaining why they would buy
+- "strategic_rationale": 1 short paragraph explaining value creation
+
+RULES:
+- DO NOT include Tier 1 competitors
+- You can include companies NOT in the list
+- Be commercially sharp and realistic
+- Avoid generic phrases
+- No markdown
+- Return ONLY valid JSON
+
+Example:
+[
+  {{
+    "ticker": "XYZ",
+    "tier": "TIER_2",
+    "deal_thesis": "Expansion into LATAM with strong commercial overlap. Improves scale and logistics density.",
+    "strategic_rationale": "The deal would unlock synergies in distribution, procurement and customer acquisition, while improving operating leverage."
+  }}
+]
 """
 
     results = []
@@ -186,63 +223,42 @@ Companies:
 
         if not raw:
             print("   ⚠️ empty AI response")
-            raise Exception("empty")
+            return []
 
         print(f"\n🧠 RAW:\n{raw[:500]}\n")
 
         clean = raw.strip()
 
-        # 🔥 QUICK VALIDATION (clave)
-        if "[" not in clean or "]" not in clean:
-            print("   ⚠️ truncated response detected")
-            raise Exception("truncated")
-
-        # limpiar markdown
+        # ─────────────────────────────
+        # LIMPIEZA
+        # ─────────────────────────────
         if "```" in clean:
             clean = clean.replace("```json", "").replace("```", "").strip()
 
-        # cortar exactamente array
         start = clean.find("[")
         end = clean.rfind("]")
 
-        clean = clean[start:end+1]
+        if start == -1 or end == -1:
+            print("   ⚠️ invalid JSON format")
+            return []
+
+        clean = clean[start:end + 1]
 
         data = json.loads(clean)
 
         for obj in data:
-            ticker = str(obj.get("ticker", "")).upper()
-
-            if ticker not in tickers:
-                continue
-
             results.append({
-                "ticker": ticker,
-                "tier": obj.get("tier", "STRATEGIC_BUYER"),
+                "ticker": str(obj.get("ticker", "N/A")).upper(),
+                "tier": obj.get("tier", "TIER_2"),
                 "deal_thesis": obj.get("deal_thesis", ""),
-                "risks": obj.get("risks", ""),
-                "expansion_signal": obj.get("expansion_signal", "MEDIUM"),
-                "expansion_note": obj.get("expansion_note", ""),
-                "approach_rec": obj.get("approach_rec", "SECONDARY"),
+                "strategic_rationale": obj.get("strategic_rationale", ""),
             })
 
     except Exception as e:
-        print(f"   ⚠️ Deal Intel fallback triggered: {e}")
+        print(f"   ❌ Deal Intel error: {e}")
+        return []
 
-        # 🔥 FALLBACK INTELIGENTE
-        results = [
-            {
-                "ticker": t,
-                "tier": "STRATEGIC_BUYER",
-                "deal_thesis": "",
-                "risks": "",
-                "expansion_signal": "MEDIUM",
-                "expansion_note": "",
-                "approach_rec": "SECONDARY",
-            }
-            for t in tickers
-        ]
-
-    print(f"   🧠 [Deal Intel] Generated {len(results)} briefs")
+    print(f"   🧠 [Deal Intel] Generated {len(results)} Tier 2/3 buyers")
 
     return results
 # ─────────────────────────────────────────────
