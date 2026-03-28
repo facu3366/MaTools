@@ -114,9 +114,11 @@ except Exception as e:
     model = None
     GEMINI_OK = False
 def _call_ai(prompt: str) -> str | None:
-    try:
-        print("   🧠 Calling Gemini 1.5 Flash")
+    if not model:
+        print("⚠️ Gemini not available")
+        return None
 
+    try:
         response = model.generate_content(
             prompt,
             generation_config={
@@ -124,14 +126,10 @@ def _call_ai(prompt: str) -> str | None:
                 "max_output_tokens": 1200,
             },
         )
-
-        text = response.text
-
-        print("   ✅ SUCCESS with Gemini")
-        return text
+        return response.text
 
     except Exception as e:
-        print(f"   ❌ Gemini failed: {e}")
+        print(f"❌ Gemini failed: {e}")
         return None
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
