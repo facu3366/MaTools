@@ -989,23 +989,106 @@ function triggerDealIntel() {
     `;
     });
   }
-  fetchDealIntel(
-    d.empresa_target || selectedTicker || "",
-    selectedTicker || d.empresa_target || "",
-    d.target_industry || "",
-    d.revenue_target || 0,
-    comps,
-  )
-    .then((data) => {
-      // ← agregar esto
-      if (data?.briefs) {
-        DEAL_INTEL_DATA = {};
-        data.briefs.forEach((b) => {
-          DEAL_INTEL_DATA[b.ticker.toUpperCase()] = b;
-        });
-        window.DEAL_INTEL_DATA = DEAL_INTEL_DATA;
-        renderDealIntelRows();
-      }
-    })
-    .catch((err) => console.error("Deal Intel:", err));
+ function showToast(msg, type = "error") {
+  const el = document.createElement("div");
+
+  el.innerText = msg;
+  el.style.position = "fixed";
+  el.style.bottom = "20px";
+  el.style.right = "20px";
+  el.style.padding = "12px 16px";
+  el.style.background = type === "error" ? "#c0392b" : "#27ae60";
+  el.style.color = "#fff";
+  el.style.borderRadius = "6px";
+  el.style.zIndex = 9999;
+  el.style.fontSize = "13px";
+
+  document.body.appendChild(el);
+
+  setTimeout(() => el.remove(), 3000);
 }
+
+function renderDealIntelPanel(data) {
+  const container = document.createElement("div");
+
+  container.innerHTML = `
+    <div style="margin-top:20px;">
+      <h3>🧠 Deal Intelligence</h3>
+
+      <table style="width:100%;margin-top:10px;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#111;color:#f5f0e8;">
+            <th style="padding:8px;text-align:left;">Ticker</th>
+            <th style="padding:8px;text-align:left;">Tier</th>
+            <th style="padding:8px;text-align:left;">Thesis</th>
+            <th style="padding:8px;text-align:left;">Risk</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.briefs
+            .map(
+              (b) => `
+            <tr style="border-bottom:1px solid #333;">
+              <td style="padding:8px;">${b.ticker || "-"}</td>
+              <td style="padding:8px;">${b.tier || "-"}</td>
+              <td style="padding:8px;">${b.deal_thesis || "-"}</td>
+              <td style="padding:8px;">${b.risks || "-"}</td>
+            </tr>
+          `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  document.getElementById("result-comps").appendChild(container);
+}
+
+fetchDealIntel(
+  d.empresa_target || selectedTicker || "",
+  selectedTicker || d.empresa_target || "",
+  d.target_industry || "",
+  d.revenue_target || 0,
+  comps,
+)
+  .then((data) => {
+    console.log("📥 RESPONSE RAW:", data);
+
+    // ❌ caso vacío o inválido
+    if (!data || !data.briefs || data.briefs.length === 0) {
+      console.warn("⚠️ Deal Intel vacío", data);
+      showToast("Deal Intelligence no disponible", "error");
+      return;
+    }
+
+    DEAL_INTEL_DATA = {};
+
+    data.briefs.forEach((b, i) => {
+      const fallbackTicker = comps[i]?.ticker || "";
+      const key = (b.ticker || fallbackTicker || "").toUpperCase();
+
+      if (!key) {
+        console.warn("⚠️ Brief sin ticker:", b);
+        return;
+      }
+
+      DEAL_INTEL_DATA[key] = {
+        ...b,
+        ticker: key,
+      };
+    });
+
+    window.DEAL_INTEL_DATA = DEAL_INTEL_DATA;
+
+    // render tabla nueva (SIEMPRE)
+    renderDealIntelPanel({
+      briefs: Object.values(DEAL_INTEL_DATA),
+    });
+
+    showToast("Deal Intelligence generado", "success");
+  })
+  .catch((err) => {
+    console.error("Deal Intel:", err);
+    showToast("Error generando Deal Intelligence", "error");
+  });

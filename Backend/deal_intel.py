@@ -159,7 +159,7 @@ a {target_industry} company.
 Return ONLY JSON:
 
 {{
-  "ticker": "{ticker}",
+  "TICKER MUST BE EXACTLY: {ticker}"
   "tier": "STRATEGIC_BUYER or FINANCIAL",
   "deal_thesis": "...",
   "risks": "...",
@@ -172,6 +172,7 @@ Rules:
 - Keep deal_thesis under 30 words
 - Keep risks under 15 words
 - No markdown
+- ticker must equal EXACTLY"
 - Valid JSON only
 """
 
@@ -201,6 +202,7 @@ Rules:
                 clean = clean[start:end+1]
 
             obj = json.loads(clean)
+            obj["ticker"] = ticker
             results.append(obj)
 
         except Exception as e:
