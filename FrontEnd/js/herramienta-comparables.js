@@ -963,11 +963,19 @@ function triggerDealIntel() {
   console.log("Revenue:", d.revenue_target);
   console.log("Comps LIMPIOS:", comps);
 
-  fetchDealIntel(
-    d.empresa_target || selectedTicker || "",
-    d.empresa_target || selectedTicker || "",
-    d.target_industry || "",
-    d.revenue_target || 0,
-    comps,
-  );
-}
+  // Reemplazá el final de triggerDealIntel() — después del fetchDealIntel(...)
+fetchDealIntel(
+  d.empresa_target || selectedTicker || "",
+  selectedTicker || d.empresa_target || "",
+  d.target_industry || "",
+  d.revenue_target || 0,
+  comps,
+).then((data) => {                          // ← agregar esto
+  if (data?.briefs) {
+    DEAL_INTEL_DATA = {};
+    data.briefs.forEach(b => { DEAL_INTEL_DATA[b.ticker.toUpperCase()] = b; });
+    window.DEAL_INTEL_DATA = DEAL_INTEL_DATA;
+    renderDealIntelRows();
+  }
+}).catch(err => console.error("Deal Intel:", err));
+
