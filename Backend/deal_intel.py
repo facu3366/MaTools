@@ -104,7 +104,7 @@ client = Anthropic(api_key=ANTHROPIC_KEY)
 def _call_ai(prompt: str) -> str | None:
     try:
         response = client.messages.create(
-            model="claude-3-haiku-20240307",
+            model="claude-4-5-20251001",
             max_tokens=1200,
             temperature=0.3,
             messages=[
