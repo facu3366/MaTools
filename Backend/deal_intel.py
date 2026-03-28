@@ -156,6 +156,18 @@ def generate_deal_intelligence(
         return []
 
     # ─────────────────────────────
+    # BUILD TIER 1 EXCLUSION LIST
+    # ─────────────────────────────
+    tier1_tickers = [
+        str(c.get("Ticker") or c.get("ticker") or "").upper()
+        for c in comps
+    ]
+    tier1_tickers = [t for t in tier1_tickers if t]
+    tier1_text = ", ".join(tier1_tickers[:20])
+
+    print(f"🚫 Tier 1 exclusion list ({len(tier1_tickers)}): {tier1_text}")
+
+    # ─────────────────────────────
     # CALL AI
     # ─────────────────────────────
     def call_ai(prompt, label="MAIN"):
@@ -167,7 +179,7 @@ def generate_deal_intelligence(
                 prompt,
                 generation_config={
                     "temperature": 0.2,
-                    "max_output_tokens": 500,
+                    "max_output_tokens": 700,
                     "response_mime_type": "application/json",
                 },
             )
@@ -179,7 +191,7 @@ def generate_deal_intelligence(
             text = r.text
 
             print(f"✅ Response received ({len(text) if text else 0} chars)")
-            print(f"🧠 RAW [{label}]:\n{text[:500]}\n")
+            print(f"🧠 RAW [{label}]:\n{text[:600]}\n")
 
             return text
 
@@ -188,7 +200,7 @@ def generate_deal_intelligence(
             return None
 
     # ─────────────────────────────
-    # PARSER
+    # PARSER ROBUSTO
     # ─────────────────────────────
     def extract(text, label="MAIN"):
         print(f"\n🔍 PARSING [{label}]...")
@@ -223,7 +235,7 @@ def generate_deal_intelligence(
         return out
 
     # ─────────────────────────────
-    # PROMPT PRINCIPAL (FIX REAL)
+    # PROMPT MEJORADO
     # ─────────────────────────────
     prompt_main = f"""
 Return ONLY valid JSON.
@@ -236,10 +248,16 @@ Each object MUST follow EXACTLY this structure:
 Target: {target_name} ({target_ticker})
 Industry: {target_industry}
 
+DO NOT include these companies (already Tier 1 competitors):
+{tier1_text}
+
 Rules:
 - Only TIER_2 or TIER_3
-- Do NOT include competitors
-- Each field max 12 words
+- Avoid large global competitors already dominant in the industry
+- Focus on realistic acquirers with strategic or financial fit
+- deal_thesis: 1–2 sentences (20–40 words)
+- strategic_rationale: 1 short paragraph (30–60 words)
+- Be specific (geography, synergies, scale, product)
 - No explanations
 - No markdown
 - No extra text
@@ -247,9 +265,9 @@ Rules:
 Return EXACTLY this format:
 
 [
-{{"ticker":"WMT","tier":"TIER_2","deal_thesis":"LATAM expansion and logistics scale","strategic_rationale":"Distribution and cross-sell synergies"}},
-{{"ticker":"AMZN","tier":"TIER_2","deal_thesis":"Marketplace expansion in emerging markets","strategic_rationale":"Technology and logistics integration"}},
-{{"ticker":"KKR","tier":"TIER_3","deal_thesis":"Private equity platform investment","strategic_rationale":"Operational improvement and exit multiple expansion"}}
+{{"ticker":"XYZ","tier":"TIER_2","deal_thesis":"Expansion into LATAM leveraging logistics and marketplace overlap to scale efficiently.","strategic_rationale":"The transaction would generate synergies in distribution, customer acquisition and payments, while improving margins through scale and cross-selling opportunities."}},
+{{"ticker":"ABC","tier":"TIER_2","deal_thesis":"...","strategic_rationale":"..."}},
+{{"ticker":"DEF","tier":"TIER_3","deal_thesis":"...","strategic_rationale":"..."}}
 ]
 """
 
@@ -271,13 +289,15 @@ Return ONLY JSON.
 
 3 companies.
 
+Do NOT include:
+{tier1_text}
+
 [
-{{"ticker":"WMT","tier":"TIER_2","deal_thesis":"Scale LATAM","strategic_rationale":"Logistics synergies"}},
-{{"ticker":"AMZN","tier":"TIER_2","deal_thesis":"Growth expansion","strategic_rationale":"Platform synergies"}},
-{{"ticker":"KKR","tier":"TIER_3","deal_thesis":"PE investment","strategic_rationale":"Value creation"}}
+{{"ticker":"SHOP","tier":"TIER_2","deal_thesis":"Expansion into emerging markets with merchant ecosystem synergies.","strategic_rationale":"Platform integration, payments and merchant services would drive cross-sell and revenue growth."}},
+{{"ticker":"SE","tier":"TIER_2","deal_thesis":"Regional e-commerce and fintech expansion opportunity in LATAM.","strategic_rationale":"Strong synergies in logistics, payments and user base expansion across geographies."}},
+{{"ticker":"KKR","tier":"TIER_3","deal_thesis":"Private equity investment in scalable marketplace platform.","strategic_rationale":"Operational improvements and strategic repositioning to drive valuation uplift."}}
 ]
 """
-
         raw = call_ai(prompt_retry, "RETRY")
         data = extract(raw, "RETRY")
 
@@ -302,6 +322,10 @@ Return ONLY JSON.
             print("     ❌ missing ticker")
             continue
 
+        if ticker in tier1_tickers:
+            print(f"     ❌ excluded Tier 1 ticker: {ticker}")
+            continue
+
         if tier not in ["TIER_2", "TIER_3"]:
             print(f"     ❌ invalid tier: {tier}")
             continue
@@ -313,16 +337,16 @@ Return ONLY JSON.
             "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
         })
 
-    print(f"\n📊 FINAL RESULTS: {len(results)}")
+    print(f"\n📊 FINAL RESULTS BEFORE TRIM: {len(results)}")
 
-    # ordenar (strategic primero)
+    # ordenar: estratégicos primero
     tier_order = {"TIER_2": 0, "TIER_3": 1}
     results.sort(key=lambda x: tier_order.get(x["tier"], 99))
 
-    # limitar a 3
+    # limitar
     results = results[:3]
 
-    print(f"🧠 OUTPUT:\n{results}\n")
+    print(f"🧠 FINAL OUTPUT ({len(results)}):\n{results}")
     print("="*60 + "\n")
 
     return results
