@@ -147,8 +147,9 @@ def generate_deal_intelligence(
     Returns list of dicts with tier, deal_thesis, risks, etc.
     Never raises — returns empty list on failure.
     """
-    if not ANTHROPIC_KEY:
-        print("   ⚠️ [Deal Intel] No ANTHROPIC_API_KEY — skipping")
+
+    if not model:
+        print("   ⚠️ [Deal Intel] Gemini not available")
         return []
 
     if not comps:
@@ -174,20 +175,47 @@ def generate_deal_intelligence(
             print(f"   ⚠️ [Deal Intel] All models failed")
             return []
 
-        # Clean response
+        # ─────────────────────────────
+        # CLEAN + ROBUST PARSE
+        # ─────────────────────────────
+
         clean = raw_text.strip()
+
+        # remover markdown
         if clean.startswith("```"):
             clean = clean.split("\n", 1)[-1]
         if clean.endswith("```"):
             clean = clean.rsplit("```", 1)[0]
+
         clean = clean.strip()
 
+        # extraer JSON array
         start_idx = clean.find("[")
         end_idx = clean.rfind("]")
+
         if start_idx != -1 and end_idx != -1:
             clean = clean[start_idx:end_idx + 1]
 
-        briefs = json.loads(clean)
+        # limpiar caracteres problemáticos
+        clean = clean.replace("\n", " ").replace("\r", " ")
+
+        # intento 1
+        try:
+            briefs = json.loads(clean)
+
+        except json.JSONDecodeError:
+            print("   ⚠️ retry JSON parse...")
+
+            # fixes comunes de LLM
+            clean = clean.replace("'", '"').replace('""', '"')
+
+            try:
+                briefs = json.loads(clean)
+            except Exception as e:
+                print(f"   ⚠️ second parse failed: {e}")
+                return []
+
+        # ─────────────────────────────
 
         if not isinstance(briefs, list):
             print(f"   ⚠️ [Deal Intel] Response is not a list")
@@ -200,6 +228,7 @@ def generate_deal_intelligence(
         for comp in comps:
             ticker = comp.get("Ticker", "").upper()
             brief = brief_map.get(ticker, {})
+
             result.append({
                 "ticker": ticker,
                 "tier": brief.get("tier", "STRATEGIC_BUYER"),
@@ -211,21 +240,17 @@ def generate_deal_intelligence(
             })
 
         print(f"   🧠 [Deal Intel] Generated {len(result)} briefs in {elapsed:.1f}s")
-        
-        # Stats
+
         priorities = sum(1 for r in result if r["approach_rec"] == "PRIORITY")
         strategic = sum(1 for r in result if r["tier"] == "STRATEGIC_BUYER")
+
         print(f"   🧠 [Deal Intel] {priorities} PRIORITY | {strategic} STRATEGIC_BUYER")
 
         return result
 
-    except json.JSONDecodeError as e:
-        print(f"   ⚠️ [Deal Intel] JSON parse error: {e}")
-        return []
     except Exception as e:
         print(f"   ⚠️ [Deal Intel] Failed: {type(e).__name__}: {e}")
         return []
-
 
 # ─────────────────────────────────────────────
 # API ENDPOINT
