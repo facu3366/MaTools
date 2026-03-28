@@ -989,7 +989,8 @@ function triggerDealIntel() {
     `;
     });
   }
- function showToast(msg, type = "error") {
+}
+function showToast(msg, type = "error") {
   const el = document.createElement("div");
 
   el.innerText = msg;
