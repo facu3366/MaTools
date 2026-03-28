@@ -116,10 +116,20 @@ def _call_ai(prompt: str) -> str | None:
             prompt,
             generation_config={
                 "temperature": 0.25,
-                "max_output_tokens": 800,  # importante
+                "max_output_tokens": 800,
             },
         )
-        return response.text
+
+        # 🔥 FIX CLAVE: reconstruir texto completo
+        text = ""
+
+        try:
+            parts = response.candidates[0].content.parts
+            text = "".join([p.text for p in parts if hasattr(p, "text")])
+        except Exception:
+            text = response.text  # fallback
+
+        return text
 
     except Exception as e:
         print(f"❌ Gemini failed: {e}")
