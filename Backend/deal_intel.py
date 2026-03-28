@@ -212,152 +212,169 @@ def generate_deal_intelligence(
     # ─────────────────────────────
     # PARSER ROBUSTO
     # ─────────────────────────────
-    def extract(text, label="MAIN"):
-        print(f"\n🔍 PARSING [{label}]...")
+import json
+import re
+import google.generativeai as genai
 
-        if not text:
-            return []
 
-        clean = text.strip()
+def generate_deal_intelligence(
+    target_ticker: str,
+    target_name: str,
+    target_industry: str,
+    target_revenue: float,
+    comps: list[dict],
+) -> list[dict]:
 
-        if "```" in clean:
-            clean = clean.replace("```json", "").replace("```", "")
+    print("\n" + "="*60)
+    print("🧠 DEAL INTEL START")
+    print(f"Target: {target_name} ({target_ticker})")
+    print(f"Comps received: {len(comps)}")
+    print("="*60)
 
-        matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
+    if not model:
+        print("❌ Gemini model NOT available")
+        return []
 
-        print(f"Objects detected: {len(matches)}")
-
-        out = []
-        for i, m in enumerate(matches):
-            try:
-                obj = json.loads(m)
-                print(f"   ✅ Object {i} parsed")
-                out.append(obj)
-            except Exception as e:
-                print(f"   ❌ Object {i} failed: {e}")
-
-        print(f"Parsed valid objects: {len(out)}")
-        return out
+    if not comps:
+        print("⚠️ No comps provided")
+        return []
 
     # ─────────────────────────────
-    # PROMPT BASE (USADO EN MAIN Y RETRY)
+    # PRINT MODELOS DISPONIBLES
     # ─────────────────────────────
-def build_prompt():
-    comps_text = _build_comps_text(comps)
+    try:
+        print("\n📦 AVAILABLE MODELS:")
+        for m in genai.list_models():
+            print(" -", m.name)
+    except Exception as e:
+        print("⚠️ Could not list models:", e)
 
-    return f"""
+    # ─────────────────────────────
+    # EXCLUSION LIST
+    # ─────────────────────────────
+    tier1 = set()
+
+    if target_ticker:
+        tier1.add(target_ticker.upper())
+
+    for c in comps:
+        t = str(c.get("Ticker") or c.get("ticker") or "").upper()
+        if t:
+            tier1.add(t)
+
+    tier1_list = list(tier1)
+    tier1_text = ", ".join(tier1_list[:15])
+
+    print(f"\n🚫 Excluded tickers: {tier1_text}")
+
+    # ─────────────────────────────
+    # PROMPT SIMPLE (CLAVE)
+    # ─────────────────────────────
+    prompt = f"""
+Return a JSON array of 3 companies.
+
 Target: {target_name} ({target_ticker})
 Industry: {target_industry}
 
-Universe (reference only, do NOT duplicate these exact companies):
-{comps_text}
-
-Excluded tickers (STRICTLY FORBIDDEN):
+DO NOT include these tickers:
 {tier1_text}
 
-Task: Identify and classify potential acquirers/comparables into 2 Tiers:
-
-2. TIER_2 (Strategic/Vertical): Generalists, companies with shared business units, or those that could generate economies of scale/synergies.
-3. TIER_3 (Financial Sponsors): Private Equity firms or major Institutional Investors interested in this sector.
-
-Each JSON object MUST follow this structure:
+Each object:
 {{
-  "ticker": "TICKER",
-  "name": "Company Name",
-  "tier": "TIER_2" | "TIER_3",
-  "deal_thesis": "1-2 sentences explaining the strategic fit (20-40 words).",
-  "strategic_rationale": "Detailed explanation of synergies or investment thesis (30-60 words)."
+  "ticker": "...",
+  "tier": "TIER_2" or "TIER_3",
+  "deal_thesis": "short explanation"
 }}
 
 Rules:
-- Strictly NO prose or markdown.
-- Must include at least 3 companies TOTAL.
-- Ensure professional tone.
-- Focus on LATAM relevance if applicable.
-- DO NOT include any ticker from excluded list.
-- Avoid obvious direct competitors.
-
-Return ONLY the JSON array.
+- No markdown
+- No explanations
+- Keep it short
 """
-    # ─────────────────────────────
-    # MAIN CALL
-    # ─────────────────────────────
-    raw = call_ai(build_prompt(), "MAIN")
-    data = extract(raw, "MAIN")
+
+    print("\n🧾 PROMPT SIZE:", len(prompt))
 
     # ─────────────────────────────
-    # RETRY
+    # CALL AI
     # ─────────────────────────────
-    if not data:
-        print("\n⚠️ MAIN FAILED → RETRY\n")
-        raw = call_ai(build_prompt(), "RETRY")
-        data = extract(raw, "RETRY")
+    try:
+        r = model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.2,
+                "max_output_tokens": 300,
+            },
+        )
+        raw = r.text if r else None
 
-    if not data:
-        print("\n❌ TOTAL AI FAILURE → fallback")
-        data = []
+    except Exception as e:
+        print("❌ Gemini error:", e)
+        raw = None
+
+    print("\n🧠 RAW LENGTH:", len(raw) if raw else 0)
+
+    if not raw:
+        print("❌ EMPTY RESPONSE → fallback")
+        raw = ""
+
+    print("\n🧠 RAW PREVIEW:")
+    print(raw[:300])
+    print("—" * 40)
 
     # ─────────────────────────────
-    # NORMALIZACIÓN + FILTRO
+    # PARSER SIMPLE
     # ─────────────────────────────
+    clean = raw.strip().replace("```json", "").replace("```", "")
+
+    matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
+
+    print(f"\n🔍 OBJECTS FOUND: {len(matches)}")
+
     results = []
 
-    print("\n🧩 NORMALIZING RESULTS...")
+    for m in matches:
+        try:
+            obj = json.loads(m)
 
-    for i, obj in enumerate(data):
-        ticker = str(obj.get("ticker", "")).upper().strip()
-        tier = str(obj.get("tier", "")).strip()
+            ticker = str(obj.get("ticker", "")).upper().strip()
 
-        print(f"   → Raw object {i}: {obj}")
+            if not ticker or ticker in tier1:
+                continue
 
-        if not ticker:
+            results.append({
+                "ticker": ticker,
+                "tier": obj.get("tier", ""),
+                "deal_thesis": obj.get("deal_thesis", ""),
+            })
+
+        except:
             continue
-
-        if ticker in tier1_tickers:
-            print(f"     ❌ excluded: {ticker}")
-            continue
-
-        if tier not in ["TIER_2", "TIER_3"]:
-            print(f"     ❌ invalid tier: {tier}")
-            continue
-
-        results.append({
-            "ticker": ticker,
-            "tier": tier,
-            "deal_thesis": str(obj.get("deal_thesis", "")).strip(),
-            "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
-        })
 
     # ─────────────────────────────
-    # FALLBACK INTELIGENTE
+    # FALLBACK REAL (SIMPLE Y SEGURO)
     # ─────────────────────────────
     if not results:
-        print("⚠️ Using fallback generation")
+        print("⚠️ Using fallback")
 
-        for t in tier1_tickers:
-            if t == target_ticker:
+        for c in comps:
+            t = str(c.get("Ticker") or c.get("ticker") or "").upper()
+
+            if not t or t == target_ticker:
                 continue
 
             results.append({
                 "ticker": t,
                 "tier": "TIER_2",
-                "deal_thesis": "Potential strategic adjacency and regional expansion opportunity.",
-                "strategic_rationale": "Operational and commercial synergies could drive scale benefits and margin improvement.",
+                "deal_thesis": "Potential strategic fit based on industry adjacency.",
             })
 
             if len(results) >= 3:
                 break
 
-    # ordenar
-    tier_order = {"TIER_2": 0, "TIER_3": 1}
-    results.sort(key=lambda x: tier_order.get(x["tier"], 99))
-
-    results = results[:3]
-
     print(f"\n🧠 FINAL OUTPUT ({len(results)}):\n{results}")
     print("="*60 + "\n")
 
-    return results
+    return results[:3]
 # ─────────────────────────────────────────────
 # API ENDPOINT
 # ─────────────────────────────────────────────
