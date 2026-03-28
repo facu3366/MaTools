@@ -128,6 +128,9 @@ def _call_ai(prompt: str) -> str | None:
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
 # ─────────────────────────────────────────────
+import json
+import re
+
 def generate_deal_intelligence(
     target_ticker: str,
     target_name: str,
@@ -145,8 +148,11 @@ def generate_deal_intelligence(
 
     print("   🧠 [Deal Intel] Generating Tier 2 & 3 buyers (NO Tier 1)...")
 
-    # usamos comps solo como contexto, no como output obligatorio
+    # ─────────────────────────────
+    # CONTEXTO (NO OUTPUT)
+    # ─────────────────────────────
     context_companies = []
+
     for c in comps[:10]:
         ticker = c.get("Ticker", "") or c.get("ticker", "")
         name = c.get("Empresa", ticker) or c.get("company", ticker)
@@ -159,6 +165,9 @@ def generate_deal_intelligence(
 
     comps_text = "\n".join(context_companies)
 
+    # ─────────────────────────────
+    # PROMPT OPTIMIZADO
+    # ─────────────────────────────
     prompt = f"""
 You are a senior M&A consultant at Deloitte working on a live sell-side mandate.
 
@@ -168,157 +177,118 @@ Industry: {target_industry}
 Revenue: ${target_revenue}M
 
 IMPORTANT:
-- Tier 1 competitors are ALREADY identified externally.
+- Tier 1 competitors are already identified externally.
 - DO NOT return Tier 1 companies.
-- Your job is to identify NEW potential buyers.
-
-TIER DEFINITIONS:
-- TIER_2: Strategic buyers (synergies, adjacency, scale, cross-sell, geography, technology, distribution)
-- TIER_3: Financial sponsors (Private Equity, buyout funds, roll-ups)
-
-CONTEXT (existing comps):
-{comps_text}
 
 TASK:
-Return a JSON array of potential buyers (NOT limited to comps).
+Identify potential buyers:
 
-Each object must contain:
-- "ticker"
-- "tier": "TIER_2" or "TIER_3"
-- "deal_thesis": exactly 2 short lines explaining why they would buy
-- "strategic_rationale": 1 short paragraph explaining value creation
+- TIER_2: Strategic buyers (adjacency, synergies, scale, cross-sell, geography)
+- TIER_3: Financial sponsors (Private Equity, buyout, roll-up)
 
-RULES:
-- DO NOT include Tier 1 competitors
-- You can include companies NOT in the list
-- Be commercially sharp and realistic
-- Avoid generic phrases
-- Keep responses concise
-- Return at most 5 companies
+CONTEXT:
+{comps_text}
+
+OUTPUT RULES:
+- Return MAX 4 companies
+- Keep text concise
 - No markdown
-- Return ONLY valid JSON
+- Valid JSON only
 
-Example:
+FORMAT:
 [
   {{
-    "ticker": "XYZ",
+    "ticker": "ABC",
     "tier": "TIER_2",
-    "deal_thesis": "Expansion into LATAM with strong commercial overlap. Improves scale and logistics density.",
-    "strategic_rationale": "The deal would unlock synergies in distribution, procurement and customer acquisition, while improving operating leverage."
+    "deal_thesis": "Short explanation.",
+    "strategic_rationale": "Short value creation logic."
   }}
 ]
 """
 
-    results = []
-
+    # ─────────────────────────────
+    # CALL AI
+    # ─────────────────────────────
     try:
-        raw = _call_ai(prompt)
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.2,
+                "max_output_tokens": 1000,
+                "response_mime_type": "application/json",
+            },
+        )
 
-        if not raw:
-            print("   ⚠️ empty AI response")
-            return []
+        raw = response.text if response else None
 
-        print(f"\n🧠 RAW:\n{raw[:500]}\n")
+    except Exception as e:
+        print(f"   ❌ Gemini call failed: {e}")
+        return []
 
-        clean = raw.strip()
+    if not raw:
+        print("   ⚠️ empty AI response")
+        return []
+
+    print(f"\n🧠 RAW:\n{raw[:500]}\n")
+
+    # ─────────────────────────────
+    # PARSER ROBUSTO (ANTI-TRUNCADO)
+    # ─────────────────────────────
+    def _safe_extract_objects(text: str):
+        clean = text.strip()
 
         if "```" in clean:
             clean = clean.replace("```json", "").replace("```", "").strip()
 
         start = clean.find("[")
+        if start != -1:
+            clean = clean[start:]
 
-        if start == -1:
-            print("   ⚠️ no JSON detected")
-            return []
+        # extraer objetos JSON válidos
+        matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
 
-        clean = clean[start:]
-
-        # intento 1: parse directo
-        try:
-            data = json.loads(clean)
-        except Exception:
-            # intento 2: cortar al último ] si existe
-            end = clean.rfind("]")
-            if end != -1:
-                clean_try = clean[:end + 1]
-                try:
-                    data = json.loads(clean_try)
-                except Exception:
-                    # intento 3: recuperación si vino truncado
-                    print("   ⚠️ trying to recover truncated JSON")
-                    recovered = clean.rstrip()
-
-                    # si termina con coma, la saco
-                    while recovered and recovered[-1] in [",", "\n", "\r", "\t", " "]:
-                        recovered = recovered[:-1]
-
-                    # cierro objeto si quedó abierto
-                    open_braces = recovered.count("{") - recovered.count("}")
-                    if open_braces > 0:
-                        recovered += "}" * open_braces
-
-                    # cierro array si quedó abierto
-                    open_brackets = recovered.count("[") - recovered.count("]")
-                    if open_brackets > 0:
-                        recovered += "]" * open_brackets
-
-                    try:
-                        data = json.loads(recovered)
-                    except Exception as e:
-                        print(f"   ⚠️ JSON parse failed after recovery: {e}")
-                        return []
-            else:
-                # intento 3 directo si no hubo ]
-                print("   ⚠️ trying to recover truncated JSON")
-                recovered = clean.rstrip()
-
-                while recovered and recovered[-1] in [",", "\n", "\r", "\t", " "]:
-                    recovered = recovered[:-1]
-
-                open_braces = recovered.count("{") - recovered.count("}")
-                if open_braces > 0:
-                    recovered += "}" * open_braces
-
-                open_brackets = recovered.count("[") - recovered.count("]")
-                if open_brackets > 0:
-                    recovered += "]" * open_brackets
-
-                try:
-                    data = json.loads(recovered)
-                except Exception as e:
-                    print(f"   ⚠️ JSON parse failed after recovery: {e}")
-                    return []
-
-        if not isinstance(data, list):
-            print("   ⚠️ AI response is not a list")
-            return []
-
-        for obj in data:
-            if not isinstance(obj, dict):
+        objs = []
+        for m in matches:
+            try:
+                parsed = json.loads(m)
+                if isinstance(parsed, dict):
+                    objs.append(parsed)
+            except:
                 continue
 
-            ticker = str(obj.get("ticker", "")).upper().strip()
-            tier = str(obj.get("tier", "TIER_2")).strip()
+        return objs
 
-            if not ticker:
-                continue
+    data = _safe_extract_objects(raw)
 
-            if tier not in ["TIER_2", "TIER_3"]:
-                continue
-
-            results.append({
-                "ticker": ticker,
-                "tier": tier,
-                "deal_thesis": str(obj.get("deal_thesis", "")).strip(),
-                "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
-            })
-
-        print(f"   🧠 [Deal Intel] Generated {len(results)} Tier 2/3 buyers")
-        return results
-
-    except Exception as e:
-        print(f"   ❌ Deal Intel error: {e}")
+    if not data:
+        print("   ⚠️ no valid JSON objects extracted")
         return []
+
+    # ─────────────────────────────
+    # NORMALIZACIÓN FINAL
+    # ─────────────────────────────
+    results = []
+
+    for obj in data:
+        ticker = str(obj.get("ticker", "")).upper().strip()
+        tier = str(obj.get("tier", "TIER_2")).strip()
+
+        if not ticker:
+            continue
+
+        if tier not in ["TIER_2", "TIER_3"]:
+            continue
+
+        results.append({
+            "ticker": ticker,
+            "tier": tier,
+            "deal_thesis": str(obj.get("deal_thesis", "")).strip(),
+            "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
+        })
+
+    print(f"   🧠 [Deal Intel] Generated {len(results)} Tier 2/3 buyers")
+
+    return results
 # ─────────────────────────────────────────────
 # API ENDPOINT
 # ─────────────────────────────────────────────
