@@ -153,7 +153,7 @@ def generate_deal_intelligence(
         return []
 
     # ─────────────────────────────
-    # Tier 1
+    # Tier1 (comparables reales)
     # ─────────────────────────────
     tier1 = set()
 
@@ -165,53 +165,57 @@ def generate_deal_intelligence(
         if t:
             tier1.add(t)
 
-    print(f"🚫 Tier1 detected ({len(tier1)}): {list(tier1)}")
+    tier1_list = sorted(list(tier1))
+
+    print(f"🚫 Tier1 detected ({len(tier1_list)}): {tier1_list}")
 
     # ─────────────────────────────
-    # PROMPT
+    # PROMPT (OPTIMIZADO)
     # ─────────────────────────────
-    def build_prompt(target_name, target_ticker, target_industry):
-        prompt = f"""
-Return ONLY a valid JSON array of exactly 10-15 objects. 
+    def build_prompt():
+
+        excluded = ", ".join(tier1_list[:15])  # cap para no inflar prompt
+
+        return f"""
+Return ONLY a JSON array of 6-8 companies.
+
 Target: {target_name} ({target_ticker})
 Industry: {target_industry}
+
+DO NOT include these companies:
+{excluded}
 
 Each object:
 {{
   "ticker": "...",
-  "name": "...",
-  "tier": "TIER_1" | "TIER_2" | "TIER_3",
-  "deal_thesis": "...",
-  "strategic_rationale": "..."
+  "tier": "TIER_2" or "TIER_3",
+  "deal_thesis": "max 20 words",
+  "strategic_rationale": "max 30 words"
 }}
 
 Rules:
 - No markdown
-- No explanation
+- No explanations
 - JSON only
 """
-        return prompt
 
-    prompt = build_prompt(target_name, target_ticker, target_industry)
+    prompt = build_prompt()
 
-    print("\n🧾 PROMPT PREVIEW (first 400 chars):")
-    print(prompt[:400])
-    print("—" * 40)
+    print("\n🧾 PROMPT SIZE:", len(prompt))
 
     # ─────────────────────────────
     # CALL AI
     # ─────────────────────────────
     raw = _call_ai(prompt)
 
-    print("\n🧠 RAW RESPONSE TYPE:", type(raw))
-    print("🧠 RAW LENGTH:", len(raw) if raw else 0)
+    print("\n🧠 RAW LENGTH:", len(raw) if raw else 0)
 
     if not raw:
-        print("❌ EMPTY RESPONSE FROM AI")
+        print("❌ EMPTY RESPONSE")
         return []
 
-    print("\n🧠 RAW PREVIEW (first 500 chars):")
-    print(raw[:500])
+    print("\n🧠 RAW PREVIEW:")
+    print(raw[:300])
     print("—" * 40)
 
     # ─────────────────────────────
@@ -220,96 +224,38 @@ Rules:
     clean = raw.strip()
     clean = clean.replace("```json", "").replace("```", "")
 
-    print("\n🧹 CLEANED PREVIEW:")
-    print(clean[:500])
-    print("—" * 40)
-
     # ─────────────────────────────
-    # PARSER DEBUG STEP 1 (JSON directo)
-    # ─────────────────────────────
-    try:
-        data = json.loads(clean)
-        print(f"✅ DIRECT JSON PARSE OK: {len(data)} objects")
-    except Exception as e:
-        print("❌ DIRECT JSON PARSE FAILED")
-        print("Error:", str(e))
-        data = None
-
-    # ─────────────────────────────
-    # PARSER DEBUG STEP 2 (regex {})
+    # PARSER ROBUSTO
     # ─────────────────────────────
     matches = re.findall(r"\{[^{}]*\}", clean)
-    print(f"\n🔍 REGEX OBJECT MATCHES: {len(matches)}")
 
-    parsed_objects = []
+    results = []
+
+    print(f"\n🔍 OBJECT MATCHES: {len(matches)}")
 
     for i, m in enumerate(matches):
         try:
             obj = json.loads(m)
-            parsed_objects.append(obj)
+
+            ticker = str(obj.get("ticker", "")).upper().strip()
+
+            if not ticker:
+                continue
+
+            if ticker in tier1:
+                print(f"❌ Removed Tier1 duplicate: {ticker}")
+                continue
+
+            results.append({
+                "ticker": ticker,
+                "name": obj.get("name", ""),
+                "tier": obj.get("tier", ""),
+                "deal_thesis": obj.get("deal_thesis", ""),
+                "strategic_rationale": obj.get("strategic_rationale", ""),
+            })
+
         except Exception as e:
-            print(f"❌ Failed parsing object {i}: {m[:80]}")
-
-    print(f"✅ REGEX PARSED OBJECTS: {len(parsed_objects)}")
-
-    # ─────────────────────────────
-    # PARSER DEBUG STEP 3 (ticker split)
-    # ─────────────────────────────
-    chunks = re.split(r'"ticker"\s*:\s*"', clean)
-    print(f"\n🧩 TICKER SPLIT CHUNKS: {len(chunks)}")
-
-    rebuilt = []
-
-    for i, chunk in enumerate(chunks[1:]):
-        try:
-            obj_str = '{"ticker":"' + chunk
-            obj_str = obj_str.split("}")[0] + "}"
-            obj = json.loads(obj_str)
-            rebuilt.append(obj)
-        except Exception:
-            continue
-
-    print(f"✅ REBUILT OBJECTS: {len(rebuilt)}")
-
-    # ─────────────────────────────
-    # FINAL SOURCE SELECTION
-    # ─────────────────────────────
-    if isinstance(data, list) and len(data) > 0:
-        final_data = data
-        print("🟢 USING DIRECT JSON")
-    elif len(parsed_objects) > 0:
-        final_data = parsed_objects
-        print("🟡 USING REGEX OBJECTS")
-    elif len(rebuilt) > 0:
-        final_data = rebuilt
-        print("🟠 USING REBUILT OBJECTS")
-    else:
-        print("❌ ALL PARSERS FAILED")
-        return []
-
-    # ─────────────────────────────
-    # FILTER
-    # ─────────────────────────────
-    results = []
-
-    for obj in final_data:
-        ticker = str(obj.get("ticker", "")).upper().strip()
-
-        if not ticker:
-            print("⚠️ Skipping object without ticker:", obj)
-            continue
-
-        if ticker in tier1:
-            print(f"❌ Removed Tier1 duplicate: {ticker}")
-            continue
-
-        results.append({
-            "ticker": ticker,
-            "name": obj.get("name", ""),
-            "tier": obj.get("tier", ""),
-            "deal_thesis": obj.get("deal_thesis", ""),
-            "strategic_rationale": obj.get("strategic_rationale", ""),
-        })
+            print(f"❌ Parse fail {i}: {m[:80]}")
 
     # ─────────────────────────────
     # DEDUP
@@ -319,13 +265,11 @@ Rules:
 
     for r in results:
         if r["ticker"] in seen:
-            print(f"⚠️ Duplicate removed: {r['ticker']}")
             continue
         seen.add(r["ticker"])
         clean_final.append(r)
 
     print(f"\n🧠 FINAL COUNT: {len(clean_final)}")
-    print("🧠 FINAL DATA:", clean_final)
     print("="*60 + "\n")
 
     return clean_final
