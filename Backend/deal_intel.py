@@ -143,9 +143,7 @@ def generate_deal_intelligence(
     if not comps:
         return []
 
-    # 🔥 limitar para no romper quota
     comps = comps[:5]
-
     tickers = [c.get("Ticker", "").upper() for c in comps]
 
     print(f"   🧠 [Deal Intel] Generating briefs (BATCH mode) for {len(tickers)} comps...")
@@ -181,37 +179,36 @@ Companies:
 {tickers}
 """
 
+    results = []
+
     try:
         raw = _call_ai(prompt)
 
         if not raw:
             print("   ⚠️ empty AI response")
-            return []
+            raise Exception("empty")
 
-        print(f"\n🧠 RAW:\n{raw[:1000]}\n")
+        print(f"\n🧠 RAW:\n{raw[:500]}\n")
 
         clean = raw.strip()
 
-        # limpiar fences
+        # 🔥 QUICK VALIDATION (clave)
+        if "[" not in clean or "]" not in clean:
+            print("   ⚠️ truncated response detected")
+            raise Exception("truncated")
+
+        # limpiar markdown
         if "```" in clean:
-            clean = clean.split("```")[1] if "```json" in clean else clean.replace("```", "")
+            clean = clean.replace("```json", "").replace("```", "").strip()
 
-        # intentar parse directo
-        try:
-            data = json.loads(clean)
-        except:
-            # 🔥 fallback: extraer array manual
-            start = clean.find("[")
-            end = clean.rfind("]")
+        # cortar exactamente array
+        start = clean.find("[")
+        end = clean.rfind("]")
 
-            if start != -1 and end != -1:
-                clean = clean[start:end+1]
-                data = json.loads(clean)
-            else:
-                print("   ⚠️ could not recover JSON")
-                return []
+        clean = clean[start:end+1]
 
-        results = []
+        data = json.loads(clean)
+
         for obj in data:
             ticker = str(obj.get("ticker", "")).upper()
 
@@ -228,32 +225,26 @@ Companies:
                 "approach_rec": obj.get("approach_rec", "SECONDARY"),
             })
 
-        print(f"   🧠 [Deal Intel] Generated {len(results)} briefs")
-
     except Exception as e:
-        print(f"   ❌ Deal Intel failed: {e}")
-        results = []
+        print(f"   ⚠️ Deal Intel fallback triggered: {e}")
 
-    # 👉 asegurar output completo (aunque falle AI)
-    brief_map = {b["ticker"]: b for b in results}
+        # 🔥 FALLBACK INTELIGENTE
+        results = [
+            {
+                "ticker": t,
+                "tier": "STRATEGIC_BUYER",
+                "deal_thesis": "",
+                "risks": "",
+                "expansion_signal": "MEDIUM",
+                "expansion_note": "",
+                "approach_rec": "SECONDARY",
+            }
+            for t in tickers
+        ]
 
-    final = []
-    for comp in comps:
-        ticker = comp.get("Ticker", "").upper()
+    print(f"   🧠 [Deal Intel] Generated {len(results)} briefs")
 
-        b = brief_map.get(ticker, {})
-
-        final.append({
-            "ticker": ticker,
-            "tier": b.get("tier", "STRATEGIC_BUYER"),
-            "deal_thesis": b.get("deal_thesis", ""),
-            "risks": b.get("risks", ""),
-            "expansion_signal": b.get("expansion_signal", "MEDIUM"),
-            "expansion_note": b.get("expansion_note", ""),
-            "approach_rec": b.get("approach_rec", "SECONDARY"),
-        })
-
-    return final
+    return results
 # ─────────────────────────────────────────────
 # API ENDPOINT
 # ─────────────────────────────────────────────

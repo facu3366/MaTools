@@ -1046,3 +1046,21 @@ function renderDealIntelTable(briefs) {
 
   container.insertAdjacentHTML("beforeend", html);
 }
+function showToast(msg, type = "error") {
+  const el = document.createElement("div");
+
+  el.innerText = msg;
+  el.style.position = "fixed";
+  el.style.bottom = "20px";
+  el.style.right = "20px";
+  el.style.padding = "12px 16px";
+  el.style.background = type === "error" ? "#c0392b" : "#27ae60";
+  el.style.color = "#fff";
+  el.style.borderRadius = "6px";
+  el.style.zIndex = 9999;
+  el.style.fontSize = "13px";
+
+  document.body.appendChild(el);
+
+  setTimeout(() => el.remove(), 3000);
+}
