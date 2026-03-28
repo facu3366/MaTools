@@ -107,7 +107,23 @@ except Exception as e:
     print(f"⚠️ Gemini init failed: {e}")
     model = None
     GEMINI_OK = False
+def _call_ai(prompt: str) -> str | None:
+    if not model:
+        return None
 
+    try:
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.25,
+                "max_output_tokens": 800,  # importante
+            },
+        )
+        return response.text
+
+    except Exception as e:
+        print(f"❌ Gemini failed: {e}")
+        return None
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
 # ─────────────────────────────────────────────
@@ -186,31 +202,6 @@ Return ONLY the JSON array.
 """
 
     # ─────────────────────────────
-    # AI CALL
-    # ─────────────────────────────
-    def call_ai(prompt, label):
-        print(f"\n🚀 CALL [{label}]")
-
-        try:
-            r = model.generate_content(
-                prompt,
-                generation_config={
-                    "temperature": 0.35,
-                    "max_output_tokens": 1200
-                },
-            )
-
-            text = r.text if r else None
-
-            print(f"🧠 RAW [{label}]:\n{text[:500] if text else 'EMPTY'}\n")
-
-            return text
-
-        except Exception as e:
-            print(f"❌ AI error: {e}")
-            return None
-
-    # ─────────────────────────────
     # PARSER ROBUSTO (FIX CLAVE)
     # ─────────────────────────────
     def extract(text):
@@ -250,18 +241,16 @@ Return ONLY the JSON array.
     # ─────────────────────────────
     prompt = build_prompt(target_name, target_ticker, target_industry)
 
-    raw = call_ai(prompt, "MAIN")
+    raw = _call_ai(prompt)
+    print(f"\n🧠 RAW [MAIN]:\n{raw[:500] if raw else 'EMPTY'}\n")
+
     data = extract(raw)
 
     if not data:
         print("⚠️ RETRY")
-        raw = call_ai(prompt, "RETRY")
+        raw = _call_ai(prompt)
+        print(f"\n🧠 RAW [RETRY]:\n{raw[:500] if raw else 'EMPTY'}\n")
         data = extract(raw)
-
-    if not data:
-        print("❌ AI FAILED")
-        return []
-
     # ─────────────────────────────
     # FILTRO FINAL
     # ─────────────────────────────
