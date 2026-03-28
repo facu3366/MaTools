@@ -230,7 +230,7 @@ def generate_deal_intelligence(
     # ─────────────────────────────
     # PROMPT (MODO CONSULTOR REAL)
     # ─────────────────────────────
-   def build_prompt(target_name, target_ticker, target_industry, sector_context):
+def build_prompt(target_name, target_ticker, target_industry, sector_context):
     return f"""
 Return ONLY a valid JSON array of exactly 10-15 objects. 
 Role: Senior M&A Associate at Deloitte.
