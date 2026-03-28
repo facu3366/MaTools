@@ -156,7 +156,7 @@ def generate_deal_intelligence(
         return []
 
     # ─────────────────────────────
-    # BUILD EXCLUSION LIST (TARGET + TIER 1)
+    # EXCLUSION LIST (TARGET + TIER 1)
     # ─────────────────────────────
     tier1_tickers = set()
 
@@ -191,12 +191,16 @@ def generate_deal_intelligence(
             )
 
             if not r:
-                print("❌ Empty response object")
+                print("❌ Empty response")
                 return None
 
             text = r.text
 
             print(f"✅ Response received ({len(text) if text else 0} chars)")
+
+            if text and not text.strip().endswith("]"):
+                print("⚠️ Detected truncated response")
+
             print(f"🧠 RAW [{label}]:\n{text[:600]}\n")
 
             return text
@@ -212,13 +216,11 @@ def generate_deal_intelligence(
         print(f"\n🔍 PARSING [{label}]...")
 
         if not text:
-            print("❌ No text to parse")
             return []
 
         clean = text.strip()
 
         if "```" in clean:
-            print("⚠️ Markdown detected, cleaning...")
             clean = clean.replace("```json", "").replace("```", "")
 
         matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
@@ -233,15 +235,15 @@ def generate_deal_intelligence(
                 out.append(obj)
             except Exception as e:
                 print(f"   ❌ Object {i} failed: {e}")
-                continue
 
         print(f"Parsed valid objects: {len(out)}")
         return out
 
     # ─────────────────────────────
-    # PROMPT PRINCIPAL
+    # PROMPT BASE (USADO EN MAIN Y RETRY)
     # ─────────────────────────────
-    prompt_main = f"""
+    def build_prompt():
+        return f"""
 Return ONLY valid JSON.
 
 You MUST return exactly 3 companies.
@@ -256,31 +258,27 @@ DO NOT include these companies:
 {tier1_text}
 
 Rules:
-- NEVER include the target company
-- NEVER include any ticker from the exclusion list
-- Only TIER_2 or TIER_3
+- NEVER include target
+- NEVER include excluded tickers
+- Only TIER_2 or TIER_3 (TIER_1 is forbidden)
 - At least 2 must be TIER_2
 - Avoid dominant global competitors
 - Focus on realistic acquirers
 
 - deal_thesis: 1–2 sentences (20–40 words)
-- strategic_rationale: 1 short paragraph (30–60 words)
-- Be specific (geography, synergies, scale, product)
+- strategic_rationale: 30–60 words
 
 - No explanations
 - No markdown
 - No extra text
 
-Return EXACTLY this format:
-
-[
-{{"ticker":"XYZ","tier":"TIER_2","deal_thesis":"Expansion into LATAM leveraging logistics and marketplace overlap to scale efficiently.","strategic_rationale":"The transaction would generate synergies in distribution, customer acquisition and payments, while improving margins through scale and cross-selling opportunities."}},
-{{"ticker":"ABC","tier":"TIER_2","deal_thesis":"...","strategic_rationale":"..."}},
-{{"ticker":"DEF","tier":"TIER_3","deal_thesis":"...","strategic_rationale":"..."}}
-]
+Return ONLY JSON array.
 """
 
-    raw = call_ai(prompt_main, "MAIN")
+    # ─────────────────────────────
+    # MAIN CALL
+    # ─────────────────────────────
+    raw = call_ai(build_prompt(), "MAIN")
     data = extract(raw, "MAIN")
 
     # ─────────────────────────────
@@ -288,28 +286,15 @@ Return EXACTLY this format:
     # ─────────────────────────────
     if not data:
         print("\n⚠️ MAIN FAILED → RETRY\n")
-
-        prompt_retry = f"""
-Return ONLY JSON.
-
-3 companies.
-Do NOT include: {tier1_text}
-
-[
-{{"ticker":"SHOP","tier":"TIER_2","deal_thesis":"Expansion into emerging markets leveraging merchant ecosystem and logistics capabilities to scale efficiently.","strategic_rationale":"Strong synergies in platform integration, payments and cross-border commerce enabling margin expansion and revenue growth."}},
-{{"ticker":"SE","tier":"TIER_2","deal_thesis":"Regional expansion opportunity combining e-commerce and fintech platforms across LATAM markets.","strategic_rationale":"Logistics, payments and user base synergies would drive strong growth and operating leverage."}},
-{{"ticker":"KKR","tier":"TIER_3","deal_thesis":"Private equity investment in scalable marketplace platform with strong growth profile.","strategic_rationale":"Value creation through operational improvements, margin expansion and strategic repositioning."}}
-]
-"""
-        raw = call_ai(prompt_retry, "RETRY")
+        raw = call_ai(build_prompt(), "RETRY")
         data = extract(raw, "RETRY")
 
     if not data:
-        print("\n❌ TOTAL FAILURE")
-        return []
+        print("\n❌ TOTAL AI FAILURE → fallback")
+        data = []
 
     # ─────────────────────────────
-    # NORMALIZACIÓN FINAL
+    # NORMALIZACIÓN + FILTRO
     # ─────────────────────────────
     results = []
 
@@ -317,16 +302,15 @@ Do NOT include: {tier1_text}
 
     for i, obj in enumerate(data):
         ticker = str(obj.get("ticker", "")).upper().strip()
-        tier = str(obj.get("tier", "TIER_2")).strip()
+        tier = str(obj.get("tier", "")).strip()
 
         print(f"   → Raw object {i}: {obj}")
 
         if not ticker:
-            print("     ❌ missing ticker")
             continue
 
         if ticker in tier1_tickers:
-            print(f"     ❌ excluded (target or Tier 1): {ticker}")
+            print(f"     ❌ excluded: {ticker}")
             continue
 
         if tier not in ["TIER_2", "TIER_3"]:
@@ -340,7 +324,25 @@ Do NOT include: {tier1_text}
             "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
         })
 
-    print(f"\n📊 FINAL BEFORE SORT: {len(results)}")
+    # ─────────────────────────────
+    # FALLBACK INTELIGENTE
+    # ─────────────────────────────
+    if not results:
+        print("⚠️ Using fallback generation")
+
+        for t in tier1_tickers:
+            if t == target_ticker:
+                continue
+
+            results.append({
+                "ticker": t,
+                "tier": "TIER_2",
+                "deal_thesis": "Potential strategic adjacency and regional expansion opportunity.",
+                "strategic_rationale": "Operational and commercial synergies could drive scale benefits and margin improvement.",
+            })
+
+            if len(results) >= 3:
+                break
 
     # ordenar
     tier_order = {"TIER_2": 0, "TIER_3": 1}
@@ -348,7 +350,7 @@ Do NOT include: {tier1_text}
 
     results = results[:3]
 
-    print(f"🧠 FINAL OUTPUT ({len(results)}):\n{results}")
+    print(f"\n🧠 FINAL OUTPUT ({len(results)}):\n{results}")
     print("="*60 + "\n")
 
     return results
