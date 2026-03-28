@@ -102,28 +102,17 @@ import google.generativeai as genai
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 print("\n📦 MODELOS DISPONIBLES EN TU API KEY:\n")
 
-for m in genai.list_models():
-    print(m.name)
 
-print("\n✅ FIN LISTA MODELOS\n")
-try:
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    GEMINI_OK = True
-except Exception as e:
-    print(f"⚠️ Gemini init failed: {e}")
-    model = None
-    GEMINI_OK = False
 def _call_ai(prompt: str) -> str | None:
     if not model:
-        print("⚠️ Gemini not available")
         return None
 
     try:
         response = model.generate_content(
             prompt,
             generation_config={
-                "temperature": 0.3,
-                "max_output_tokens": 1200,
+                "temperature": 0.2,
+                "max_output_tokens": 800,  # 🔥 bajamos para evitar corte
             },
         )
         return response.text
@@ -151,14 +140,43 @@ def generate_deal_intelligence(
 
     print(f"   🧠 [Deal Intel] Generating briefs for {len(comps)} companies...")
 
+    # 🔥 limitar comps (clave para no romper)
+    comps = comps[:5]
+
     comps_text = _build_comps_text(comps)
-    prompt = DEAL_INTEL_PROMPT.format(
-        target_name=target_name,
-        target_ticker=target_ticker,
-        target_industry=target_industry,
-        target_revenue=target_revenue or 0,
-        comps_text=comps_text,
-    )
+
+    prompt = f"""
+You are an investment banking analyst.
+
+Analyze potential M&A buyers for {target_name} ({target_ticker}),
+a {target_industry} company with revenue {target_revenue}.
+
+For each company below, return JSON:
+
+[
+  {{
+    "ticker": "...",
+    "tier": "STRATEGIC_BUYER or FINANCIAL",
+    "deal_thesis": "...",
+    "risks": "...",
+    "expansion_signal": "HIGH/MEDIUM/LOW",
+    "expansion_note": "...",
+    "approach_rec": "PRIORITY or SECONDARY"
+  }}
+]
+
+Rules:
+- Return ONLY JSON
+- No markdown
+- No explanations
+- Keep deal_thesis under 40 words
+- Keep risks under 20 words
+- Ensure all strings are closed
+- Do not truncate
+
+Companies:
+{comps_text}
+"""
 
     try:
         t0 = time.time()
@@ -169,17 +187,11 @@ def generate_deal_intelligence(
             print("   ⚠️ [Deal Intel] All models failed")
             return []
 
-        # ─────────────────────────────
-        # LOG RAW OUTPUT (clave)
-        # ─────────────────────────────
-        print("\n🧠 RAW AI RESPONSE (first 1000 chars):\n")
-        print(raw_text[:1000])
+        print("\n🧠 RAW AI RESPONSE:\n")
+        print(raw_text[:800])
         print("\n🧠 END RAW\n")
 
-        # ─────────────────────────────
-        # CLEAN
-        # ─────────────────────────────
-
+        # ───────── CLEAN ─────────
         clean = raw_text.strip()
 
         if clean.startswith("```"):
@@ -197,10 +209,7 @@ def generate_deal_intelligence(
 
         clean = clean.replace("\n", " ").replace("\r", " ")
 
-        # ─────────────────────────────
-        # PARSE
-        # ─────────────────────────────
-
+        # ───────── PARSE ─────────
         try:
             briefs = json.loads(clean)
 
@@ -223,10 +232,7 @@ def generate_deal_intelligence(
                 print("   ⚠️ no valid JSON objects recovered")
                 return []
 
-        # ─────────────────────────────
-
         if not isinstance(briefs, list):
-            print("   ⚠️ [Deal Intel] Response is not a list")
             return []
 
         brief_map = {b.get("ticker", "").upper(): b for b in briefs}
@@ -248,15 +254,10 @@ def generate_deal_intelligence(
 
         print(f"   🧠 [Deal Intel] Generated {len(result)} briefs in {elapsed:.1f}s")
 
-        priorities = sum(1 for r in result if r["approach_rec"] == "PRIORITY")
-        strategic = sum(1 for r in result if r["tier"] == "STRATEGIC_BUYER")
-
-        print(f"   🧠 [Deal Intel] {priorities} PRIORITY | {strategic} STRATEGIC_BUYER")
-
         return result
 
     except Exception as e:
-        print(f"   ⚠️ [Deal Intel] Failed: {type(e).__name__}: {e}")
+        print(f"   ⚠️ [Deal Intel] Failed: {e}")
         return []
 
 # ─────────────────────────────────────────────

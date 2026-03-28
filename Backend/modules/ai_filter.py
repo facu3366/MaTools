@@ -79,25 +79,17 @@ import google.generativeai as genai
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
-try:
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    GEMINI_OK = True
-except Exception as e:
-    print(f"⚠️ Gemini init failed: {e}")
-    model = None
-    GEMINI_OK = False
 
 def _call_ai(prompt: str) -> str | None:
     if not model:
-        print("⚠️ Gemini not available")
         return None
 
     try:
         response = model.generate_content(
             prompt,
             generation_config={
-                "temperature": 0.3,
-                "max_output_tokens": 1200,
+                "temperature": 0.2,
+                "max_output_tokens": 800,  # 🔥 bajamos para evitar corte
             },
         )
         return response.text
