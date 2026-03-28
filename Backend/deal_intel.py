@@ -136,9 +136,6 @@ def generate_deal_intelligence(
     comps: list[dict],
 ) -> list[dict]:
 
-    # ─────────────────────────────
-    # VALIDACIONES
-    # ─────────────────────────────
     if not model:
         print("   ⚠️ [Deal Intel] Gemini not available")
         return []
@@ -146,18 +143,15 @@ def generate_deal_intelligence(
     if not comps:
         return []
 
-    print(f"   🧠 [Deal Intel] Generating Tier 2 & 3 buyers (NO Tier 1)...")
+    print("   🧠 [Deal Intel] Generating Tier 2 & 3 buyers (NO Tier 1)...")
 
-    # ─────────────────────────────
-    # CONTEXTO (NO OUTPUT)
-    # ─────────────────────────────
+    # usamos comps solo como contexto, no como output obligatorio
     context_companies = []
-
     for c in comps[:10]:
-        ticker = c.get("Ticker", "")
-        name = c.get("Empresa", ticker)
-        industry = c.get("Industria", "N/A")
-        rev = c.get("Revenue ($mm)", 0)
+        ticker = c.get("Ticker", "") or c.get("ticker", "")
+        name = c.get("Empresa", ticker) or c.get("company", ticker)
+        industry = c.get("Industria", "N/A") or c.get("industry", "N/A")
+        rev = c.get("Revenue ($mm)", 0) or c.get("revenue", 0)
 
         context_companies.append(
             f"- {ticker}: {name} | {industry} | Revenue ${rev}M"
@@ -165,9 +159,6 @@ def generate_deal_intelligence(
 
     comps_text = "\n".join(context_companies)
 
-    # ─────────────────────────────
-    # PROMPT (CLAVE)
-    # ─────────────────────────────
     prompt = f"""
 You are a senior M&A consultant at Deloitte working on a live sell-side mandate.
 
@@ -194,7 +185,7 @@ Return a JSON array of potential buyers (NOT limited to comps).
 Each object must contain:
 - "ticker"
 - "tier": "TIER_2" or "TIER_3"
-- "deal_thesis": exactly 2 lines explaining why they would buy
+- "deal_thesis": exactly 2 short lines explaining why they would buy
 - "strategic_rationale": 1 short paragraph explaining value creation
 
 RULES:
@@ -202,6 +193,8 @@ RULES:
 - You can include companies NOT in the list
 - Be commercially sharp and realistic
 - Avoid generic phrases
+- Keep responses concise
+- Return at most 5 companies
 - No markdown
 - Return ONLY valid JSON
 
@@ -229,38 +222,103 @@ Example:
 
         clean = raw.strip()
 
-        # ─────────────────────────────
-        # LIMPIEZA
-        # ─────────────────────────────
         if "```" in clean:
             clean = clean.replace("```json", "").replace("```", "").strip()
 
         start = clean.find("[")
-        end = clean.rfind("]")
 
-        if start == -1 or end == -1:
-            print("   ⚠️ invalid JSON format")
+        if start == -1:
+            print("   ⚠️ no JSON detected")
             return []
 
-        clean = clean[start:end + 1]
+        clean = clean[start:]
 
-        data = json.loads(clean)
+        # intento 1: parse directo
+        try:
+            data = json.loads(clean)
+        except Exception:
+            # intento 2: cortar al último ] si existe
+            end = clean.rfind("]")
+            if end != -1:
+                clean_try = clean[:end + 1]
+                try:
+                    data = json.loads(clean_try)
+                except Exception:
+                    # intento 3: recuperación si vino truncado
+                    print("   ⚠️ trying to recover truncated JSON")
+                    recovered = clean.rstrip()
+
+                    # si termina con coma, la saco
+                    while recovered and recovered[-1] in [",", "\n", "\r", "\t", " "]:
+                        recovered = recovered[:-1]
+
+                    # cierro objeto si quedó abierto
+                    open_braces = recovered.count("{") - recovered.count("}")
+                    if open_braces > 0:
+                        recovered += "}" * open_braces
+
+                    # cierro array si quedó abierto
+                    open_brackets = recovered.count("[") - recovered.count("]")
+                    if open_brackets > 0:
+                        recovered += "]" * open_brackets
+
+                    try:
+                        data = json.loads(recovered)
+                    except Exception as e:
+                        print(f"   ⚠️ JSON parse failed after recovery: {e}")
+                        return []
+            else:
+                # intento 3 directo si no hubo ]
+                print("   ⚠️ trying to recover truncated JSON")
+                recovered = clean.rstrip()
+
+                while recovered and recovered[-1] in [",", "\n", "\r", "\t", " "]:
+                    recovered = recovered[:-1]
+
+                open_braces = recovered.count("{") - recovered.count("}")
+                if open_braces > 0:
+                    recovered += "}" * open_braces
+
+                open_brackets = recovered.count("[") - recovered.count("]")
+                if open_brackets > 0:
+                    recovered += "]" * open_brackets
+
+                try:
+                    data = json.loads(recovered)
+                except Exception as e:
+                    print(f"   ⚠️ JSON parse failed after recovery: {e}")
+                    return []
+
+        if not isinstance(data, list):
+            print("   ⚠️ AI response is not a list")
+            return []
 
         for obj in data:
+            if not isinstance(obj, dict):
+                continue
+
+            ticker = str(obj.get("ticker", "")).upper().strip()
+            tier = str(obj.get("tier", "TIER_2")).strip()
+
+            if not ticker:
+                continue
+
+            if tier not in ["TIER_2", "TIER_3"]:
+                continue
+
             results.append({
-                "ticker": str(obj.get("ticker", "N/A")).upper(),
-                "tier": obj.get("tier", "TIER_2"),
-                "deal_thesis": obj.get("deal_thesis", ""),
-                "strategic_rationale": obj.get("strategic_rationale", ""),
+                "ticker": ticker,
+                "tier": tier,
+                "deal_thesis": str(obj.get("deal_thesis", "")).strip(),
+                "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
             })
+
+        print(f"   🧠 [Deal Intel] Generated {len(results)} Tier 2/3 buyers")
+        return results
 
     except Exception as e:
         print(f"   ❌ Deal Intel error: {e}")
         return []
-
-    print(f"   🧠 [Deal Intel] Generated {len(results)} Tier 2/3 buyers")
-
-    return results
 # ─────────────────────────────────────────────
 # API ENDPOINT
 # ─────────────────────────────────────────────
