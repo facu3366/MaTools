@@ -107,6 +107,7 @@ except Exception as e:
     print(f"⚠️ Gemini init failed: {e}")
     model = None
     GEMINI_OK = False
+
 def _call_ai(prompt: str) -> str | None:
     if not model:
         return None
@@ -115,8 +116,8 @@ def _call_ai(prompt: str) -> str | None:
         response = model.generate_content(
             prompt,
             generation_config={
-                "temperature": 0.25,
-                "max_output_tokens": 800,  # importante
+                "temperature": 0.2,
+                "max_output_tokens": 800,  # 🔥 bajamos para evitar corte
             },
         )
         return response.text
@@ -127,8 +128,8 @@ def _call_ai(prompt: str) -> str | None:
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
 # ─────────────────────────────────────────────
-import re
 import json
+import re
 
 def generate_deal_intelligence(
     target_ticker: str,
@@ -141,6 +142,8 @@ def generate_deal_intelligence(
     print("\n" + "="*60)
     print("🧠 DEAL INTEL START")
     print(f"Target: {target_name} ({target_ticker})")
+    print(f"Industry: {target_industry}")
+    print(f"Revenue: {target_revenue}")
     print(f"Comps received: {len(comps)}")
     print("="*60)
 
@@ -153,126 +156,213 @@ def generate_deal_intelligence(
         return []
 
     # ─────────────────────────────
-    # Tier1 (comparables reales)
+    # EXCLUSION LIST (TARGET + TIER 1)
     # ─────────────────────────────
-    tier1 = set()
+    tier1_tickers = set()
 
     if target_ticker:
-        tier1.add(target_ticker.upper())
+        tier1_tickers.add(str(target_ticker).upper())
 
     for c in comps:
         t = str(c.get("Ticker") or c.get("ticker") or "").upper()
         if t:
-            tier1.add(t)
+            tier1_tickers.add(t)
 
-    tier1_list = sorted(list(tier1))
+    tier1_tickers = list(tier1_tickers)
+    tier1_text = ", ".join(tier1_tickers[:25])
 
-    print(f"🚫 Tier1 detected ({len(tier1_list)}): {tier1_list}")
+    print(f"🚫 Tier 1 exclusion list ({len(tier1_tickers)}): {tier1_text}")
 
     # ─────────────────────────────
-    # PROMPT (OPTIMIZADO)
+    # AI CALL
+    # ─────────────────────────────
+    def call_ai(prompt, label="MAIN"):
+        print(f"\n🚀 CALLING GEMINI [{label}]...")
+        print(f"Prompt length: {len(prompt)} chars")
+
+        try:
+            r = model.generate_content(
+                prompt,
+                generation_config={
+                    "temperature": 0.2,
+                    "max_output_tokens": 700,
+                    "response_mime_type": "application/json",
+                },
+            )
+
+            if not r:
+                print("❌ Empty response")
+                return None
+
+            text = r.text
+
+            print(f"✅ Response received ({len(text) if text else 0} chars)")
+
+            if text and not text.strip().endswith("]"):
+                print("⚠️ Detected truncated response")
+
+            print(f"🧠 RAW [{label}]:\n{text[:600]}\n")
+
+            return text
+
+        except Exception as e:
+            print(f"❌ Gemini exception: {e}")
+            return None
+
+    # ─────────────────────────────
+    # PARSER
+    # ─────────────────────────────
+    def extract(text, label="MAIN"):
+        print(f"\n🔍 PARSING [{label}]...")
+
+        if not text:
+            return []
+
+        clean = text.strip()
+
+        if "```" in clean:
+            clean = clean.replace("```json", "").replace("```", "")
+
+        matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
+
+        print(f"Objects detected: {len(matches)}")
+
+        out = []
+        for i, m in enumerate(matches):
+            try:
+                obj = json.loads(m)
+                print(f"   ✅ Object {i} parsed")
+                out.append(obj)
+            except Exception as e:
+                print(f"   ❌ Object {i} failed: {e}")
+
+        print(f"Parsed valid objects: {len(out)}")
+        return out
+
+    # ─────────────────────────────
+    # PROMPT
     # ─────────────────────────────
     def build_prompt():
-
-        excluded = ", ".join(tier1_list[:15])  # cap para no inflar prompt
-
         return f"""
-Return ONLY a JSON array of 6-8 companies.
+Return ONLY valid JSON.
+
+You MUST return exactly 3 companies.
+
+Each object MUST follow EXACTLY this structure:
+{{"ticker":"XXX","tier":"TIER_2","deal_thesis":"text","strategic_rationale":"text"}}
 
 Target: {target_name} ({target_ticker})
 Industry: {target_industry}
 
-DO NOT include these companies:
-{excluded}
+Tier 1 (direct competitors — strictly forbidden):
+{tier1_text}
 
-Each object:
-{{
-  "ticker": "...",
-  "tier": "TIER_2" or "TIER_3",
-  "deal_thesis": "max 20 words",
-  "strategic_rationale": "max 30 words"
-}}
+If you include ANY of these tickers, the answer is INVALID.
 
 Rules:
-- No markdown
+- NEVER include target
+- NEVER include excluded tickers
+- Only TIER_2 or TIER_3 (TIER_1 is forbidden)
+- You MUST include at least 1 TIER_3 (financial sponsor)
+- At least 2 must be TIER_2
+- Avoid dominant global competitors
+- Focus on realistic acquirers
+
+- deal_thesis: 1–2 sentences (20–40 words)
+- strategic_rationale: 30–60 words
+
 - No explanations
-- JSON only
+- No markdown
+- No extra text
+
+Return ONLY JSON array.
 """
 
-    prompt = build_prompt()
+    # MAIN
+    raw = call_ai(build_prompt(), "MAIN")
+    data = extract(raw, "MAIN")
 
-    print("\n🧾 PROMPT SIZE:", len(prompt))
+    # RETRY
+    if not data:
+        print("\n⚠️ MAIN FAILED → RETRY\n")
+        raw = call_ai(build_prompt(), "RETRY")
+        data = extract(raw, "RETRY")
 
-    # ─────────────────────────────
-    # CALL AI
-    # ─────────────────────────────
-    raw = _call_ai(prompt)
-
-    print("\n🧠 RAW LENGTH:", len(raw) if raw else 0)
-
-    if not raw:
-        print("❌ EMPTY RESPONSE")
-        return []
-
-    print("\n🧠 RAW PREVIEW:")
-    print(raw[:300])
-    print("—" * 40)
+    if not data:
+        print("\n❌ TOTAL FAILURE → continuing with empty")
+        data = []
 
     # ─────────────────────────────
-    # CLEAN
+    # NORMALIZE
     # ─────────────────────────────
-    clean = raw.strip()
-    clean = clean.replace("```json", "").replace("```", "")
-
-    # ─────────────────────────────
-    # PARSER ROBUSTO
-    # ─────────────────────────────
-    matches = re.findall(r"\{[^{}]*\}", clean)
-
     results = []
 
-    print(f"\n🔍 OBJECT MATCHES: {len(matches)}")
+    print("\n🧩 NORMALIZING RESULTS...")
 
-    for i, m in enumerate(matches):
-        try:
-            obj = json.loads(m)
+    for i, obj in enumerate(data):
+        ticker = str(obj.get("ticker", "")).upper().strip()
+        tier = str(obj.get("tier", "")).strip()
 
-            ticker = str(obj.get("ticker", "")).upper().strip()
+        print(f"   → Raw object {i}: {obj}")
 
-            if not ticker:
-                continue
+        if not ticker:
+            continue
 
-            if ticker in tier1:
-                print(f"❌ Removed Tier1 duplicate: {ticker}")
-                continue
+        if ticker in tier1_tickers:
+            print(f"     ❌ excluded Tier 1: {ticker}")
+            continue
 
-            results.append({
-                "ticker": ticker,
-                "name": obj.get("name", ""),
-                "tier": obj.get("tier", ""),
-                "deal_thesis": obj.get("deal_thesis", ""),
-                "strategic_rationale": obj.get("strategic_rationale", ""),
-            })
+        if tier not in ["TIER_2", "TIER_3"]:
+            print(f"     ❌ invalid tier: {tier}")
+            continue
 
-        except Exception as e:
-            print(f"❌ Parse fail {i}: {m[:80]}")
+        results.append({
+            "ticker": ticker,
+            "tier": tier,
+            "deal_thesis": str(obj.get("deal_thesis", "")).strip(),
+            "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
+        })
 
     # ─────────────────────────────
-    # DEDUP
+    # POST-FILTER INTELIGENTE
     # ─────────────────────────────
     seen = set()
-    clean_final = []
+    clean_results = []
 
     for r in results:
         if r["ticker"] in seen:
             continue
         seen.add(r["ticker"])
-        clean_final.append(r)
+        clean_results.append(r)
 
-    print(f"\n🧠 FINAL COUNT: {len(clean_final)}")
+    results = clean_results
+
+    tier2 = [r for r in results if r["tier"] == "TIER_2"]
+    tier3 = [r for r in results if r["tier"] == "TIER_3"]
+
+    if len(tier3) == 0:
+        print("⚠️ No Tier 3 → injecting fallback PE")
+        tier3.append({
+            "ticker": "PE_FUND",
+            "tier": "TIER_3",
+            "deal_thesis": "Private equity investment in scalable digital platform with strong growth potential.",
+            "strategic_rationale": "Operational improvements and strategic repositioning to drive value creation and exit optionality.",
+        })
+
+    results = tier2[:2] + tier3[:1]
+
+    while len(results) < 3:
+        results.append({
+            "ticker": "ALT_BUYER",
+            "tier": "TIER_2",
+            "deal_thesis": "Strategic adjacency and expansion opportunity.",
+            "strategic_rationale": "Potential synergies in operations and customer base expansion.",
+        })
+
+    print(f"\n🧠 FINAL OUTPUT ({len(results)}):\n{results}")
     print("="*60 + "\n")
 
-    return clean_final
+    return results
 # ─────────────────────────────────────────────
 # API ENDPOINT
 # ─────────────────────────────────────────────
