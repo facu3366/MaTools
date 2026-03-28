@@ -142,8 +142,6 @@ def generate_deal_intelligence(
     print("\n" + "="*60)
     print("🧠 DEAL INTEL START")
     print(f"Target: {target_name} ({target_ticker})")
-    print(f"Industry: {target_industry}")
-    print(f"Revenue: {target_revenue}")
     print(f"Comps received: {len(comps)}")
     print("="*60)
 
@@ -156,7 +154,7 @@ def generate_deal_intelligence(
         return []
 
     # ─────────────────────────────
-    # EXCLUSION LIST (TARGET + TIER 1)
+    # EXCLUSION LIST (Tier 1 + Target)
     # ─────────────────────────────
     tier1 = set()
 
@@ -171,20 +169,64 @@ def generate_deal_intelligence(
     tier1_list = list(tier1)
     tier1_text = ", ".join(tier1_list[:25])
 
-    print(f"🚫 Exclusion list ({len(tier1_list)}): {tier1_text}")
+    print(f"🚫 Tier1 exclusion ({len(tier1_list)}): {tier1_text}")
+
+    # ─────────────────────────────
+    # PROMPT
+    # ─────────────────────────────
+    def build_prompt():
+        return f"""
+Return ONLY a valid JSON array of 10-15 objects.
+
+Role: Senior M&A Associate at Deloitte.
+
+Target: {target_name} ({target_ticker})
+Industry: {target_industry}
+
+Known Tier 1 (DO NOT INCLUDE):
+{tier1_text}
+
+Task:
+Identify and classify additional relevant companies into:
+
+TIER_2 (Strategic / Vertical):
+Non-direct competitors with synergies or expansion logic.
+
+TIER_3 (Financial Sponsors):
+Private equity or institutional investors.
+
+Each JSON object MUST follow:
+{{
+  "ticker": "TICKER",
+  "name": "Company Name",
+  "tier": "TIER_2" | "TIER_3",
+  "deal_thesis": "1-2 sentences (20-40 words).",
+  "strategic_rationale": "Detailed rationale (30-60 words)."
+}}
+
+Rules:
+- DO NOT include Tier 1
+- DO NOT include target
+- DO NOT output TIER_1
+- Include both TIER_2 and TIER_3
+- Minimum 3 per tier
+- No markdown
+- No explanations
+
+Return ONLY JSON.
+"""
 
     # ─────────────────────────────
     # AI CALL
     # ─────────────────────────────
     def call_ai(prompt, label):
-        print(f"\n🚀 CALLING GEMINI [{label}]...")
-        print(f"Prompt size: {len(prompt)}")
+        print(f"\n🚀 CALL [{label}]")
 
         try:
             r = model.generate_content(
                 prompt,
                 generation_config={
-                    "temperature": 0.35,  # un poco más creativo
+                    "temperature": 0.35,
                     "max_output_tokens": 900,
                     "response_mime_type": "application/json",
                 },
@@ -192,10 +234,7 @@ def generate_deal_intelligence(
 
             text = r.text if r else None
 
-            print(f"🧠 RAW [{label}]:\n{text[:600] if text else 'EMPTY'}\n")
-
-            if text and not text.strip().endswith("]"):
-                print("⚠️ Possible truncation detected")
+            print(f"🧠 RAW [{label}]:\n{text[:500] if text else 'EMPTY'}\n")
 
             return text
 
@@ -204,7 +243,7 @@ def generate_deal_intelligence(
             return None
 
     # ─────────────────────────────
-    # PARSER ROBUSTO
+    # PARSER
     # ─────────────────────────────
     def extract(text):
         if not text:
@@ -217,67 +256,35 @@ def generate_deal_intelligence(
 
         matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
 
-        objs = []
+        out = []
         for m in matches:
             try:
-                objs.append(json.loads(m))
+                out.append(json.loads(m))
             except:
                 continue
 
-        print(f"✅ Parsed objects: {len(objs)}")
-        return objs
+        print(f"✅ Parsed: {len(out)} objects")
+        return out
 
     # ─────────────────────────────
-    # PROMPT (MODO CONSULTOR REAL)
+    # EXECUTION
     # ─────────────────────────────
-def build_prompt(target_name, target_ticker, target_industry, sector_context):
-    return f"""
-Return ONLY a valid JSON array of exactly 10-15 objects. 
-Role: Senior M&A Associate at Deloitte.
-Target: {target_name} ({target_ticker})
-Industry: {target_industry}
+    prompt = build_prompt()
 
-Task: Identify and classify potential acquirers/comparables into 3 Tiers:
-
-1. TIER_1 (Direct Competitors): Companies with the same core business and overlapping market share.
-2. TIER_2 (Strategic/Vertical): Generalists, companies with shared business units, or those that could generate economies of scale/synergies (e.g., supply chain integration, in-house production).
-3. TIER_3 (Financial Sponsors): Private Equity firms or major Institutional Investors interested in this sector.
-
-Each JSON object MUST follow this structure:
-{{
-  "ticker": "TICKER",
-  "name": "Company Name",
-  "tier": "TIER_1" | "TIER_2" | "TIER_3",
-  "deal_thesis": "1-2 sentences explaining the strategic fit (20-40 words).",
-  "strategic_rationale": "Detailed explanation of synergies or investment thesis (30-60 words)."
-}}
-
-Rules:
-- Strictly NO prose or markdown.
-- Must include at least 3 companies for EACH Tier.
-- Ensure 'deal_thesis' and 'strategic_rationale' sound professional and data-driven.
-- Focus on LATAM relevance if applicable.
-
-Return ONLY the JSON array.
-"""
-
-    # ─────────────────────────────
-    # MAIN + RETRY
-    # ─────────────────────────────
-    raw = call_ai(build_prompt(), "MAIN")
+    raw = call_ai(prompt, "MAIN")
     data = extract(raw)
 
     if not data:
-        print("⚠️ RETRYING...")
-        raw = call_ai(build_prompt(), "RETRY")
+        print("⚠️ RETRY")
+        raw = call_ai(prompt, "RETRY")
         data = extract(raw)
 
     if not data:
-        print("❌ No valid AI output")
+        print("❌ AI FAILED")
         return []
 
     # ─────────────────────────────
-    # NORMALIZACIÓN SUAVE (SIN HARD FILTERING AGRESIVO)
+    # NORMALIZATION (SIN HARD FILTER AGRESIVO)
     # ─────────────────────────────
     results = []
 
@@ -297,12 +304,13 @@ Return ONLY the JSON array.
 
         results.append({
             "ticker": ticker,
+            "name": obj.get("name", ""),
             "tier": tier,
             "deal_thesis": obj.get("deal_thesis", ""),
             "strategic_rationale": obj.get("strategic_rationale", ""),
         })
 
-    # eliminar duplicados
+    # dedup
     seen = set()
     clean = []
     for r in results:
@@ -311,10 +319,10 @@ Return ONLY the JSON array.
         seen.add(r["ticker"])
         clean.append(r)
 
-    print(f"\n🧠 FINAL RESULTS ({len(clean)}):\n{clean}")
+    print(f"\n🧠 FINAL ({len(clean)}): {clean}")
     print("="*60 + "\n")
 
-    return clean[:3]
+    return clean
 # ─────────────────────────────────────────────
 # API ENDPOINT
 # ─────────────────────────────────────────────
