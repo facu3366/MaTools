@@ -171,7 +171,7 @@ def generate_deal_intelligence(
     tier1_tickers = list(tier1_tickers)
     tier1_text = ", ".join(tier1_tickers[:25])
 
-    print(f"🚫 Exclusion list ({len(tier1_tickers)}): {tier1_text}")
+    print(f"🚫 Tier 1 exclusion list ({len(tier1_tickers)}): {tier1_text}")
 
     # ─────────────────────────────
     # AI CALL
@@ -210,7 +210,7 @@ def generate_deal_intelligence(
             return None
 
     # ─────────────────────────────
-    # PARSER ROBUSTO
+    # PARSER
     # ─────────────────────────────
     def extract(text, label="MAIN"):
         print(f"\n🔍 PARSING [{label}]...")
@@ -240,7 +240,7 @@ def generate_deal_intelligence(
         return out
 
     # ─────────────────────────────
-    # PROMPT BASE (USADO EN MAIN Y RETRY)
+    # PROMPT
     # ─────────────────────────────
     def build_prompt():
         return f"""
@@ -254,13 +254,16 @@ Each object MUST follow EXACTLY this structure:
 Target: {target_name} ({target_ticker})
 Industry: {target_industry}
 
-DO NOT include these companies:
+Tier 1 (direct competitors — strictly forbidden):
 {tier1_text}
+
+If you include ANY of these tickers, the answer is INVALID.
 
 Rules:
 - NEVER include target
 - NEVER include excluded tickers
 - Only TIER_2 or TIER_3 (TIER_1 is forbidden)
+- You MUST include at least 1 TIER_3 (financial sponsor)
 - At least 2 must be TIER_2
 - Avoid dominant global competitors
 - Focus on realistic acquirers
@@ -275,26 +278,22 @@ Rules:
 Return ONLY JSON array.
 """
 
-    # ─────────────────────────────
-    # MAIN CALL
-    # ─────────────────────────────
+    # MAIN
     raw = call_ai(build_prompt(), "MAIN")
     data = extract(raw, "MAIN")
 
-    # ─────────────────────────────
     # RETRY
-    # ─────────────────────────────
     if not data:
         print("\n⚠️ MAIN FAILED → RETRY\n")
         raw = call_ai(build_prompt(), "RETRY")
         data = extract(raw, "RETRY")
 
     if not data:
-        print("\n❌ TOTAL AI FAILURE → fallback")
+        print("\n❌ TOTAL FAILURE → continuing with empty")
         data = []
 
     # ─────────────────────────────
-    # NORMALIZACIÓN + FILTRO
+    # NORMALIZE
     # ─────────────────────────────
     results = []
 
@@ -310,7 +309,7 @@ Return ONLY JSON array.
             continue
 
         if ticker in tier1_tickers:
-            print(f"     ❌ excluded: {ticker}")
+            print(f"     ❌ excluded Tier 1: {ticker}")
             continue
 
         if tier not in ["TIER_2", "TIER_3"]:
@@ -325,30 +324,40 @@ Return ONLY JSON array.
         })
 
     # ─────────────────────────────
-    # FALLBACK INTELIGENTE
+    # POST-FILTER INTELIGENTE
     # ─────────────────────────────
-    if not results:
-        print("⚠️ Using fallback generation")
+    seen = set()
+    clean_results = []
 
-        for t in tier1_tickers:
-            if t == target_ticker:
-                continue
+    for r in results:
+        if r["ticker"] in seen:
+            continue
+        seen.add(r["ticker"])
+        clean_results.append(r)
 
-            results.append({
-                "ticker": t,
-                "tier": "TIER_2",
-                "deal_thesis": "Potential strategic adjacency and regional expansion opportunity.",
-                "strategic_rationale": "Operational and commercial synergies could drive scale benefits and margin improvement.",
-            })
+    results = clean_results
 
-            if len(results) >= 3:
-                break
+    tier2 = [r for r in results if r["tier"] == "TIER_2"]
+    tier3 = [r for r in results if r["tier"] == "TIER_3"]
 
-    # ordenar
-    tier_order = {"TIER_2": 0, "TIER_3": 1}
-    results.sort(key=lambda x: tier_order.get(x["tier"], 99))
+    if len(tier3) == 0:
+        print("⚠️ No Tier 3 → injecting fallback PE")
+        tier3.append({
+            "ticker": "PE_FUND",
+            "tier": "TIER_3",
+            "deal_thesis": "Private equity investment in scalable digital platform with strong growth potential.",
+            "strategic_rationale": "Operational improvements and strategic repositioning to drive value creation and exit optionality.",
+        })
 
-    results = results[:3]
+    results = tier2[:2] + tier3[:1]
+
+    while len(results) < 3:
+        results.append({
+            "ticker": "ALT_BUYER",
+            "tier": "TIER_2",
+            "deal_thesis": "Strategic adjacency and expansion opportunity.",
+            "strategic_rationale": "Potential synergies in operations and customer base expansion.",
+        })
 
     print(f"\n🧠 FINAL OUTPUT ({len(results)}):\n{results}")
     print("="*60 + "\n")
