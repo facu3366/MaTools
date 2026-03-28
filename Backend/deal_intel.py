@@ -116,20 +116,10 @@ def _call_ai(prompt: str) -> str | None:
             prompt,
             generation_config={
                 "temperature": 0.25,
-                "max_output_tokens": 800,
+                "max_output_tokens": 800,  # importante
             },
         )
-
-        # 🔥 FIX CLAVE: reconstruir texto completo
-        text = ""
-
-        try:
-            parts = response.candidates[0].content.parts
-            text = "".join([p.text for p in parts if hasattr(p, "text")])
-        except Exception:
-            text = response.text  # fallback
-
-        return text
+        return response.text
 
     except Exception as e:
         print(f"❌ Gemini failed: {e}")
@@ -137,6 +127,7 @@ def _call_ai(prompt: str) -> str | None:
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
 # ─────────────────────────────────────────────
+import re
 import json
 
 def generate_deal_intelligence(
@@ -177,7 +168,7 @@ def generate_deal_intelligence(
     print(f"🚫 Tier1 detected ({len(tier1)}): {list(tier1)}")
 
     # ─────────────────────────────
-    # PROMPT (igual al tuyo)
+    # PROMPT
     # ─────────────────────────────
     def build_prompt(target_name, target_ticker, target_industry):
         return f"""
@@ -188,79 +179,67 @@ Industry: {target_industry}
 
 Task: Identify and classify potential acquirers/comparables into 3 Tiers:
 
-1. TIER_1 (Direct Competitors): Companies with the same core business and overlapping market share.
-2. TIER_2 (Strategic/Vertical): Generalists, companies with shared business units, or those that could generate economies of scale/synergies (e.g., supply chain integration, in-house production).
-3. TIER_3 (Financial Sponsors): Private Equity firms or major Institutional Investors interested in this sector.
+1. TIER_1 (Direct Competitors)
+2. TIER_2 (Strategic/Vertical)
+3. TIER_3 (Financial Sponsors)
 
-Each JSON object MUST follow this structure:
+Each JSON object MUST follow:
 {{
   "ticker": "TICKER",
   "name": "Company Name",
   "tier": "TIER_1" | "TIER_2" | "TIER_3",
-  "deal_thesis": "1-2 sentences explaining the strategic fit (20-40 words).",
-  "strategic_rationale": "Detailed explanation of synergies or investment thesis (30-60 words)."
+  "deal_thesis": "...",
+  "strategic_rationale": "..."
 }}
 
 Rules:
-- Strictly NO prose or markdown.
-- Must include at least 3 companies for EACH Tier.
-- Ensure 'deal_thesis' and 'strategic_rationale' sound professional and data-driven.
-- Focus on LATAM relevance if applicable.
-- DO NOT include companies already listed as direct competitors.
+- No markdown
+- No explanations
+- DO NOT include Tier1 companies
 
-Return ONLY the JSON array.
+Return ONLY JSON array.
 """
 
     # ─────────────────────────────
-    # PARSER ROBUSTO (FIX CLAVE)
+    # PARSER ROBUSTO (CLAVE)
     # ─────────────────────────────
     def extract(text):
         if not text:
             return []
 
         clean = text.strip()
+        clean = clean.replace("```json", "").replace("```", "")
 
-        if "```" in clean:
-            clean = clean.replace("```json", "").replace("```", "")
+        # 🔥 extraer objetos individuales (NO JSON completo)
+        matches = re.findall(r"\{[^{}]*\}", clean)
 
-        # intento directo
-        try:
-            data = json.loads(clean)
-            if isinstance(data, list):
-                print(f"✅ Parsed objects (direct): {len(data)}")
-                return data
-        except:
-            pass
+        results = []
 
-        # fallback buscando array
-        try:
-            start = clean.find("[")
-            end = clean.rfind("]") + 1
-            if start != -1 and end != -1:
-                data = json.loads(clean[start:end])
-                print(f"✅ Parsed objects (fallback): {len(data)}")
-                return data
-        except:
-            pass
+        for m in matches:
+            try:
+                obj = json.loads(m)
+                if isinstance(obj, dict) and obj.get("ticker"):
+                    results.append(obj)
+            except:
+                continue
 
-        print("❌ Could not parse JSON")
-        return []
+        print(f"✅ Extracted objects (robust): {len(results)}")
+        return results
 
     # ─────────────────────────────
-    # EXECUTION
+    # EXECUTION (SIN RETRY)
     # ─────────────────────────────
     prompt = build_prompt(target_name, target_ticker, target_industry)
 
     raw = _call_ai(prompt)
-    print(f"\n🧠 RAW [MAIN]:\n{raw[:500] if raw else 'EMPTY'}\n")
+    print(f"\n🧠 RAW:\n{raw[:500] if raw else 'EMPTY'}\n")
 
     data = extract(raw)
 
     if not data:
-        print("⚠️ RETRY")
-        raw = _call_ai(prompt)
-        print(f"\n🧠 RAW [RETRY]:\n{raw[:500] if raw else 'EMPTY'}\n")
-        data = extract(raw)
+        print("❌ AI FAILED")
+        return []
+
     # ─────────────────────────────
     # FILTRO FINAL
     # ─────────────────────────────
