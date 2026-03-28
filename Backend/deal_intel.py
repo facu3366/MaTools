@@ -143,127 +143,91 @@ def generate_deal_intelligence(
     if not comps:
         return []
 
-    print(f"   🧠 [Deal Intel] Generating briefs for {len(comps)} companies...")
+    print(f"   🧠 [Deal Intel] Generating briefs (1-by-1 mode)...")
 
-    # 🔥 limitar comps (clave para no romper)
-    comps = comps[:5]
+    results = []
 
-    comps_text = _build_comps_text(comps)
+    for comp in comps[:5]:  # limitamos igual
+        ticker = comp.get("Ticker", "")
 
-    prompt = f"""
+        prompt = f"""
 You are an investment banking analyst.
 
-Analyze potential M&A buyers for {target_name} ({target_ticker}),
-a {target_industry} company with revenue {target_revenue}.
+Analyze if {ticker} could acquire {target_name} ({target_ticker}),
+a {target_industry} company.
 
-For each company below, return JSON:
+Return ONLY JSON:
 
-[
-  {{
-    "ticker": "...",
-    "tier": "STRATEGIC_BUYER or FINANCIAL",
-    "deal_thesis": "...",
-    "risks": "...",
-    "expansion_signal": "HIGH/MEDIUM/LOW",
-    "expansion_note": "...",
-    "approach_rec": "PRIORITY or SECONDARY"
-  }}
-]
+{{
+  "ticker": "{ticker}",
+  "tier": "STRATEGIC_BUYER or FINANCIAL",
+  "deal_thesis": "...",
+  "risks": "...",
+  "expansion_signal": "HIGH/MEDIUM/LOW",
+  "expansion_note": "...",
+  "approach_rec": "PRIORITY or SECONDARY"
+}}
 
 Rules:
-- Return ONLY JSON
+- Keep deal_thesis under 30 words
+- Keep risks under 15 words
 - No markdown
-- No explanations
-- Keep deal_thesis under 40 words
-- Keep risks under 20 words
-- Ensure all strings are closed
-- Do not truncate
-
-Companies:
-{comps_text}
+- Valid JSON only
 """
 
-    try:
-        t0 = time.time()
-        raw_text = _call_ai(prompt)
-        elapsed = time.time() - t0
-
-        if raw_text is None:
-            print("   ⚠️ [Deal Intel] All models failed")
-            return []
-
-        print("\n🧠 RAW AI RESPONSE:\n")
-        print(raw_text[:800])
-        print("\n🧠 END RAW\n")
-
-        # ───────── CLEAN ─────────
-        clean = raw_text.strip()
-
-        if clean.startswith("```"):
-            clean = clean.split("\n", 1)[-1]
-        if clean.endswith("```"):
-            clean = clean.rsplit("```", 1)[0]
-
-        clean = clean.strip()
-
-        start_idx = clean.find("[")
-        end_idx = clean.rfind("]")
-
-        if start_idx != -1 and end_idx != -1:
-            clean = clean[start_idx:end_idx + 1]
-
-        clean = clean.replace("\n", " ").replace("\r", " ")
-
-        # ───────── PARSE ─────────
         try:
-            briefs = json.loads(clean)
+            raw = _call_ai(prompt)
 
-        except json.JSONDecodeError:
-            print("   ⚠️ retry JSON parse (regex recovery)...")
+            if not raw:
+                continue
 
-            import re
+            print(f"\n🧠 RAW {ticker}:\n{raw}\n")
 
-            matches = re.findall(r"\{.*?\}", clean)
+            # limpiar
+            clean = raw.strip()
 
-            briefs = []
-            for m in matches:
-                try:
-                    obj = json.loads(m)
-                    briefs.append(obj)
-                except:
-                    continue
+            if clean.startswith("```"):
+                clean = clean.split("\n", 1)[-1]
+            if clean.endswith("```"):
+                clean = clean.rsplit("```", 1)[0]
 
-            if not briefs:
-                print("   ⚠️ no valid JSON objects recovered")
-                return []
+            clean = clean.strip()
 
-        if not isinstance(briefs, list):
-            return []
+            # extraer objeto
+            start = clean.find("{")
+            end = clean.rfind("}")
 
-        brief_map = {b.get("ticker", "").upper(): b for b in briefs}
+            if start != -1 and end != -1:
+                clean = clean[start:end+1]
 
-        result = []
-        for comp in comps:
-            ticker = comp.get("Ticker", "").upper()
-            brief = brief_map.get(ticker, {})
+            obj = json.loads(clean)
+            results.append(obj)
 
-            result.append({
-                "ticker": ticker,
-                "tier": brief.get("tier", "STRATEGIC_BUYER"),
-                "deal_thesis": brief.get("deal_thesis", ""),
-                "risks": brief.get("risks", ""),
-                "expansion_signal": brief.get("expansion_signal", "MEDIUM"),
-                "expansion_note": brief.get("expansion_note", ""),
-                "approach_rec": brief.get("approach_rec", "SECONDARY"),
-            })
+        except Exception as e:
+            print(f"   ⚠️ {ticker} failed: {e}")
+            continue
 
-        print(f"   🧠 [Deal Intel] Generated {len(result)} briefs in {elapsed:.1f}s")
+    print(f"   🧠 [Deal Intel] Generated {len(results)} briefs")
 
-        return result
+    # map back
+    brief_map = {b.get("ticker", "").upper(): b for b in results}
 
-    except Exception as e:
-        print(f"   ⚠️ [Deal Intel] Failed: {e}")
-        return []
+    final = []
+    for comp in comps:
+        ticker = comp.get("Ticker", "").upper()
+        b = brief_map.get(ticker, {})
+
+        final.append({
+            "ticker": ticker,
+            "tier": b.get("tier", "STRATEGIC_BUYER"),
+            "deal_thesis": b.get("deal_thesis", ""),
+            "risks": b.get("risks", ""),
+            "expansion_signal": b.get("expansion_signal", "MEDIUM"),
+            "expansion_note": b.get("expansion_note", ""),
+            "approach_rec": b.get("approach_rec", "SECONDARY"),
+        })
+
+    return final
 
 # ─────────────────────────────────────────────
 # API ENDPOINT
