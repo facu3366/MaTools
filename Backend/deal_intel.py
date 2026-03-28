@@ -42,7 +42,7 @@ class DealIntelRequest(BaseModel):
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 try:
-    model = genai.GenerativeModel("gemini-2.5-pro")
+    model = genai.GenerativeModel("gemini-2.0-flash")
     GEMINI_OK = True
 except Exception as e:
     print(f"⚠️ Gemini init failed: {e}")
