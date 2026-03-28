@@ -156,19 +156,25 @@ def generate_deal_intelligence(
         return []
 
     # ─────────────────────────────
-    # BUILD TIER 1 EXCLUSION LIST
+    # BUILD EXCLUSION LIST (TARGET + TIER 1)
     # ─────────────────────────────
-    tier1_tickers = [
-        str(c.get("Ticker") or c.get("ticker") or "").upper()
-        for c in comps
-    ]
-    tier1_tickers = [t for t in tier1_tickers if t]
-    tier1_text = ", ".join(tier1_tickers[:20])
+    tier1_tickers = set()
 
-    print(f"🚫 Tier 1 exclusion list ({len(tier1_tickers)}): {tier1_text}")
+    if target_ticker:
+        tier1_tickers.add(str(target_ticker).upper())
+
+    for c in comps:
+        t = str(c.get("Ticker") or c.get("ticker") or "").upper()
+        if t:
+            tier1_tickers.add(t)
+
+    tier1_tickers = list(tier1_tickers)
+    tier1_text = ", ".join(tier1_tickers[:25])
+
+    print(f"🚫 Exclusion list ({len(tier1_tickers)}): {tier1_text}")
 
     # ─────────────────────────────
-    # CALL AI
+    # AI CALL
     # ─────────────────────────────
     def call_ai(prompt, label="MAIN"):
         print(f"\n🚀 CALLING GEMINI [{label}]...")
@@ -215,8 +221,6 @@ def generate_deal_intelligence(
             print("⚠️ Markdown detected, cleaning...")
             clean = clean.replace("```json", "").replace("```", "")
 
-        print(f"Clean length: {len(clean)}")
-
         matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
 
         print(f"Objects detected: {len(matches)}")
@@ -235,7 +239,7 @@ def generate_deal_intelligence(
         return out
 
     # ─────────────────────────────
-    # PROMPT MEJORADO
+    # PROMPT PRINCIPAL
     # ─────────────────────────────
     prompt_main = f"""
 Return ONLY valid JSON.
@@ -248,16 +252,21 @@ Each object MUST follow EXACTLY this structure:
 Target: {target_name} ({target_ticker})
 Industry: {target_industry}
 
-DO NOT include these companies (already Tier 1 competitors):
+DO NOT include these companies:
 {tier1_text}
 
 Rules:
+- NEVER include the target company
+- NEVER include any ticker from the exclusion list
 - Only TIER_2 or TIER_3
-- Avoid large global competitors already dominant in the industry
-- Focus on realistic acquirers with strategic or financial fit
+- At least 2 must be TIER_2
+- Avoid dominant global competitors
+- Focus on realistic acquirers
+
 - deal_thesis: 1–2 sentences (20–40 words)
 - strategic_rationale: 1 short paragraph (30–60 words)
 - Be specific (geography, synergies, scale, product)
+
 - No explanations
 - No markdown
 - No extra text
@@ -271,42 +280,36 @@ Return EXACTLY this format:
 ]
 """
 
-    # ─────────────────────────────
-    # MAIN CALL
-    # ─────────────────────────────
     raw = call_ai(prompt_main, "MAIN")
-
     data = extract(raw, "MAIN")
 
     # ─────────────────────────────
-    # RETRY SI FALLA
+    # RETRY
     # ─────────────────────────────
     if not data:
-        print("\n⚠️ MAIN FAILED → RETRYING...\n")
+        print("\n⚠️ MAIN FAILED → RETRY\n")
 
         prompt_retry = f"""
 Return ONLY JSON.
 
 3 companies.
-
-Do NOT include:
-{tier1_text}
+Do NOT include: {tier1_text}
 
 [
-{{"ticker":"SHOP","tier":"TIER_2","deal_thesis":"Expansion into emerging markets with merchant ecosystem synergies.","strategic_rationale":"Platform integration, payments and merchant services would drive cross-sell and revenue growth."}},
-{{"ticker":"SE","tier":"TIER_2","deal_thesis":"Regional e-commerce and fintech expansion opportunity in LATAM.","strategic_rationale":"Strong synergies in logistics, payments and user base expansion across geographies."}},
-{{"ticker":"KKR","tier":"TIER_3","deal_thesis":"Private equity investment in scalable marketplace platform.","strategic_rationale":"Operational improvements and strategic repositioning to drive valuation uplift."}}
+{{"ticker":"SHOP","tier":"TIER_2","deal_thesis":"Expansion into emerging markets leveraging merchant ecosystem and logistics capabilities to scale efficiently.","strategic_rationale":"Strong synergies in platform integration, payments and cross-border commerce enabling margin expansion and revenue growth."}},
+{{"ticker":"SE","tier":"TIER_2","deal_thesis":"Regional expansion opportunity combining e-commerce and fintech platforms across LATAM markets.","strategic_rationale":"Logistics, payments and user base synergies would drive strong growth and operating leverage."}},
+{{"ticker":"KKR","tier":"TIER_3","deal_thesis":"Private equity investment in scalable marketplace platform with strong growth profile.","strategic_rationale":"Value creation through operational improvements, margin expansion and strategic repositioning."}}
 ]
 """
         raw = call_ai(prompt_retry, "RETRY")
         data = extract(raw, "RETRY")
 
     if not data:
-        print("\n❌ TOTAL FAILURE → returning empty\n")
+        print("\n❌ TOTAL FAILURE")
         return []
 
     # ─────────────────────────────
-    # NORMALIZACIÓN
+    # NORMALIZACIÓN FINAL
     # ─────────────────────────────
     results = []
 
@@ -323,7 +326,7 @@ Do NOT include:
             continue
 
         if ticker in tier1_tickers:
-            print(f"     ❌ excluded Tier 1 ticker: {ticker}")
+            print(f"     ❌ excluded (target or Tier 1): {ticker}")
             continue
 
         if tier not in ["TIER_2", "TIER_3"]:
@@ -337,13 +340,12 @@ Do NOT include:
             "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
         })
 
-    print(f"\n📊 FINAL RESULTS BEFORE TRIM: {len(results)}")
+    print(f"\n📊 FINAL BEFORE SORT: {len(results)}")
 
-    # ordenar: estratégicos primero
+    # ordenar
     tier_order = {"TIER_2": 0, "TIER_3": 1}
     results.sort(key=lambda x: tier_order.get(x["tier"], 99))
 
-    # limitar
     results = results[:3]
 
     print(f"🧠 FINAL OUTPUT ({len(results)}):\n{results}")
