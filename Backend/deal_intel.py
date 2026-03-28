@@ -106,9 +106,11 @@ for m in genai.list_models():
 print("\n✅ FIN LISTA MODELOS\n")
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
-model = genai.GenerativeModel("gemini-1.5-flash")
+model = genai.GenerativeModel("gemini-1.5-flash-latest")
+print("TEST GEMINI...")
 
-
+response = model.generate_content("hola")
+print("RESPUESTA:", response.text)
 def _call_ai(prompt: str) -> str | None:
     try:
         print("   🧠 Calling Gemini 1.5 Flash")
