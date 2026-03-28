@@ -944,16 +944,13 @@ function triggerDealIntel() {
     return;
   }
 
-  let comps = d.empresas_filtradas || d.empresas || [];
-
-  comps = comps.slice(0, 15).map((c) => ({
+  let comps = d.empresas_universe || d.empresas || [];
+  comps = comps.slice(0, 25).map((c) => ({
     ticker: c.Ticker,
-    ev: c["EV ($mm)"],
+    name: c.Empresa,
+    sector: d.sector,
     revenue: c["Revenue ($mm)"],
-    ebitda: c["EBITDA ($mm)"],
-    evRev: c["EV/Rev"],
-    evEbitda: c["EV/EBITDA"],
-    margin: c["EBITDA Mg"],
+    ev: c["EV ($mm)"],
   }));
 
   console.log("🧠 DEAL INTEL TRIGGER", comps);
@@ -1002,6 +999,7 @@ function renderDealIntelTable(briefs) {
   const container = document.getElementById("result-comps");
 
   // separar tiers
+
   const tier2 = briefs.filter((b) => b.tier === "TIER_2");
   const tier3 = briefs.filter((b) => b.tier === "TIER_3");
 

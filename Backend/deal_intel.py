@@ -129,7 +129,6 @@ def _call_ai(prompt: str) -> str | None:
 # MAIN FUNCTION
 # ─────────────────────────────────────────────
 import json
-import re
 
 def generate_deal_intelligence(
     target_ticker: str,
@@ -154,7 +153,7 @@ def generate_deal_intelligence(
         return []
 
     # ─────────────────────────────
-    # Tier 1 (para filtrar después)
+    # Tier 1 (comparables reales)
     # ─────────────────────────────
     tier1 = set()
 
@@ -169,9 +168,9 @@ def generate_deal_intelligence(
     print(f"🚫 Tier1 detected ({len(tier1)}): {list(tier1)}")
 
     # ─────────────────────────────
-    # TU PROMPT (SIN MODIFICAR)
+    # PROMPT (igual al tuyo)
     # ─────────────────────────────
-    def build_prompt(target_name, target_ticker, target_industry, sector_context=None):
+    def build_prompt(target_name, target_ticker, target_industry):
         return f"""
 Return ONLY a valid JSON array of exactly 10-15 objects. 
 Role: Senior M&A Associate at Deloitte.
@@ -198,6 +197,7 @@ Rules:
 - Must include at least 3 companies for EACH Tier.
 - Ensure 'deal_thesis' and 'strategic_rationale' sound professional and data-driven.
 - Focus on LATAM relevance if applicable.
+- DO NOT include companies already listed as direct competitors.
 
 Return ONLY the JSON array.
 """
@@ -213,7 +213,7 @@ Return ONLY the JSON array.
                 prompt,
                 generation_config={
                     "temperature": 0.35,
-                    "max_output_tokens": 1000,
+                    "max_output_tokens": 1200,
                     "response_mime_type": "application/json",
                 },
             )
@@ -229,7 +229,7 @@ Return ONLY the JSON array.
             return None
 
     # ─────────────────────────────
-    # PARSER ROBUSTO
+    # PARSER ROBUSTO (FIX CLAVE)
     # ─────────────────────────────
     def extract(text):
         if not text:
@@ -240,17 +240,28 @@ Return ONLY the JSON array.
         if "```" in clean:
             clean = clean.replace("```json", "").replace("```", "")
 
-        matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
+        # intento directo
+        try:
+            data = json.loads(clean)
+            if isinstance(data, list):
+                print(f"✅ Parsed objects (direct): {len(data)}")
+                return data
+        except:
+            pass
 
-        objs = []
-        for m in matches:
-            try:
-                objs.append(json.loads(m))
-            except:
-                continue
+        # fallback buscando array
+        try:
+            start = clean.find("[")
+            end = clean.rfind("]") + 1
+            if start != -1 and end != -1:
+                data = json.loads(clean[start:end])
+                print(f"✅ Parsed objects (fallback): {len(data)}")
+                return data
+        except:
+            pass
 
-        print(f"✅ Parsed objects: {len(objs)}")
-        return objs
+        print("❌ Could not parse JSON")
+        return []
 
     # ─────────────────────────────
     # EXECUTION
@@ -270,7 +281,7 @@ Return ONLY the JSON array.
         return []
 
     # ─────────────────────────────
-    # FILTRO FINAL (SIN TOCAR PROMPT)
+    # FILTRO FINAL
     # ─────────────────────────────
     results = []
 
@@ -281,7 +292,6 @@ Return ONLY the JSON array.
         if not ticker:
             continue
 
-        # ❗ clave: filtramos Tier 1 acá (no en prompt)
         if ticker in tier1:
             print(f"❌ Removed Tier1 duplicate: {ticker}")
             continue
