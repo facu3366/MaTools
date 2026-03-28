@@ -108,23 +108,6 @@ except Exception as e:
     model = None
     GEMINI_OK = False
 
-def _call_ai(prompt: str) -> str | None:
-    if not model:
-        return None
-
-    try:
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": 0.2,
-                "max_output_tokens": 800,  # 🔥 bajamos para evitar corte
-            },
-        )
-        return response.text
-
-    except Exception as e:
-        print(f"❌ Gemini failed: {e}")
-        return None
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
 # ─────────────────────────────────────────────
@@ -213,8 +196,7 @@ Return ONLY the JSON array.
                 prompt,
                 generation_config={
                     "temperature": 0.35,
-                    "max_output_tokens": 1200,
-                    "response_mime_type": "application/json",
+                    "max_output_tokens": 1200
                 },
             )
 
