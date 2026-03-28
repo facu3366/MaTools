@@ -12,16 +12,17 @@ Se llama como endpoint separado para no ralentizar la carga inicial.
 import os
 import json
 import logging
-import time
-from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
 router = APIRouter()
+
 
 # ─────────────────────────────────────────────
 # MODELS
@@ -36,77 +37,18 @@ class DealIntelRequest(BaseModel):
 
 
 # ─────────────────────────────────────────────
-# PROMPT
+# GEMINI
 # ─────────────────────────────────────────────
-
-DEAL_INTEL_PROMPT = """You are the #1 ranked M&A analyst at Goldman Sachs. Your MD needs deal intelligence on potential acquirers/targets for a live mandate. Every word you write goes directly into the client pitch book.
-
-TARGET COMPANY (the company being sold):
-- Name: {target_name} ({target_ticker})
-- Industry: {target_industry}
-- Revenue: ${target_revenue:,.0f}M USD
-
-COMPARABLE COMPANIES TO ANALYZE:
-{comps_text}
-
-For EACH company above, provide a JSON object with these EXACT fields:
-- "ticker": the company ticker
-- "tier": one of "STRATEGIC_BUYER", "FINANCIAL_SPONSOR", "ADJACENT_SYNERGY" 
-  - STRATEGIC_BUYER = same industry, would buy for market share/consolidation
-  - FINANCIAL_SPONSOR = PE-backed or has acquisition history, buys for returns
-  - ADJACENT_SYNERGY = different but related business, buys for cross-sell/tech/supply chain
-- "deal_thesis": 2-3 sentences on WHY this company would acquire the target. Be specific about synergies (cost savings, revenue, technology, geography). Use real business logic, not generic statements.
-- "risks": 1-2 specific risks of this acquirer (regulatory, cultural, financial capacity, strategic fit issues)
-- "expansion_signal": "HIGH", "MEDIUM", or "LOW" — is this company actively expanding/acquiring?
-- "expansion_note": 1 sentence explaining the expansion signal (recent acquisitions, capex trends, management commentary)
-- "approach_rec": "PRIORITY", "SECONDARY", or "MONITOR" — should the deal team contact them now?
-
-CRITICAL RULES:
-1. Be brutally honest. If a company is a bad fit, say so.
-2. Use the financial data provided — reference specific numbers (revenue scale, margins, growth).
-3. STRATEGIC_BUYER is most common (same industry). FINANCIAL_SPONSOR is rare in this list. ADJACENT_SYNERGY is for companies from related but different industries.
-4. "approach_rec" = PRIORITY means they have means + motive + fit. SECONDARY means good fit but obstacles. MONITOR means long shot or wait for better timing.
-
-Return ONLY a JSON array. No explanation. No markdown. No backticks.
-Example: [{{"ticker":"TM","tier":"STRATEGIC_BUYER","deal_thesis":"...","risks":"...","expansion_signal":"MEDIUM","expansion_note":"...","approach_rec":"PRIORITY"}}]"""
-
-
-def _build_comps_text(comps: list[dict]) -> str:
-    lines = []
-    for c in comps[:20]:  # cap at 20 to stay within token limits
-        ticker = c.get("Ticker", "???")
-        name = c.get("Empresa", ticker)
-        industry = c.get("Industria", "N/A")
-        rev = c.get("Revenue ($mm)", 0) or 0
-        ebitda = c.get("EBITDA ($mm)", 0) or 0
-        ev = c.get("EV ($mm)", 0) or 0
-        growth = c.get("Rev Growth %", "N/A")
-        country = c.get("País") or c.get("Pais") or "N/A"
-        ebitda_mg = c.get("EBITDA Mg%", "N/A")
-        desc = c.get("Descripción", "")[:150] if c.get("Descripción") else ""
-        
-        lines.append(
-            f"- {ticker}: {name} | {industry} | {country}\n"
-            f"  Rev: ${rev:,.0f}M | EBITDA: ${ebitda:,.0f}M ({ebitda_mg}% mg) | EV: ${ev:,.0f}M | Growth: {growth}%\n"
-            f"  {desc}"
-        )
-    return "\n".join(lines)
-
-
-# ─────────────────────────────────────────────
-# CALL AI
-# ─────────────────────────────────────────────
-
-import google.generativeai as genai
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 try:
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel("gemini-2.5-pro")
     GEMINI_OK = True
 except Exception as e:
     print(f"⚠️ Gemini init failed: {e}")
     model = None
     GEMINI_OK = False
+
 
 def _call_ai(prompt: str) -> str | None:
     if not model:
@@ -117,104 +59,21 @@ def _call_ai(prompt: str) -> str | None:
             prompt,
             generation_config={
                 "temperature": 0.2,
-                "max_output_tokens": 800,  # 🔥 bajamos para evitar corte
+                "max_output_tokens": 300,
             },
         )
-        return response.text
+        return response.text if response else None
 
     except Exception as e:
         print(f"❌ Gemini failed: {e}")
         return None
+
+
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
 # ─────────────────────────────────────────────
-import json
+
 import re
-
-def generate_deal_intelligence(
-    target_ticker: str,
-    target_name: str,
-    target_industry: str,
-    target_revenue: float,
-    comps: list[dict],
-) -> list[dict]:
-
-    print("\n" + "="*60)
-    print("🧠 DEAL INTEL START")
-    print(f"Target: {target_name} ({target_ticker})")
-    print(f"Industry: {target_industry}")
-    print(f"Revenue: {target_revenue}")
-    print(f"Comps received: {len(comps)}")
-    print("="*60)
-
-    if not model:
-        print("❌ Gemini model NOT available")
-        return []
-
-    if not comps:
-        print("⚠️ No comps provided")
-        return []
-
-    # ─────────────────────────────
-    # EXCLUSION LIST (TARGET + TIER 1)
-    # ─────────────────────────────
-    tier1_tickers = set()
-
-    if target_ticker:
-        tier1_tickers.add(str(target_ticker).upper())
-
-    for c in comps:
-        t = str(c.get("Ticker") or c.get("ticker") or "").upper()
-        if t:
-            tier1_tickers.add(t)
-
-    tier1_tickers = list(tier1_tickers)
-    tier1_text = ", ".join(tier1_tickers[:25])
-
-    print(f"🚫 Exclusion list ({len(tier1_tickers)}): {tier1_text}")
-
-    # ─────────────────────────────
-    # AI CALL
-    # ─────────────────────────────
-    def call_ai(prompt, label="MAIN"):
-        print(f"\n🚀 CALLING GEMINI [{label}]...")
-        print(f"Prompt length: {len(prompt)} chars")
-
-        try:
-            r = model.generate_content(
-                prompt,
-                generation_config={
-                    "temperature": 0.2,
-                    "max_output_tokens": 700,
-                    "response_mime_type": "application/json",
-                },
-            )
-
-            if not r:
-                print("❌ Empty response")
-                return None
-
-            text = r.text
-
-            print(f"✅ Response received ({len(text) if text else 0} chars)")
-
-            if text and not text.strip().endswith("]"):
-                print("⚠️ Detected truncated response")
-
-            print(f"🧠 RAW [{label}]:\n{text[:600]}\n")
-
-            return text
-
-        except Exception as e:
-            print(f"❌ Gemini exception: {e}")
-            return None
-
-    # ─────────────────────────────
-    # PARSER ROBUSTO
-    # ─────────────────────────────
-import json
-import re
-import google.generativeai as genai
 
 
 def generate_deal_intelligence(
@@ -225,11 +84,11 @@ def generate_deal_intelligence(
     comps: list[dict],
 ) -> list[dict]:
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("🧠 DEAL INTEL START")
     print(f"Target: {target_name} ({target_ticker})")
     print(f"Comps received: {len(comps)}")
-    print("="*60)
+    print("=" * 60)
 
     if not model:
         print("❌ Gemini model NOT available")
@@ -268,7 +127,7 @@ def generate_deal_intelligence(
     print(f"\n🚫 Excluded tickers: {tier1_text}")
 
     # ─────────────────────────────
-    # PROMPT SIMPLE (CLAVE)
+    # PROMPT SIMPLE
     # ─────────────────────────────
     prompt = f"""
 Return a JSON array of 3 companies.
@@ -297,19 +156,7 @@ Rules:
     # ─────────────────────────────
     # CALL AI
     # ─────────────────────────────
-    try:
-        r = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": 0.2,
-                "max_output_tokens": 300,
-            },
-        )
-        raw = r.text if r else None
-
-    except Exception as e:
-        print("❌ Gemini error:", e)
-        raw = None
+    raw = _call_ai(prompt)
 
     print("\n🧠 RAW LENGTH:", len(raw) if raw else 0)
 
@@ -347,11 +194,11 @@ Rules:
                 "deal_thesis": obj.get("deal_thesis", ""),
             })
 
-        except:
+        except Exception:
             continue
 
     # ─────────────────────────────
-    # FALLBACK REAL (SIMPLE Y SEGURO)
+    # FALLBACK SIMPLE
     # ─────────────────────────────
     if not results:
         print("⚠️ Using fallback")
@@ -359,7 +206,7 @@ Rules:
         for c in comps:
             t = str(c.get("Ticker") or c.get("ticker") or "").upper()
 
-            if not t or t == target_ticker:
+            if not t or t == target_ticker or t in tier1:
                 continue
 
             results.append({
@@ -372,9 +219,11 @@ Rules:
                 break
 
     print(f"\n🧠 FINAL OUTPUT ({len(results)}):\n{results}")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
     return results[:3]
+
+
 # ─────────────────────────────────────────────
 # API ENDPOINT
 # ─────────────────────────────────────────────
@@ -401,5 +250,3 @@ def get_deal_intelligence(request: DealIntelRequest):
         "n_briefs": len(briefs),
         "briefs": briefs,
     }
-
-
