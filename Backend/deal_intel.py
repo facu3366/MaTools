@@ -139,116 +139,150 @@ def generate_deal_intelligence(
     comps: list[dict],
 ) -> list[dict]:
 
+    print("\n" + "="*60)
+    print("🧠 DEAL INTEL START")
+    print(f"Target: {target_name} ({target_ticker})")
+    print(f"Industry: {target_industry}")
+    print(f"Revenue: {target_revenue}")
+    print(f"Comps received: {len(comps)}")
+    print("="*60)
+
     if not model:
-        print("   ⚠️ [Deal Intel] Gemini not available")
+        print("❌ Gemini model NOT available")
         return []
 
     if not comps:
+        print("⚠️ No comps provided")
         return []
-
-    print("   🧠 [Deal Intel] Generating Tier 2 & 3 buyers (NO Tier 1)...")
 
     # ─────────────────────────────
     # CALL AI
     # ─────────────────────────────
-    def call_ai(prompt):
+    def call_ai(prompt, label="MAIN"):
+        print(f"\n🚀 CALLING GEMINI [{label}]...")
+        print(f"Prompt length: {len(prompt)} chars")
+
         try:
             r = model.generate_content(
                 prompt,
                 generation_config={
                     "temperature": 0.2,
-                    "max_output_tokens": 700,
+                    "max_output_tokens": 500,
                     "response_mime_type": "application/json",
                 },
             )
-            return r.text if r else None
+
+            if not r:
+                print("❌ Empty response object")
+                return None
+
+            text = r.text
+
+            print(f"✅ Response received ({len(text) if text else 0} chars)")
+            print(f"🧠 RAW [{label}]:\n{text[:500]}\n")
+
+            return text
+
         except Exception as e:
-            print(f"   ❌ Gemini error: {e}")
+            print(f"❌ Gemini exception: {e}")
             return None
 
     # ─────────────────────────────
-    # PARSER ROBUSTO
+    # PARSER
     # ─────────────────────────────
-    def extract(text):
+    def extract(text, label="MAIN"):
+        print(f"\n🔍 PARSING [{label}]...")
+
         if not text:
+            print("❌ No text to parse")
             return []
 
-        text = text.strip()
+        clean = text.strip()
 
-        if "```" in text:
-            text = text.replace("```json", "").replace("```", "")
+        if "```" in clean:
+            print("⚠️ Markdown detected, cleaning...")
+            clean = clean.replace("```json", "").replace("```", "")
 
-        matches = re.findall(r"\{.*?\}", text, re.DOTALL)
+        print(f"Clean length: {len(clean)}")
+
+        matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
+
+        print(f"Objects detected: {len(matches)}")
 
         out = []
-        for m in matches:
+        for i, m in enumerate(matches):
             try:
                 obj = json.loads(m)
-                if isinstance(obj, dict):
-                    out.append(obj)
-            except:
+                print(f"   ✅ Object {i} parsed")
+                out.append(obj)
+            except Exception as e:
+                print(f"   ❌ Object {i} failed: {e}")
                 continue
 
+        print(f"Parsed valid objects: {len(out)}")
         return out
 
     # ─────────────────────────────
-    # PROMPT PRINCIPAL (BALANCEADO)
+    # PROMPT PRINCIPAL (FIX REAL)
     # ─────────────────────────────
     prompt_main = f"""
-Return a JSON array with exactly 3 buyers.
+Return ONLY valid JSON.
+
+You MUST return exactly 3 companies.
+
+Each object MUST follow EXACTLY this structure:
+{{"ticker":"XXX","tier":"TIER_2","deal_thesis":"text","strategic_rationale":"text"}}
 
 Target: {target_name} ({target_ticker})
 Industry: {target_industry}
 
 Rules:
 - Only TIER_2 or TIER_3
-- Each field max 15 words
-- Be specific (no generic text)
+- Do NOT include competitors
+- Each field max 12 words
 - No explanations
 - No markdown
-- Valid JSON only
+- No extra text
 
-Format:
+Return EXACTLY this format:
+
 [
-  {{
-    "ticker": "WMT",
-    "tier": "TIER_2",
-    "deal_thesis": "LATAM expansion and logistics scale.",
-    "strategic_rationale": "Distribution and cross-sell synergies."
-  }}
+{{"ticker":"WMT","tier":"TIER_2","deal_thesis":"LATAM expansion and logistics scale","strategic_rationale":"Distribution and cross-sell synergies"}},
+{{"ticker":"AMZN","tier":"TIER_2","deal_thesis":"Marketplace expansion in emerging markets","strategic_rationale":"Technology and logistics integration"}},
+{{"ticker":"KKR","tier":"TIER_3","deal_thesis":"Private equity platform investment","strategic_rationale":"Operational improvement and exit multiple expansion"}}
 ]
 """
 
-    raw = call_ai(prompt_main)
-    print(f"\n🧠 RAW:\n{str(raw)[:400]}\n")
+    # ─────────────────────────────
+    # MAIN CALL
+    # ─────────────────────────────
+    raw = call_ai(prompt_main, "MAIN")
 
-    data = extract(raw)
+    data = extract(raw, "MAIN")
 
     # ─────────────────────────────
-    # RETRY INTELIGENTE
+    # RETRY SI FALLA
     # ─────────────────────────────
     if not data:
-        print("   ⚠️ retrying with compact prompt")
+        print("\n⚠️ MAIN FAILED → RETRYING...\n")
 
         prompt_retry = f"""
-Return ONLY valid JSON.
+Return ONLY JSON.
 
-3 buyers.
-Very short fields.
+3 companies.
 
 [
 {{"ticker":"WMT","tier":"TIER_2","deal_thesis":"Scale LATAM","strategic_rationale":"Logistics synergies"}},
-{{"ticker":"AMZN","tier":"TIER_2","deal_thesis":"Market expansion","strategic_rationale":"Cross-sell growth"}},
-{{"ticker":"KKR","tier":"TIER_3","deal_thesis":"PE buyout","strategic_rationale":"Value creation"}}
+{{"ticker":"AMZN","tier":"TIER_2","deal_thesis":"Growth expansion","strategic_rationale":"Platform synergies"}},
+{{"ticker":"KKR","tier":"TIER_3","deal_thesis":"PE investment","strategic_rationale":"Value creation"}}
 ]
 """
-        raw = call_ai(prompt_retry)
-        print(f"\n🧠 RETRY RAW:\n{str(raw)[:400]}\n")
 
-        data = extract(raw)
+        raw = call_ai(prompt_retry, "RETRY")
+        data = extract(raw, "RETRY")
 
     if not data:
-        print("   ⚠️ no valid output after retry")
+        print("\n❌ TOTAL FAILURE → returning empty\n")
         return []
 
     # ─────────────────────────────
@@ -256,14 +290,20 @@ Very short fields.
     # ─────────────────────────────
     results = []
 
-    for obj in data:
+    print("\n🧩 NORMALIZING RESULTS...")
+
+    for i, obj in enumerate(data):
         ticker = str(obj.get("ticker", "")).upper().strip()
         tier = str(obj.get("tier", "TIER_2")).strip()
 
+        print(f"   → Raw object {i}: {obj}")
+
         if not ticker:
+            print("     ❌ missing ticker")
             continue
 
         if tier not in ["TIER_2", "TIER_3"]:
+            print(f"     ❌ invalid tier: {tier}")
             continue
 
         results.append({
@@ -273,18 +313,17 @@ Very short fields.
             "strategic_rationale": str(obj.get("strategic_rationale", "")).strip(),
         })
 
-    # ─────────────────────────────
-    # LIMIT + ORDEN (DEMO READY)
-    # ─────────────────────────────
-    results = results[:3]
+    print(f"\n📊 FINAL RESULTS: {len(results)}")
 
+    # ordenar (strategic primero)
     tier_order = {"TIER_2": 0, "TIER_3": 1}
     results.sort(key=lambda x: tier_order.get(x["tier"], 99))
 
-    if len(results) < 3:
-        print(f"   ⚠️ only {len(results)} buyers generated (expected 3)")
+    # limitar a 3
+    results = results[:3]
 
-    print(f"   🧠 [Deal Intel] Generated {len(results)} buyers")
+    print(f"🧠 OUTPUT:\n{results}\n")
+    print("="*60 + "\n")
 
     return results
 # ─────────────────────────────────────────────
