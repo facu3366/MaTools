@@ -101,7 +101,6 @@ function bcraFmtB(n) {
 function bcraML() {
   return BCRA_METRICS.find((m) => m.k === bcraState.metric).l;
 }
-
 function bcraShort(name) {
   if (!name) return "";
 
@@ -113,13 +112,20 @@ function bcraShort(name) {
     .replace(/ LTDO\.?$/i, "")
     .trim();
 
-  // solo abreviaciones MUY seguras
-  n = n.replace(/\bARGENTINA\b/gi, "ARG.");
+  // normalización por prefijo (NO palabra exacta)
+  n = n.replace(/\bARG\w*/gi, "ARG.");
   n = n.replace(/\bBUENOS AIRES\b/gi, "BS. AS.");
+  n = n.replace(/\bBS AS\b/gi, "BS. AS.");
+  n = n.replace(/\bPROV\w*/gi, "PROV.");
+  n = n.replace(/\bSANTIAGO\b/gi, "SGO.");
+  n = n.replace(/\bSANTA\b/gi, "STA.");
 
-  // corte elegante SOLO si es MUY largo
+  // limpiar dobles espacios generados
+  n = n.replace(/\s+/g, " ").trim();
+
+  // corte elegante SOLO si es largo
   if (n.length > 32) {
-    return n.slice(0, 29) + "…";
+    n = n.slice(0, 29) + "…";
   }
 
   return n;
