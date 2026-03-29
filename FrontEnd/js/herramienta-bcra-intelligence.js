@@ -769,6 +769,8 @@ function bcraInitTabs() {
 }
 function bcraRenderChips(query = "") {
   const row = document.getElementById("bcra-chip-row");
+  const counter = document.getElementById("bcra-selected-count");
+
   if (!row) return;
 
   const q = (query || "").toLowerCase().trim();
@@ -780,6 +782,7 @@ function bcraRenderChips(query = "") {
       (b.short || "").toLowerCase().includes(q),
   );
 
+  // 🔹 render chips
   row.innerHTML = banksToShow
     .map((b) => {
       const on = bcraState.selected.has(b.id);
@@ -793,6 +796,7 @@ function bcraRenderChips(query = "") {
     })
     .join("");
 
+  // 🔹 click chips
   row.querySelectorAll(".chip").forEach((el) => {
     el.onclick = () => {
       const id = +el.dataset.id;
@@ -805,12 +809,35 @@ function bcraRenderChips(query = "") {
         bcraState.selected.add(id);
       }
 
+      // 🔥 actualizar contador SIEMPRE
+      updateSelectedCount();
+
       bcraRenderAll();
 
       const search = document.getElementById("bcra-bank-search");
       bcraRenderChips(search ? search.value : "");
     };
   });
+
+  // 🔥 actualizar contador al render
+  updateSelectedCount();
+}
+function toggleBankList() {
+  const row = document.getElementById("bcra-chip-row");
+
+  if (!row) return;
+
+  row.classList.toggle("hidden");
+}
+
+function updateSelectedCount() {
+  const label = document.getElementById("bcra-selected-count");
+
+  if (!label) return;
+
+  const selected = bcraState.selected.size;
+
+  label.innerText = `${selected} banco${selected !== 1 ? "s" : ""} seleccionado${selected !== 1 ? "s" : ""}`;
 }
 function bcraRenderScatter() {
   const a = bcraActive()
@@ -910,5 +937,3 @@ async function exportBcraExcel() {
     }
   }
 }
-
-
