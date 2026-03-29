@@ -19,7 +19,10 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAnBovaLp2o8B45ytc59NcrEnU48vnsfz8")
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
+
+if not GEMINI_KEY:
+    raise RuntimeError("GEMINI_API_KEY no está configurada en Railway")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 router = APIRouter()
