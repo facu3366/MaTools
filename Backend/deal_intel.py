@@ -16,6 +16,74 @@ import time
 import requests
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+import psycopg2
+from datetime import datetime, timedelta
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+CACHE_TTL_DAYS = 7
+
+def _get_conn():
+    return psycopg2.connect(DATABASE_URL)
+
+
+def _cache_key(target_ticker, target_industry):
+    return f"{target_ticker}_{target_industry}".lower()
+
+
+def _get_from_cache(key):
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT data, created_at
+            FROM ai_cache
+            WHERE cache_key = %s
+        """, (key,))
+
+        row = cur.fetchone()
+
+        cur.close()
+        conn.close()
+
+        if not row:
+            return None
+
+        data, created_at = row
+
+        if datetime.utcnow() - created_at > timedelta(days=CACHE_TTL_DAYS):
+            print("   ⏳ Cache expired")
+            return None
+
+        print("   💾 CACHE HIT")
+        return json.loads(data)
+
+    except Exception as e:
+        print(f"   ⚠️ Cache read error: {e}")
+        return None
+
+
+def _save_to_cache(key, data):
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+
+        cur.execute("""
+            INSERT INTO ai_cache (cache_key, data, created_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (cache_key)
+            DO UPDATE SET data = EXCLUDED.data, created_at = NOW()
+        """, (key, json.dumps(data)))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        print("   💾 Saved to cache")
+
+    except Exception as e:
+        print(f"   ⚠️ Cache save error: {e}")
+
 
 logger = logging.getLogger(__name__)
 
@@ -310,10 +378,43 @@ def generate_deal_intelligence(
 
     print(f"   🧠 [Deal Intel v3] {target_name} ({target_ticker}) | {target_industry} | {len(comps)} comps")
 
+    # ─────────────────────────────
+    # CACHE KEY
+    # ─────────────────────────────
+    key = f"{target_ticker}_{target_industry}".lower()
+
+    # ── 1. TRY CACHE ──
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT data, created_at
+            FROM ai_cache
+            WHERE cache_key = %s
+        """, (key,))
+
+        row = cur.fetchone()
+
+        cur.close()
+        conn.close()
+
+        if row:
+            data, created_at = row
+
+            if datetime.utcnow() - created_at <= timedelta(days=CACHE_TTL_DAYS):
+                print("   💾 CACHE HIT")
+                return json.loads(data)
+            else:
+                print("   ⏳ Cache expired")
+
+    except Exception as e:
+        print(f"   ⚠️ Cache read error: {e}")
+
     # Get Tier 2/3 candidates
     tier2_candidates = _get_tier2_for_industry(target_industry)
 
-    # ── TRY GEMINI ──
+    # ── 2. TRY GEMINI ──
     if GEMINI_KEY:
         prompt = DEAL_INTEL_PROMPT.format(
             target_name=target_name,
@@ -336,7 +437,6 @@ def generate_deal_intelligence(
                     # Normalize all tickers to uppercase
                     for b in briefs:
                         b["ticker"] = b.get("ticker", "").upper()
-                        # Ensure required fields exist
                         b.setdefault("tier", "STRATEGIC_BUYER")
                         b.setdefault("deal_thesis", "")
                         b.setdefault("strategic_rationale", "")
@@ -348,7 +448,30 @@ def generate_deal_intelligence(
                     t1 = sum(1 for b in briefs if b["tier"] == "STRATEGIC_BUYER")
                     t2 = sum(1 for b in briefs if b["tier"] == "ADJACENT_SYNERGY")
                     t3 = sum(1 for b in briefs if b["tier"] == "FINANCIAL_SPONSOR")
+
                     print(f"   🧠 ✅ Gemini: {len(briefs)} briefs in {elapsed:.1f}s | T1={t1} T2={t2} T3={t3}")
+
+                    # 💾 SAVE GEMINI RESULT
+                    try:
+                        conn = _get_conn()
+                        cur = conn.cursor()
+
+                        cur.execute("""
+                            INSERT INTO ai_cache (cache_key, data, created_at)
+                            VALUES (%s, %s, NOW())
+                            ON CONFLICT (cache_key)
+                            DO UPDATE SET data = EXCLUDED.data, created_at = NOW()
+                        """, (key, json.dumps(briefs)))
+
+                        conn.commit()
+                        cur.close()
+                        conn.close()
+
+                        print("   💾 Saved Gemini result")
+
+                    except Exception as e:
+                        print(f"   ⚠️ Cache save error: {e}")
+
                     return briefs
 
         except json.JSONDecodeError as e:
@@ -356,10 +479,35 @@ def generate_deal_intelligence(
         except Exception as e:
             print(f"   ⚠️ Gemini failed: {e}")
 
-    # ── FALLBACK ──
-    return _generate_mock_briefs(comps, target_name, target_industry, target_revenue)
+    # ── 3. FALLBACK ──
+    print("   🎭 Using fallback")
 
+    fallback = _generate_mock_briefs(
+        comps, target_name, target_industry, target_revenue
+    )
 
+    # 💾 SAVE FALLBACK TAMBIÉN
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+
+        cur.execute("""
+            INSERT INTO ai_cache (cache_key, data, created_at)
+            VALUES (%s, %s, NOW())
+            ON CONFLICT (cache_key)
+            DO UPDATE SET data = EXCLUDED.data, created_at = NOW()
+        """, (key, json.dumps(fallback)))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        print("   💾 Saved fallback result")
+
+    except Exception as e:
+        print(f"   ⚠️ Cache save error: {e}")
+
+    return fallback
 # ─────────────────────────────────────────────
 # ENDPOINT
 # ─────────────────────────────────────────────

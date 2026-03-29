@@ -26,9 +26,19 @@ def init_db():
         )
         """)
 
+        # 👉 NUEVA TABLA PARA CACHE
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ai_cache (
+            cache_key TEXT PRIMARY KEY,
+            data JSONB,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+        """)
+
         conn.commit()
         conn.close()
-        print("✅ DB conectada")
+        print("✅ DB conectada + cache ready")
+
     except Exception as e:
         print(f"⚠️ DB no disponible (local mode): {e}")
 
