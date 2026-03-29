@@ -1,9 +1,12 @@
 """
-🧠 DEAL INTELLIGENCE — DealDesk v2
+🧠 DEAL INTELLIGENCE — DealDesk v3
 ====================================
-M&A Intelligence Engine: clasifica comparables en 3 Tiers con Deal Thesis.
-- Primary: Google Gemini 1.5 Flash (gratis)
-- Fallback: Mock data realista (demo never fails)
+M&A Intelligence: 3-Tier classification with real strategic analysis.
+- Tier 1: Direct Competitors (from comps table)
+- Tier 2: Adjacent Synergies (injected by engine — vertical/horizontal)
+- Tier 3: Financial Sponsors / PE (injected by engine)
+- Primary: Google Gemini 1.5 Flash
+- Fallback: Curated mock data (demo never fails)
 """
 
 import os
@@ -35,10 +38,74 @@ class DealIntelRequest(BaseModel):
 
 
 # ─────────────────────────────────────────────
-# NORMALIZE COMP FIELDS
-# Frontend sends: ticker, revenue, ev, ebitda (lowercase)
-# Backend sends: Ticker, Revenue ($mm), EV ($mm), EBITDA ($mm)
-# This function handles both.
+# TIER 2 & 3 CANDIDATES BY INDUSTRY
+# These get INJECTED into the analysis alongside comps
+# ─────────────────────────────────────────────
+
+TIER2_CANDIDATES = {
+    "Internet Retail": [
+        {"ticker": "WMT", "name": "Walmart", "rationale": "Physical retail + logistics integration, last-mile delivery economies of scale"},
+        {"ticker": "V", "name": "Visa", "rationale": "Fintech integration — acquiring payment infrastructure in emerging markets"},
+        {"ticker": "FDX", "name": "FedEx", "rationale": "Vertical integration into last-mile delivery, logistics infrastructure"},
+        {"ticker": "UBER", "name": "Uber", "rationale": "Super App convergence — rides + eats + payments + retail ecosystem"},
+        {"ticker": "GOOGL", "name": "Alphabet (Google)", "rationale": "Google Shopping + Cloud + Retail Media data monetization"},
+        {"ticker": "MA", "name": "Mastercard", "rationale": "Payment network expansion into underbanked LATAM markets"},
+    ],
+    "Auto Manufacturers": [
+        {"ticker": "ALB", "name": "Albemarle", "rationale": "Lithium supply chain vertical integration for EV batteries"},
+        {"ticker": "GOOGL", "name": "Alphabet (Waymo)", "rationale": "Autonomous driving technology convergence"},
+        {"ticker": "AAPL", "name": "Apple", "rationale": "Apple Car project — technology + brand + ecosystem integration"},
+        {"ticker": "ENPH", "name": "Enphase Energy", "rationale": "Solar + EV charging infrastructure synergy"},
+        {"ticker": "UBER", "name": "Uber", "rationale": "Ride-sharing fleet electrification, autonomous vehicle deployment"},
+    ],
+    "Software - Application": [
+        {"ticker": "GOOGL", "name": "Alphabet", "rationale": "Cloud infrastructure + AI integration + distribution"},
+        {"ticker": "AMZN", "name": "Amazon (AWS)", "rationale": "Cloud cross-selling, enterprise customer base expansion"},
+        {"ticker": "ACN", "name": "Accenture", "rationale": "Implementation services + consulting integration"},
+        {"ticker": "IBM", "name": "IBM", "rationale": "Enterprise AI + hybrid cloud strategy acceleration"},
+    ],
+    "Semiconductors": [
+        {"ticker": "AAPL", "name": "Apple", "rationale": "Vertical integration of chip design + manufacturing"},
+        {"ticker": "AMZN", "name": "Amazon (AWS)", "rationale": "Custom silicon for cloud, AI inference chips"},
+        {"ticker": "MSFT", "name": "Microsoft", "rationale": "AI chip supply security for Azure + Copilot"},
+        {"ticker": "GOOGL", "name": "Alphabet", "rationale": "TPU expansion, AI training infrastructure"},
+    ],
+    "Health Care Plans": [
+        {"ticker": "AMZN", "name": "Amazon (One Medical)", "rationale": "Healthcare delivery + pharmacy + insurance integration"},
+        {"ticker": "CVS", "name": "CVS Health", "rationale": "Retail clinic + PBM + insurance vertical integration"},
+        {"ticker": "WMT", "name": "Walmart Health", "rationale": "Low-cost healthcare delivery at scale"},
+    ],
+    "_default": [
+        {"ticker": "GOOGL", "name": "Alphabet", "rationale": "Technology + data integration across industries"},
+        {"ticker": "AMZN", "name": "Amazon", "rationale": "Distribution + cloud + logistics platform synergies"},
+        {"ticker": "MSFT", "name": "Microsoft", "rationale": "Enterprise software + AI + cloud integration"},
+    ],
+}
+
+TIER3_CANDIDATES = [
+    {"ticker": "SFTBY", "name": "SoftBank Vision Fund", "rationale": "Lead investor in LATAM tech ecosystems, understands asset-light scalability"},
+    {"ticker": "BLK", "name": "BlackRock", "rationale": "Largest asset manager globally, capacity for take-private to unlock subsidiary value (eg fintech spin-off)"},
+    {"ticker": "KKR", "name": "KKR & Co.", "rationale": "LBO specialists — could spin off high-growth units at premium valuations"},
+    {"ticker": "APO", "name": "Apollo Global Management", "rationale": "Opportunistic PE — targets undervalued tech platforms with strong cash flow"},
+    {"ticker": "BX", "name": "Blackstone", "rationale": "Largest PE firm globally, infrastructure + tech crossover expertise"},
+    {"ticker": "CG", "name": "Carlyle Group", "rationale": "Deep emerging markets expertise, growth equity strategy"},
+    {"ticker": "TPG", "name": "TPG Inc.", "rationale": "Tech-focused PE, Rise Fund ESG angle for financial inclusion"},
+]
+
+
+def _get_tier2_for_industry(industry: str) -> list[dict]:
+    if not industry:
+        return TIER2_CANDIDATES["_default"]
+    for key, candidates in TIER2_CANDIDATES.items():
+        if key == "_default":
+            continue
+        if key.lower() in industry.lower() or industry.lower() in key.lower():
+            return candidates
+    return TIER2_CANDIDATES["_default"]
+
+
+# ─────────────────────────────────────────────
+# NORMALIZE FIELDS
 # ─────────────────────────────────────────────
 
 def _normalize_comp(c: dict) -> dict:
@@ -50,64 +117,67 @@ def _normalize_comp(c: dict) -> dict:
         "revenue": c.get("Revenue ($mm)") or c.get("revenue") or 0,
         "ebitda": c.get("EBITDA ($mm)") or c.get("ebitda") or 0,
         "ev": c.get("EV ($mm)") or c.get("ev") or 0,
-        "ev_revenue": c.get("EV/Revenue") or c.get("evRev") or 0,
-        "ev_ebitda": c.get("EV/EBITDA") or c.get("evEbitda") or 0,
-        "margin": c.get("EBITDA Mg%") or c.get("margin") or 0,
     }
 
 
 # ─────────────────────────────────────────────
-# PROMPT — 3 TIER M&A CLASSIFICATION
+# PROMPT
 # ─────────────────────────────────────────────
 
-DEAL_INTEL_PROMPT = """You are a Senior M&A Consultant at Deloitte. You are preparing deal intelligence for a client pitch book.
+DEAL_INTEL_PROMPT = """You are a Senior M&A Consultant at Deloitte preparing a deal intelligence brief for a client pitch book. Your analysis must be specific, data-driven, and worthy of a VP-level presentation.
 
-TARGET COMPANY (being analyzed for potential acquirers/partners):
+TARGET COMPANY:
 - Name: {target_name} ({target_ticker})
 - Industry: {target_industry}
 - Revenue: ${target_revenue:,.0f}M USD
 
-COMPARABLE COMPANIES:
-{comps_text}
+═══ TIER 1 CANDIDATES (Direct Competitors — from comps analysis): ═══
+{tier1_text}
 
-CLASSIFY each company into exactly ONE of these tiers:
+═══ TIER 2 CANDIDATES (Adjacent Synergies — vertical/horizontal integration): ═══
+{tier2_text}
 
-TIER 1 — STRATEGIC_BUYER (Direct Competitors):
-Same core business, same customers, same value chain. Would acquire for market share, consolidation, or eliminating competition.
+═══ TIER 3 CANDIDATES (Financial Sponsors / Private Equity): ═══
+{tier3_text}
 
-TIER 2 — ADJACENT_SYNERGY (Strategic Synergies):
-Different but related business. Would acquire for vertical/horizontal integration, cross-selling, technology transfer, supply chain economies, or geographic expansion.
+For EACH company above, return a JSON object:
+- "ticker": string
+- "tier": "STRATEGIC_BUYER" (Tier 1), "ADJACENT_SYNERGY" (Tier 2), or "FINANCIAL_SPONSOR" (Tier 3)
+- "deal_thesis": 2-3 sentences. Be SPECIFIC: mention revenue numbers, geographic markets, product overlaps, technology gaps. Think like a Deloitte M&A consultant.
+- "strategic_rationale": 1 sentence on value creation (cost synergies $X, revenue synergies, vertical integration, ecosystem play)
+- "risks": 1-2 specific risks (regulatory/antitrust, cultural, financial capacity, integration complexity)
+- "expansion_signal": "HIGH", "MEDIUM", or "LOW"
+- "expansion_note": 1 sentence with evidence (recent acquisitions, capex trends, management commentary)
+- "approach_rec": "PRIORITY", "SECONDARY", or "MONITOR"
 
-TIER 3 — FINANCIAL_SPONSOR (Financial Buyers / PE):
-Companies with PE backing, acquisition history, or financial capacity to buy for returns rather than strategic fit. Also conglomerates.
+RULES:
+1. Keep each company in its designated tier (Tier 1/2/3 as labeled above).
+2. PRIORITY = has means + motive + strategic fit. Maximum 3-4 companies.
+3. Be brutally specific. "Market consolidation" is not enough. Say "Combined 35% market share in Brazilian e-commerce would create pricing power in electronics category."
+4. For Tier 3 (PE), focus on financial engineering: LBO capacity, spin-off potential, multiple arbitrage.
 
-For EACH company, return a JSON object with these EXACT fields:
-- "ticker": company ticker (string)
-- "tier": exactly one of "STRATEGIC_BUYER", "ADJACENT_SYNERGY", "FINANCIAL_SPONSOR"
-- "deal_thesis": 2-3 sentences explaining WHY this company would acquire the target. Reference specific financial data (revenue scale, margins). Be concrete — mention geographic expansion, technology gaps, market share.
-- "strategic_rationale": 1 sentence on the value created by the transaction (cost synergies, revenue synergies, vertical integration benefit)
-- "risks": 1-2 specific risks (regulatory, cultural, financial capacity, integration complexity)
-- "expansion_signal": "HIGH", "MEDIUM", or "LOW" — is this company actively acquiring?
-- "expansion_note": 1 sentence explaining why
-- "approach_rec": "PRIORITY" (means + motive + fit), "SECONDARY" (good fit, obstacles), or "MONITOR" (long shot)
-
-CRITICAL: Be brutally honest. Use the financial data. If revenue is 100x the target, note the scale mismatch. Most companies should be STRATEGIC_BUYER (Tier 1). FINANCIAL_SPONSOR is rare. ADJACENT_SYNERGY is for genuinely different industries.
-
-Return ONLY a valid JSON array. No markdown. No backticks. No explanation before or after.
-Example format: [{{"ticker":"AMZN","tier":"STRATEGIC_BUYER","deal_thesis":"...","strategic_rationale":"...","risks":"...","expansion_signal":"HIGH","expansion_note":"...","approach_rec":"PRIORITY"}}]"""
+Return ONLY a valid JSON array. No markdown fences. No explanation."""
 
 
-def _build_comps_text(comps: list[dict]) -> str:
+def _build_tier1_text(comps: list[dict]) -> str:
     lines = []
-    for c in comps[:15]:
+    for c in comps[:12]:
         n = _normalize_comp(c)
-        ev_rev = f"{n['ev_revenue']:.1f}x" if n['ev_revenue'] else "N/A"
-        ev_ebitda = f"{n['ev_ebitda']:.1f}x" if n['ev_ebitda'] else "N/A"
-        lines.append(
-            f"- {n['ticker']}: {n['name']} | {n['industry']} | {n['country']}\n"
-            f"  Rev: ${n['revenue']:,.0f}M | EBITDA: ${n['ebitda']:,.0f}M | EV: ${n['ev']:,.0f}M | "
-            f"EV/Rev: {ev_rev} | EV/EBITDA: {ev_ebitda}"
-        )
+        lines.append(f"- {n['ticker']}: {n['name']} | {n['industry']} | {n['country']} | Rev: ${n['revenue']:,.0f}M | EV: ${n['ev']:,.0f}M")
+    return "\n".join(lines) if lines else "No Tier 1 candidates available."
+
+
+def _build_tier2_text(candidates: list[dict]) -> str:
+    lines = []
+    for c in candidates[:6]:
+        lines.append(f"- {c['ticker']}: {c['name']} | Context: {c['rationale']}")
+    return "\n".join(lines) if lines else "No Tier 2 candidates available."
+
+
+def _build_tier3_text() -> str:
+    lines = []
+    for c in TIER3_CANDIDATES[:5]:
+        lines.append(f"- {c['ticker']}: {c['name']} | Context: {c['rationale']}")
     return "\n".join(lines)
 
 
@@ -117,7 +187,6 @@ def _build_comps_text(comps: list[dict]) -> str:
 
 def _call_gemini(prompt: str) -> str | None:
     if not GEMINI_KEY:
-        print("   ⚠️ No GEMINI_API_KEY")
         return None
 
     try:
@@ -132,7 +201,7 @@ def _call_gemini(prompt: str) -> str | None:
                     "maxOutputTokens": 4096,
                 }
             },
-            timeout=45,
+            timeout=60,
         )
 
         if response.status_code != 200:
@@ -140,107 +209,90 @@ def _call_gemini(prompt: str) -> str | None:
             return None
 
         data = response.json()
-        
-        # Check for blocked or empty responses
         candidates = data.get("candidates", [])
         if not candidates:
-            print(f"   ❌ Gemini returned no candidates: {json.dumps(data)[:300]}")
             return None
-            
+
         text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-        if not text:
-            print(f"   ❌ Gemini returned empty text")
-            return None
-            
-        print(f"   ✅ Gemini response: {len(text)} chars")
-        return text
+        if text:
+            print(f"   ✅ Gemini: {len(text)} chars")
+        return text or None
 
-    except requests.Timeout:
-        print(f"   ❌ Gemini timeout (45s)")
-        return None
     except Exception as e:
-        print(f"   ❌ Gemini error: {type(e).__name__}: {e}")
+        print(f"   ❌ Gemini error: {e}")
         return None
 
 
-# ─────────────────────────────────────────────
-# PARSE GEMINI RESPONSE
-# ─────────────────────────────────────────────
-
-def _parse_ai_response(raw_text: str) -> list[dict]:
-    clean = raw_text.strip()
-    
-    # Remove markdown fences
+def _parse_response(raw: str) -> list[dict]:
+    clean = raw.strip()
     if clean.startswith("```"):
         clean = clean.split("\n", 1)[-1] if "\n" in clean else clean[3:]
     if clean.endswith("```"):
         clean = clean.rsplit("```", 1)[0]
     clean = clean.strip()
-
-    # Extract JSON array
-    start_idx = clean.find("[")
-    end_idx = clean.rfind("]")
-    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-        clean = clean[start_idx:end_idx + 1]
-
+    start = clean.find("[")
+    end = clean.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        clean = clean[start:end + 1]
     return json.loads(clean)
 
 
 # ─────────────────────────────────────────────
-# MOCK FALLBACK — NEVER SHOW EMPTY TABLE
+# MOCK FALLBACK — ALL 3 TIERS ALWAYS PRESENT
 # ─────────────────────────────────────────────
 
-def _generate_mock_briefs(comps: list[dict], target_industry: str) -> list[dict]:
-    """
-    Generate realistic mock briefs when AI is unavailable.
-    Uses simple heuristics based on revenue scale and industry.
-    """
-    print("   🎭 [Mock] Generating fallback briefs...")
-    
+def _generate_mock_briefs(comps: list[dict], target_name: str, target_industry: str, target_revenue: float) -> list[dict]:
+    print("   🎭 [Mock] Generating 3-tier fallback briefs...")
     result = []
-    for i, c in enumerate(comps):
+
+    # Tier 1: from actual comps
+    for i, c in enumerate(comps[:8]):
         n = _normalize_comp(c)
-        ticker = n["ticker"].upper()
         rev = n["revenue"] or 0
-        
-        # Simple tier assignment based on position
-        if i < len(comps) * 0.6:
-            tier = "STRATEGIC_BUYER"
-            thesis = f"{n['name']} operates in {n['industry']} with ${rev:,.0f}M revenue. As a direct competitor, acquisition would consolidate market share and eliminate pricing pressure in key segments."
-            rationale = "Cost synergies from eliminating duplicate operations and combined purchasing power."
-            approach = "PRIORITY" if i < 3 else "SECONDARY"
-            signal = "HIGH" if rev > 50000 else "MEDIUM"
-        elif i < len(comps) * 0.85:
-            tier = "ADJACENT_SYNERGY"
-            thesis = f"{n['name']} ({n['industry']}) has complementary capabilities. Integration would unlock cross-selling opportunities and expand the combined addressable market."
-            rationale = "Revenue synergies from cross-selling to combined customer base."
-            approach = "SECONDARY"
-            signal = "MEDIUM"
-        else:
-            tier = "FINANCIAL_SPONSOR"
-            thesis = f"{n['name']} has the financial capacity (EV: ${n['ev']:,.0f}M) and acquisition track record to pursue this as a platform investment in {target_industry}."
-            rationale = "Multiple expansion through buy-and-build strategy in fragmented market."
-            approach = "MONITOR"
-            signal = "LOW"
-        
         result.append({
-            "ticker": ticker,
-            "tier": tier,
-            "deal_thesis": thesis,
-            "strategic_rationale": rationale,
-            "risks": f"Integration complexity given {'significant' if rev > 100000 else 'moderate'} scale differential. Regulatory review likely in key markets.",
-            "expansion_signal": signal,
-            "expansion_note": f"{'Active acquirer with multiple recent transactions' if signal == 'HIGH' else 'Selective M&A focus, primarily organic growth' if signal == 'MEDIUM' else 'Limited acquisition activity in recent years'}.",
-            "approach_rec": approach,
+            "ticker": n["ticker"].upper(),
+            "tier": "STRATEGIC_BUYER",
+            "deal_thesis": f"{n['name']} is a direct competitor in {n['industry']} with ${rev:,.0f}M revenue. Acquisition would consolidate market share and create pricing power in overlapping segments.",
+            "strategic_rationale": f"Cost synergies estimated at 15-20% of combined SG&A from eliminating duplicate operations.",
+            "risks": "Antitrust scrutiny in overlapping markets. Integration of competing product lines and technology stacks.",
+            "expansion_signal": "HIGH" if rev > 50000 else "MEDIUM",
+            "expansion_note": "Active acquirer" if rev > 50000 else "Selective M&A, primarily organic growth.",
+            "approach_rec": "PRIORITY" if i < 2 else "SECONDARY",
         })
-    
-    priorities = sum(1 for r in result if r["approach_rec"] == "PRIORITY")
-    print(f"   🎭 [Mock] Generated {len(result)} briefs | {priorities} PRIORITY")
+
+    # Tier 2: injected strategic synergies
+    tier2 = _get_tier2_for_industry(target_industry)
+    for c in tier2[:4]:
+        result.append({
+            "ticker": c["ticker"],
+            "tier": "ADJACENT_SYNERGY",
+            "deal_thesis": f"{c['name']} represents a strategic synergy opportunity: {c['rationale']}. Combined with {target_name}'s ${target_revenue:,.0f}M revenue base, the transaction would unlock significant cross-selling and ecosystem value.",
+            "strategic_rationale": c["rationale"],
+            "risks": "Cross-industry integration complexity. Different operational cultures and KPIs.",
+            "expansion_signal": "HIGH",
+            "expansion_note": "Active in adjacent acquisitions and strategic partnerships.",
+            "approach_rec": "SECONDARY",
+        })
+
+    # Tier 3: PE / financial sponsors
+    for c in TIER3_CANDIDATES[:3]:
+        result.append({
+            "ticker": c["ticker"],
+            "tier": "FINANCIAL_SPONSOR",
+            "deal_thesis": f"{c['name']}: {c['rationale']}. A take-private or growth equity investment in {target_name} could unlock value through financial engineering and subsidiary optimization.",
+            "strategic_rationale": "Financial engineering: potential spin-off of high-growth units, multiple arbitrage, and operational optimization.",
+            "risks": "Leveraged structure limits operational flexibility. Exit timeline pressure (3-5 year horizon).",
+            "expansion_signal": "HIGH",
+            "expansion_note": "Actively deploying capital, recent fund raises indicate dry powder availability.",
+            "approach_rec": "MONITOR",
+        })
+
+    print(f"   🎭 [Mock] {len(result)} briefs: {sum(1 for r in result if r['tier']=='STRATEGIC_BUYER')} T1 + {sum(1 for r in result if r['tier']=='ADJACENT_SYNERGY')} T2 + {sum(1 for r in result if r['tier']=='FINANCIAL_SPONSOR')} T3")
     return result
 
 
 # ─────────────────────────────────────────────
-# MAIN FUNCTION
+# MAIN
 # ─────────────────────────────────────────────
 
 def generate_deal_intelligence(
@@ -253,65 +305,60 @@ def generate_deal_intelligence(
     if not comps:
         return []
 
-    print(f"   🧠 [Deal Intel] {target_name} ({target_ticker}) | {target_industry} | {len(comps)} comps")
+    print(f"   🧠 [Deal Intel v3] {target_name} ({target_ticker}) | {target_industry} | {len(comps)} comps")
 
-    # ── TRY GEMINI FIRST ──
+    # Get Tier 2/3 candidates
+    tier2_candidates = _get_tier2_for_industry(target_industry)
+
+    # ── TRY GEMINI ──
     if GEMINI_KEY:
-        comps_text = _build_comps_text(comps)
         prompt = DEAL_INTEL_PROMPT.format(
             target_name=target_name,
             target_ticker=target_ticker,
             target_industry=target_industry or "Unknown",
             target_revenue=target_revenue or 0,
-            comps_text=comps_text,
+            tier1_text=_build_tier1_text(comps),
+            tier2_text=_build_tier2_text(tier2_candidates),
+            tier3_text=_build_tier3_text(),
         )
 
         try:
             t0 = time.time()
-            raw_text = _call_gemini(prompt)
+            raw = _call_gemini(prompt)
             elapsed = time.time() - t0
 
-            if raw_text:
-                briefs = _parse_ai_response(raw_text)
-
+            if raw:
+                briefs = _parse_response(raw)
                 if isinstance(briefs, list) and len(briefs) > 0:
-                    # Map back to input tickers
-                    brief_map = {b.get("ticker", "").upper(): b for b in briefs}
+                    # Normalize all tickers to uppercase
+                    for b in briefs:
+                        b["ticker"] = b.get("ticker", "").upper()
+                        # Ensure required fields exist
+                        b.setdefault("tier", "STRATEGIC_BUYER")
+                        b.setdefault("deal_thesis", "")
+                        b.setdefault("strategic_rationale", "")
+                        b.setdefault("risks", "")
+                        b.setdefault("expansion_signal", "MEDIUM")
+                        b.setdefault("expansion_note", "")
+                        b.setdefault("approach_rec", "SECONDARY")
 
-                    result = []
-                    for comp in comps:
-                        ticker = (_normalize_comp(comp)["ticker"]).upper()
-                        brief = brief_map.get(ticker, {})
-                        result.append({
-                            "ticker": ticker,
-                            "tier": brief.get("tier", "STRATEGIC_BUYER"),
-                            "deal_thesis": brief.get("deal_thesis", ""),
-                            "strategic_rationale": brief.get("strategic_rationale", ""),
-                            "risks": brief.get("risks", ""),
-                            "expansion_signal": brief.get("expansion_signal", "MEDIUM"),
-                            "expansion_note": brief.get("expansion_note", ""),
-                            "approach_rec": brief.get("approach_rec", "SECONDARY"),
-                        })
-
-                    priorities = sum(1 for r in result if r["approach_rec"] == "PRIORITY")
-                    strategic = sum(1 for r in result if r["tier"] == "STRATEGIC_BUYER")
-                    print(f"   🧠 [Deal Intel] ✅ Gemini: {len(result)} briefs in {elapsed:.1f}s | {priorities} PRIORITY | {strategic} STRATEGIC")
-                    return result
-
-                print(f"   ⚠️ [Deal Intel] Gemini returned empty/invalid list")
+                    t1 = sum(1 for b in briefs if b["tier"] == "STRATEGIC_BUYER")
+                    t2 = sum(1 for b in briefs if b["tier"] == "ADJACENT_SYNERGY")
+                    t3 = sum(1 for b in briefs if b["tier"] == "FINANCIAL_SPONSOR")
+                    print(f"   🧠 ✅ Gemini: {len(briefs)} briefs in {elapsed:.1f}s | T1={t1} T2={t2} T3={t3}")
+                    return briefs
 
         except json.JSONDecodeError as e:
-            print(f"   ⚠️ [Deal Intel] JSON parse error: {e}")
+            print(f"   ⚠️ JSON parse error: {e}")
         except Exception as e:
-            print(f"   ⚠️ [Deal Intel] Gemini failed: {type(e).__name__}: {e}")
+            print(f"   ⚠️ Gemini failed: {e}")
 
-    # ── FALLBACK TO MOCK ──
-    print(f"   🎭 [Deal Intel] Falling back to mock briefs")
-    return _generate_mock_briefs(comps, target_industry)
+    # ── FALLBACK ──
+    return _generate_mock_briefs(comps, target_name, target_industry, target_revenue)
 
 
 # ─────────────────────────────────────────────
-# API ENDPOINT
+# ENDPOINT
 # ─────────────────────────────────────────────
 
 @router.post("/comps/deal-intel")
@@ -324,9 +371,16 @@ def get_deal_intelligence(request: DealIntelRequest):
         comps=request.comps,
     )
 
+    source = "gemini" if any(b.get("deal_thesis", "").count(".") > 2 for b in briefs) else "mock"
+
     return {
         "target": request.target_ticker,
         "n_briefs": len(briefs),
         "briefs": briefs,
-        "source": "gemini" if any(b.get("deal_thesis", "").count(" ") > 15 for b in briefs) else "mock",
+        "source": source,
+        "tiers": {
+            "strategic_buyers": sum(1 for b in briefs if b["tier"] == "STRATEGIC_BUYER"),
+            "adjacent_synergies": sum(1 for b in briefs if b["tier"] == "ADJACENT_SYNERGY"),
+            "financial_sponsors": sum(1 for b in briefs if b["tier"] == "FINANCIAL_SPONSOR"),
+        }
     }
