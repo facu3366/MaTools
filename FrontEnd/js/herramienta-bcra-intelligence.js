@@ -103,7 +103,9 @@ function bcraML() {
 }
 
 function bcraShort(name) {
-  let n = (name || "")
+  if (!name) return "";
+
+  let n = name
     .replace(/^BANCO (DE LA |DE |DEL |)/i, "")
     .replace(/ S\.A\..*$/i, "")
     .replace(/ COOP.*$/i, "")
@@ -111,21 +113,20 @@ function bcraShort(name) {
     .replace(/ LTDO\.?$/i, "")
     .trim();
 
-  // abreviaciones directas (sin loops)
-  n = n.replace(/ARGENTINA/gi, "ARG.");
-  n = n.replace(/ARGENTIN/gi, "ARG.");
-  n = n.replace(/BUENOS AIRES/gi, "BS. AS.");
-  n = n.replace(/BUENOS/gi, "BS.");
-  n = n.replace(/PROVINCIA/gi, "PROV.");
-  n = n.replace(/NACIONAL/gi, "NAC.");
-  n = n.replace(/INTERNACIONAL/gi, "INTL.");
-  n = n.replace(/FINANCIERO/gi, "FIN.");
-  n = n.replace(/SERVICIOS/gi, "SERV.");
-  n = n.replace(/INDUSTRIAL/gi, "IND.");
+  // 🔒 abreviaciones SOLO seguras (palabras completas)
+  n = n.replace(/\bARGENTINA\b/gi, "ARG.");
+  n = n.replace(/\bBUENOS AIRES\b/gi, "BS. AS.");
+  n = n.replace(/\bPROVINCIA\b/gi, "PROV.");
+  n = n.replace(/\bNUEVO\b/gi, "NVO.");
+  n = n.replace(/\bSANTIAGO\b/gi, "SGO.");
+  n = n.replace(/\bSANTA\b/gi, "STA.");
 
-  // fallback si sigue largo
-  if (n.length > 28) {
-    n = n.slice(0, 26) + "…";
+  // ⚠️ NO tocar palabras como INDUSTRIAL, INTERNACIONAL, etc.
+  // porque rompen nombres reales
+
+  // fallback elegante SOLO si es MUY largo
+  if (n.length > 32) {
+    n = n.slice(0, 30) + "…";
   }
 
   return n;
