@@ -101,16 +101,36 @@ function bcraFmtB(n) {
 function bcraML() {
   return BCRA_METRICS.find((m) => m.k === bcraState.metric).l;
 }
+
 function bcraShort(name) {
-  return (name || "")
+  let n = (name || "")
     .replace(/^BANCO (DE LA |DE |DEL |)/i, "")
     .replace(/ S\.A\..*$/i, "")
     .replace(/ COOP.*$/i, "")
     .replace(/ CIA\..*$/i, "")
     .replace(/ LTDO\.?$/i, "")
-    .trim()
-    .slice(0, 24);
+    .trim();
+
+  // abreviaciones directas (sin loops)
+  n = n.replace(/ARGENTINA/gi, "ARG.");
+  n = n.replace(/ARGENTIN/gi, "ARG.");
+  n = n.replace(/BUENOS AIRES/gi, "BS. AS.");
+  n = n.replace(/BUENOS/gi, "BS.");
+  n = n.replace(/PROVINCIA/gi, "PROV.");
+  n = n.replace(/NACIONAL/gi, "NAC.");
+  n = n.replace(/INTERNACIONAL/gi, "INTL.");
+  n = n.replace(/FINANCIERO/gi, "FIN.");
+  n = n.replace(/SERVICIOS/gi, "SERV.");
+  n = n.replace(/INDUSTRIAL/gi, "IND.");
+
+  // fallback si sigue largo
+  if (n.length > 28) {
+    n = n.slice(0, 26) + "…";
+  }
+
+  return n;
 }
+
 function bcraActive() {
   return BCRA_BANKS.filter((b) => bcraState.selected.has(b.id));
 }
