@@ -17,8 +17,7 @@ import requests
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import psycopg2
-from datetime import datetime, timedelta
-
+from datetime import datetime, timedelta, timezone
 DATABASE_URL = os.getenv("DATABASE_URL")
 CACHE_TTL_DAYS = 7
 
@@ -51,7 +50,7 @@ def _get_from_cache(key):
 
         data, created_at = row
 
-        if datetime.utcnow() - created_at > timedelta(days=CACHE_TTL_DAYS):
+        if datetime.now(timezone.utc) - created_at > timedelta(days=CACHE_TTL_DAYS):
             print("   ⏳ Cache expired")
             return None
 
@@ -402,7 +401,7 @@ def generate_deal_intelligence(
         if row:
             data, created_at = row
 
-            if datetime.utcnow() - created_at <= timedelta(days=CACHE_TTL_DAYS):
+            if datetime.now(timezone.utc) - created_at <= timedelta(days=CACHE_TTL_DAYS):
                 print("   💾 CACHE HIT")
                 return json.loads(data)
             else:
