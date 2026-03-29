@@ -55,7 +55,7 @@ def _get_from_cache(key):
             return None
 
         print("   💾 CACHE HIT")
-        return json.loads(data)
+        return data if isinstance(data, list) else json.loads(data)
 
     except Exception as e:
         print(f"   ⚠️ Cache read error: {e}")
@@ -403,7 +403,7 @@ def generate_deal_intelligence(
 
             if datetime.now(timezone.utc) - created_at <= timedelta(days=CACHE_TTL_DAYS):
                 print("   💾 CACHE HIT")
-                return json.loads(data)
+                return data if isinstance(data, list) else json.loads(data)
             else:
                 print("   ⏳ Cache expired")
 
