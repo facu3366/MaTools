@@ -60,26 +60,43 @@ const bcraState = {
 // ── helpers ──
 function bcraFmt(n) {
   if (n == null || isNaN(n)) return "—";
-  if (n >= 1e12) return (n / 1e12).toFixed(1) + "T";
-  if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + "MM";
-  return Math.round(n).toString();
+
+  if (n >= 1e12)
+    return (
+      (n / 1e12).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "T"
+    );
+  if (n >= 1e9)
+    return (
+      (n / 1e9).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "B"
+    );
+  if (n >= 1e6)
+    return (
+      (n / 1e6).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "M"
+    );
+
+  return Math.round(n).toLocaleString("en-US");
 }
 function bcraFmtB(n) {
   if (n == null || isNaN(n)) return "—";
 
-  if (bcraState.scale === "billions") return n.toFixed(1) + "B";
+  let value = n;
+  let suffix = "";
 
-  if (bcraState.scale === "millions") return n.toFixed(0) + "M";
+  if (bcraState.scale === "billions") {
+    value = n;
+    suffix = "B";
+  }
 
-  return n.toLocaleString("es-AR");
-}
-function bcraFmtN(n) {
-  if (n == null || isNaN(n)) return "—";
+  if (bcraState.scale === "millions") {
+    value = n;
+    suffix = "M";
+  }
 
-  return n.toLocaleString("es-AR", {
-    maximumFractionDigits: 1,
-  });
+  return (
+    value.toLocaleString("en-US", {
+      maximumFractionDigits: 1,
+    }) + suffix
+  );
 }
 function bcraML() {
   return BCRA_METRICS.find((m) => m.k === bcraState.metric).l;
