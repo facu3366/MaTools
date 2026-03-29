@@ -493,8 +493,7 @@ def generate_deal_intelligence(
         cur.execute("""
             INSERT INTO ai_cache (cache_key, data, created_at)
             VALUES (%s, %s, NOW())
-            ON CONFLICT (cache_key)
-            DO UPDATE SET data = EXCLUDED.data, created_at = NOW()
+            ON CONFLICT (cache_key) DO NOTHING
         """, (key, json.dumps(fallback)))
 
         conn.commit()
