@@ -821,6 +821,8 @@ function renderCompsResult(data) {
           ⬇ DESCARGAR EXCEL
         </button>
 
+        <div id="deal-intel-container" style="display:none;"></div>
+
       </div>
     </div>
   `;
@@ -982,7 +984,11 @@ function triggerDealIntel() {
         ticker: b.ticker || comps[i]?.ticker || "N/A",
       }));
 
-      renderDealIntelTable(clean);
+      DEAL_INTEL_DATA = {};
+clean.forEach(b => { DEAL_INTEL_DATA[b.ticker.toUpperCase()] = b; });
+window.DEAL_INTEL_DATA = DEAL_INTEL_DATA;
+renderDealIntelRows();
+renderDealIntelSection(clean);
 
       showToast("Deal Intelligence listo", "success");
     })
