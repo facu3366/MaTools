@@ -113,25 +113,17 @@ function bcraShort(name) {
     .replace(/ LTDO\.?$/i, "")
     .trim();
 
-  // 🔒 abreviaciones SOLO seguras (palabras completas)
+  // solo abreviaciones MUY seguras
   n = n.replace(/\bARGENTINA\b/gi, "ARG.");
   n = n.replace(/\bBUENOS AIRES\b/gi, "BS. AS.");
-  n = n.replace(/\bPROVINCIA\b/gi, "PROV.");
-  n = n.replace(/\bNUEVO\b/gi, "NVO.");
-  n = n.replace(/\bSANTIAGO\b/gi, "SGO.");
-  n = n.replace(/\bSANTA\b/gi, "STA.");
 
-  // ⚠️ NO tocar palabras como INDUSTRIAL, INTERNACIONAL, etc.
-  // porque rompen nombres reales
-
-  // fallback elegante SOLO si es MUY largo
+  // corte elegante SOLO si es MUY largo
   if (n.length > 32) {
-    n = n.slice(0, 30) + "…";
+    return n.slice(0, 29) + "…";
   }
 
   return n;
 }
-
 function bcraActive() {
   return BCRA_BANKS.filter((b) => bcraState.selected.has(b.id));
 }
