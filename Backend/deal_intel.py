@@ -2,27 +2,24 @@
 🧠 DEAL INTELLIGENCE — DealDesk
 =================================
 Genera un mini-brief de M&A para cada empresa comparable.
-Para cada comp: por qué es buen/mal target, sinergias, riesgos,
-si está en expansión, y una recomendación de approach.
-
-Se ejecuta DESPUÉS de tener los comps — no bloquea la tabla principal.
-Se llama como endpoint separado para no ralentizar la carga inicial.
+Usa Google Gemini 1.5 Flash (gratis) para generar briefs.
 """
 
 import os
 import json
 import logging
+import time
+import requests
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-import google.generativeai as genai
-
 logger = logging.getLogger(__name__)
 
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAnBovaLp2o8B45ytc59NcrEnU48vnsfz8")
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
 router = APIRouter()
-
 
 # ─────────────────────────────────────────────
 # MODELS
@@ -32,49 +29,95 @@ class DealIntelRequest(BaseModel):
     target_ticker: str
     target_name: str
     target_industry: str
-    target_revenue: float  # in $mm
-    comps: list[dict]      # list of comp empresas with financial data
+    target_revenue: float
+    comps: list[dict]
 
 
 # ─────────────────────────────────────────────
-# GEMINI
+# PROMPT
 # ─────────────────────────────────────────────
 
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-try:
-    model = genai.GenerativeModel("gemini-3.1-flash-lite")
-    GEMINI_OK = True
-except Exception as e:
-    print(f"⚠️ Gemini init failed: {e}")
-    model = None
-    GEMINI_OK = False
+DEAL_INTEL_PROMPT = """You are the #1 ranked M&A analyst at Goldman Sachs. Your MD needs deal intelligence on potential acquirers/targets for a live mandate.
+
+TARGET COMPANY (the company being sold):
+- Name: {target_name} ({target_ticker})
+- Industry: {target_industry}
+- Revenue: ${target_revenue:,.0f}M USD
+
+COMPARABLE COMPANIES TO ANALYZE:
+{comps_text}
+
+For EACH company above, provide a JSON object with these EXACT fields:
+- "ticker": the company ticker
+- "tier": one of "STRATEGIC_BUYER", "FINANCIAL_SPONSOR", "ADJACENT_SYNERGY"
+- "deal_thesis": 2-3 sentences on WHY this company would acquire the target. Be specific.
+- "risks": 1-2 specific risks of this acquirer
+- "expansion_signal": "HIGH", "MEDIUM", or "LOW"
+- "expansion_note": 1 sentence explaining the expansion signal
+- "approach_rec": "PRIORITY", "SECONDARY", or "MONITOR"
+
+Return ONLY a JSON array. No explanation. No markdown. No backticks.
+Example: [{{"ticker":"TM","tier":"STRATEGIC_BUYER","deal_thesis":"...","risks":"...","expansion_signal":"MEDIUM","expansion_note":"...","approach_rec":"PRIORITY"}}]"""
 
 
-def _call_ai(prompt: str) -> str | None:
-    if not model:
+def _build_comps_text(comps: list[dict]) -> str:
+    lines = []
+    for c in comps[:20]:
+        ticker = c.get("Ticker") or c.get("ticker") or "???"
+        name = c.get("Empresa") or c.get("name") or ticker
+        industry = c.get("Industria") or c.get("industry") or "N/A"
+        rev = c.get("Revenue ($mm)") or c.get("revenue") or 0
+        ebitda = c.get("EBITDA ($mm)") or c.get("ebitda") or 0
+        ev = c.get("EV ($mm)") or c.get("ev") or 0
+        country = c.get("País") or c.get("Pais") or c.get("country") or "N/A"
+
+        lines.append(
+            f"- {ticker}: {name} | {industry} | {country} | "
+            f"Rev: ${rev:,.0f}M | EBITDA: ${ebitda:,.0f}M | EV: ${ev:,.0f}M"
+        )
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────
+# CALL GEMINI
+# ─────────────────────────────────────────────
+
+def _call_gemini(prompt: str) -> str | None:
+    if not GEMINI_KEY:
+        print("   ⚠️ No GEMINI_API_KEY")
         return None
 
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": 0.2,
-                "max_output_tokens": 300,
+        response = requests.post(
+            f"{GEMINI_URL}?key={GEMINI_KEY}",
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.3,
+                    "maxOutputTokens": 2048,
+                }
             },
+            timeout=30,
         )
-        return response.text if response else None
+
+        if response.status_code != 200:
+            print(f"   ❌ Gemini HTTP {response.status_code}: {response.text[:200]}")
+            return None
+
+        data = response.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        print(f"   ✅ Gemini response: {len(text)} chars")
+        return text
 
     except Exception as e:
-        print(f"❌ Gemini failed: {e}")
+        print(f"   ❌ Gemini error: {e}")
         return None
 
 
 # ─────────────────────────────────────────────
 # MAIN FUNCTION
 # ─────────────────────────────────────────────
-
-import re
-
 
 def generate_deal_intelligence(
     target_ticker: str,
@@ -83,145 +126,77 @@ def generate_deal_intelligence(
     target_revenue: float,
     comps: list[dict],
 ) -> list[dict]:
-
-    print("\n" + "=" * 60)
-    print("🧠 DEAL INTEL START")
-    print(f"Target: {target_name} ({target_ticker})")
-    print(f"Comps received: {len(comps)}")
-    print("=" * 60)
-
-    if not model:
-        print("❌ Gemini model NOT available")
+    if not GEMINI_KEY:
+        print("   ⚠️ [Deal Intel] No GEMINI_API_KEY — skipping")
         return []
 
     if not comps:
-        print("⚠️ No comps provided")
         return []
 
-    # ─────────────────────────────
-    # PRINT MODELOS DISPONIBLES
-    # ─────────────────────────────
+    print(f"   🧠 [Deal Intel] Generating briefs for {len(comps)} companies via Gemini...")
+
+    comps_text = _build_comps_text(comps)
+    prompt = DEAL_INTEL_PROMPT.format(
+        target_name=target_name,
+        target_ticker=target_ticker,
+        target_industry=target_industry,
+        target_revenue=target_revenue or 0,
+        comps_text=comps_text,
+    )
+
     try:
-        print("\n📦 AVAILABLE MODELS:")
-        for m in genai.list_models():
-            print(" -", m.name)
-    except Exception as e:
-        print("⚠️ Could not list models:", e)
+        t0 = time.time()
+        raw_text = _call_gemini(prompt)
+        elapsed = time.time() - t0
 
-    # ─────────────────────────────
-    # EXCLUSION LIST
-    # ─────────────────────────────
-    tier1 = set()
+        if raw_text is None:
+            return []
 
-    if target_ticker:
-        tier1.add(target_ticker.upper())
+        # Clean response
+        clean = raw_text.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[-1]
+        if clean.endswith("```"):
+            clean = clean.rsplit("```", 1)[0]
+        clean = clean.strip()
 
-    for c in comps:
-        t = str(c.get("Ticker") or c.get("ticker") or "").upper()
-        if t:
-            tier1.add(t)
+        start_idx = clean.find("[")
+        end_idx = clean.rfind("]")
+        if start_idx != -1 and end_idx != -1:
+            clean = clean[start_idx:end_idx + 1]
 
-    tier1_list = list(tier1)
-    tier1_text = ", ".join(tier1_list[:15])
+        briefs = json.loads(clean)
 
-    print(f"\n🚫 Excluded tickers: {tier1_text}")
+        if not isinstance(briefs, list):
+            print(f"   ⚠️ [Deal Intel] Response is not a list")
+            return []
 
-    # ─────────────────────────────
-    # PROMPT SIMPLE
-    # ─────────────────────────────
-    prompt = f"""
-Return a JSON array of 3 companies.
+        # Map briefs back to tickers
+        brief_map = {b.get("ticker", "").upper(): b for b in briefs}
 
-Target: {target_name} ({target_ticker})
-Industry: {target_industry}
-
-DO NOT include these tickers:
-{tier1_text}
-
-Each object:
-{{
-  "ticker": "...",
-  "tier": "TIER_2" or "TIER_3",
-  "deal_thesis": "short explanation"
-}}
-
-Rules:
-- No markdown
-- No explanations
-- Keep it short
-"""
-
-    print("\n🧾 PROMPT SIZE:", len(prompt))
-
-    # ─────────────────────────────
-    # CALL AI
-    # ─────────────────────────────
-    raw = _call_ai(prompt)
-
-    print("\n🧠 RAW LENGTH:", len(raw) if raw else 0)
-
-    if not raw:
-        print("❌ EMPTY RESPONSE → fallback")
-        raw = ""
-
-    print("\n🧠 RAW PREVIEW:")
-    print(raw[:300])
-    print("—" * 40)
-
-    # ─────────────────────────────
-    # PARSER SIMPLE
-    # ─────────────────────────────
-    clean = raw.strip().replace("```json", "").replace("```", "")
-
-    matches = re.findall(r"\{.*?\}", clean, re.DOTALL)
-
-    print(f"\n🔍 OBJECTS FOUND: {len(matches)}")
-
-    results = []
-
-    for m in matches:
-        try:
-            obj = json.loads(m)
-
-            ticker = str(obj.get("ticker", "")).upper().strip()
-
-            if not ticker or ticker in tier1:
-                continue
-
-            results.append({
+        result = []
+        for comp in comps:
+            ticker = (comp.get("Ticker") or comp.get("ticker") or "").upper()
+            brief = brief_map.get(ticker, {})
+            result.append({
                 "ticker": ticker,
-                "tier": obj.get("tier", ""),
-                "deal_thesis": obj.get("deal_thesis", ""),
+                "tier": brief.get("tier", "STRATEGIC_BUYER"),
+                "deal_thesis": brief.get("deal_thesis", ""),
+                "risks": brief.get("risks", ""),
+                "expansion_signal": brief.get("expansion_signal", "MEDIUM"),
+                "expansion_note": brief.get("expansion_note", ""),
+                "approach_rec": brief.get("approach_rec", "SECONDARY"),
             })
 
-        except Exception:
-            continue
+        print(f"   🧠 [Deal Intel] Generated {len(result)} briefs in {elapsed:.1f}s")
+        return result
 
-    # ─────────────────────────────
-    # FALLBACK SIMPLE
-    # ─────────────────────────────
-    if not results:
-        print("⚠️ Using fallback")
-
-        for c in comps:
-            t = str(c.get("Ticker") or c.get("ticker") or "").upper()
-
-            if not t or t == target_ticker or t in tier1:
-                continue
-
-            results.append({
-                "ticker": t,
-                "tier": "TIER_2",
-                "deal_thesis": "Potential strategic fit based on industry adjacency.",
-            })
-
-            if len(results) >= 3:
-                break
-
-    print(f"\n🧠 FINAL OUTPUT ({len(results)}):\n{results}")
-    print("=" * 60 + "\n")
-
-    return results[:3]
+    except json.JSONDecodeError as e:
+        print(f"   ⚠️ [Deal Intel] JSON parse error: {e}")
+        return []
+    except Exception as e:
+        print(f"   ⚠️ [Deal Intel] Failed: {type(e).__name__}: {e}")
+        return []
 
 
 # ─────────────────────────────────────────────
@@ -230,12 +205,8 @@ Rules:
 
 @router.post("/comps/deal-intel")
 def get_deal_intelligence(request: DealIntelRequest):
-    """
-    Generate deal intelligence for comps.
-    Called AFTER comps are loaded — doesn't block the main table.
-    """
-    if not ANTHROPIC_KEY:
-        raise HTTPException(503, "ANTHROPIC_API_KEY not configured")
+    if not GEMINI_KEY:
+        raise HTTPException(503, "GEMINI_API_KEY not configured")
 
     briefs = generate_deal_intelligence(
         target_ticker=request.target_ticker,

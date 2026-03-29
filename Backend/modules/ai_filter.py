@@ -1,33 +1,28 @@
 """
 🧠 AI COMP VALIDATOR — DealDesk
 ================================
-Filtro inteligente de comparables usando Claude Sonnet.
+Filtro inteligente de comparables usando Google Gemini 1.5 Flash.
 """
 
 import os
 import json
 import logging
 import time
+import requests
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY")
-
-# ─────────────────────────────────────────────
-# CONFIG
-# ─────────────────────────────────────────────
-
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAnBovaLp2o8B45ytc59NcrEnU48vnsfz8")
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
 MAX_CANDIDATES_TO_SEND = 40
-MAX_TOKENS_RESPONSE = 1500
-TIMEOUT_SECONDS = 20
 
 # ─────────────────────────────────────────────
-# PROMPT TEMPLATE
+# PROMPT
 # ─────────────────────────────────────────────
 
-FILTER_PROMPT = """You are the top-ranked Associate at Goldman Sachs M&A. Your Managing Director just handed you a list of candidate comparable companies for a live deal. If you include a bad comp, the MD will destroy you in front of the entire team. If you miss a good comp, you're equally dead. Your reputation depends on this.
+FILTER_PROMPT = """You are the top-ranked Associate at Goldman Sachs M&A. Filter candidate comparable companies ruthlessly.
 
 TARGET COMPANY:
 - Ticker: {target_ticker}
@@ -38,28 +33,19 @@ TARGET COMPANY:
 CANDIDATE COMPANIES:
 {candidates_text}
 
-YOUR TASK: Filter ruthlessly. Return ONLY legitimate comparable companies.
+RULES:
+1. SAME CORE BUSINESS only — the company must make money the same way the target does.
+2. REJECT companies from different industries even if Yahoo classifies them in the same sector.
+3. Auto parts RETAILERS are NOT comparable to auto MANUFACTURERS.
+4. Defense contractors are NOT comparable to auto manufacturers.
+5. Consumer staples are NOT comparable to tech companies.
+6. Return between 8 and 20 comps. Quality over quantity.
 
-THE MD'S RULES (non-negotiable):
-1. SAME CORE BUSINESS — the company must make money the same way the target does. Same products, same customers, same value chain position.
-2. If the target MANUFACTURES CARS → only include companies that MANUFACTURE cars or vehicles. Not retailers. Not food. Not aerospace. Not auto parts stores.
-3. If the target SELLS SOFTWARE → only include software companies. Not hardware. Not IT consulting. Not telecom.
-4. If the target is a HEALTH INSURER → only include health insurers and managed care. Not pharma. Not medical devices. Not hospitals.
-5. If the target is an E-COMMERCE PLATFORM → only include e-commerce and digital marketplace companies. Not brick-and-mortar retail.
-6. If the target is a BANK → only include banks. Not insurance. Not asset managers. Not payment processors.
-7. REJECT companies from different industries even if Yahoo Finance classifies them in the same sector. Coca-Cola is NOT a comp for Tesla. Boeing is NOT a comp for Toyota. Walmart is NOT a comp for Ford. Home Depot is NOT a comp for GM.
-8. Auto parts RETAILERS (AutoZone, O'Reilly) are NOT comparable to auto MANUFACTURERS.
-9. Defense contractors (Lockheed, RTX, Northrop) are NOT comparable to auto manufacturers.
-10. Consumer staples (P&G, Coca-Cola, PepsiCo) are NOT comparable to auto manufacturers or tech companies.
-11. Revenue scale: prefer companies within 0.2x-5x of target revenue, but include smaller/larger if business model is identical and no alternatives exist.
-12. Return between 8 and 20 comps. Quality over quantity. Every ticker you return must be defensible to the MD.
-
-Return ONLY a JSON array of ticker strings. No explanation. No markdown. No backticks. Just the array.
+Return ONLY a JSON array of ticker strings. No explanation. No markdown. No backticks.
 Example: ["TM","GM","F","STLA","HMC"]"""
 
 
 def _build_candidates_text(candidates: list[dict]) -> str:
-    """Build a compact text representation of candidates for the prompt."""
     lines = []
     for c in candidates[:MAX_CANDIDATES_TO_SEND]:
         ticker = c.get("Ticker", "???")
@@ -72,40 +58,42 @@ def _build_candidates_text(candidates: list[dict]) -> str:
 
 
 # ─────────────────────────────────────────────
-# CALL AI WITH MODEL FALLBACK
+# CALL GEMINI
 # ─────────────────────────────────────────────
 
-import google.generativeai as genai
-
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-
-try:
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    GEMINI_OK = True
-except Exception as e:
-    print(f"⚠️ Gemini init failed: {e}")
-    model = None
-    GEMINI_OK = False
-
-def _call_ai(prompt: str) -> str | None:
-    if not model:
+def _call_gemini(prompt: str) -> str | None:
+    if not GEMINI_KEY:
         return None
 
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": 0.2,
-                "max_output_tokens": 800,  # 🔥 bajamos para evitar corte
+        response = requests.post(
+            f"{GEMINI_URL}?key={GEMINI_KEY}",
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "maxOutputTokens": 1024,
+                }
             },
+            timeout=20,
         )
-        return response.text
+
+        if response.status_code != 200:
+            print(f"   ❌ Gemini HTTP {response.status_code}: {response.text[:200]}")
+            return None
+
+        data = response.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        return text
 
     except Exception as e:
-        print(f"❌ Gemini failed: {e}")
+        print(f"   ❌ Gemini error: {e}")
         return None
+
+
 # ─────────────────────────────────────────────
-# MAIN FILTER FUNCTION
+# MAIN FILTER
 # ─────────────────────────────────────────────
 
 def ai_filter_comps(
@@ -115,26 +103,18 @@ def ai_filter_comps(
     target_revenue: float,
     candidates: list[dict],
 ) -> list[dict]:
-    """
-    Filters candidate comps using Claude.
-    NEVER raises exceptions — graceful degradation always.
-    """
-    if not ANTHROPIC_KEY:
-        print("   ⚠️ [AI Filter] No ANTHROPIC_API_KEY — skipping")
+    if not GEMINI_KEY:
         return candidates
 
     if len(candidates) <= 5:
-        print(f"   🧠 [AI Filter] Only {len(candidates)} candidates — no filtering needed")
         return candidates
 
     if not target_industry:
-        print("   ⚠️ [AI Filter] No target industry — skipping")
         return candidates
 
-    print(f"   🧠 [AI Filter] Starting: {target_ticker} ({target_name}) | {target_industry} | {len(candidates)} candidates")
+    print(f"   🧠 [AI Filter] Starting via Gemini: {target_ticker} | {len(candidates)} candidates")
 
     candidates_text = _build_candidates_text(candidates)
-
     prompt = FILTER_PROMPT.format(
         target_ticker=target_ticker,
         target_name=target_name,
@@ -145,14 +125,13 @@ def ai_filter_comps(
 
     try:
         t0 = time.time()
-        raw_text = _call_ai(prompt)
+        raw_text = _call_gemini(prompt)
         elapsed = time.time() - t0
 
         if raw_text is None:
-            print(f"   ⚠️ [AI Filter] All models failed. Using unfiltered list.")
             return candidates
 
-        clean = raw_text
+        clean = raw_text.strip()
         if clean.startswith("```"):
             clean = clean.split("\n", 1)[-1]
         if clean.endswith("```"):
@@ -167,32 +146,23 @@ def ai_filter_comps(
         approved_tickers = json.loads(clean)
 
         if not isinstance(approved_tickers, list):
-            print(f"   ⚠️ [AI Filter] Response is not a list: {type(approved_tickers)}")
             return candidates
 
         approved_set = set(t.upper() for t in approved_tickers if isinstance(t, str))
-
         filtered = [c for c in candidates if c.get("Ticker", "").upper() in approved_set]
-        removed = len(candidates) - len(filtered)
 
-        print(f"   🧠 [AI Filter] RESULT: {len(candidates)} → {len(filtered)} approved, {removed} removed | {elapsed:.1f}s")
-
-        if removed > 0:
-            removed_tickers = [c.get("Ticker") for c in candidates if c.get("Ticker", "").upper() not in approved_set]
-            print(f"   🧠 [AI Filter] Removed: {removed_tickers[:20]}")
+        print(f"   🧠 [AI Filter] {len(candidates)} → {len(filtered)} approved | {elapsed:.1f}s")
 
         if len(filtered) < 5 and len(candidates) >= 5:
-            print(f"   ⚠️ [AI Filter] Only {len(filtered)} left — falling back to unfiltered")
             return candidates
 
         return filtered
 
     except json.JSONDecodeError as e:
-        print(f"   ⚠️ [AI Filter] JSON parse error: {e}. Raw: {raw_text[:300] if raw_text else 'None'}")
+        print(f"   ⚠️ [AI Filter] JSON parse error: {e}")
         return candidates
-
     except Exception as e:
-        print(f"   ⚠️ [AI Filter] Failed ({type(e).__name__}: {e}). Using unfiltered list.")
+        print(f"   ⚠️ [AI Filter] Failed: {e}")
         return candidates
 
 
@@ -215,7 +185,7 @@ def ai_filter_comps_cached(
     if cache_key in _ai_filter_cache:
         cached_tickers = _ai_filter_cache[cache_key]
         filtered = [c for c in candidates if c.get("Ticker") in cached_tickers]
-        print(f"   🧠 [AI Filter] CACHE HIT for {target_ticker}: {len(filtered)} comps")
+        print(f"   🧠 [AI Filter] CACHE HIT: {len(filtered)} comps")
         return filtered
 
     result = ai_filter_comps(
@@ -223,5 +193,4 @@ def ai_filter_comps_cached(
     )
 
     _ai_filter_cache[cache_key] = set(c.get("Ticker") for c in result)
-
     return result
