@@ -19,7 +19,7 @@ from pydantic import BaseModel
 import psycopg2
 from datetime import datetime, timedelta, timezone
 DATABASE_URL = os.getenv("DATABASE_URL")
-CACHE_TTL_DAYS = 7
+CACHE_TTL_HOURS = 24
 
 def _get_conn():
     return psycopg2.connect(DATABASE_URL)
@@ -50,7 +50,7 @@ def _get_from_cache(key):
 
         data, created_at = row
 
-        if datetime.now(timezone.utc) - created_at > timedelta(days=CACHE_TTL_DAYS):
+        if datetime.now(timezone.utc) - created_at > timedelta(days=CACHE_TTL_HOURS):
             print("   ⏳ Cache expired")
             return None
 
@@ -401,7 +401,7 @@ def generate_deal_intelligence(
         if row:
             data, created_at = row
 
-            if datetime.now(timezone.utc) - created_at <= timedelta(days=CACHE_TTL_DAYS):
+            if datetime.now(timezone.utc) - created_at <= timedelta(days=CACHE_TTL_HOURS):
                 print("   💾 CACHE HIT")
                 return data if isinstance(data, list) else json.loads(data)
             else:
