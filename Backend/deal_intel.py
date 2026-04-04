@@ -316,7 +316,7 @@ def _generate_mock_briefs(comps: list[dict], target_name: str, target_industry: 
     result = []
 
     # Tier 1: from actual comps
-    for i, c in enumerate(comps[:8]):
+    for i, c in enumerate(comps):
         n = _normalize_comp(c)
         rev = n["revenue"] or 0
         result.append({
