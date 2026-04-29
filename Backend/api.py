@@ -3,11 +3,12 @@
 Backend principal del motor financiero DealDesk.
 """
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
+import os
 import pathlib
 
 from Backend.db import init_db
@@ -24,7 +25,7 @@ from Backend.modules.research import router as research_router
 from Backend.modules.financials import router as financials_router
 # from Backend.modules.precedents import router as precedents_router  # DESHABILITADO
 from Backend.modules.bcra_export import router as bcra_export_router
-from Backend.deal_intel import router as deal_intel_router
+from Backend.deal_intel import router as deal_intel_router, clear_deal_intel_cache
 try:
     from Backend.modules.ask_ai import router as ask_router
     HAS_ASK = True
@@ -62,6 +63,29 @@ app = FastAPI(
 # ─────────────────────────────────────────────
 
 init_db()
+
+# Optional: wipe Deal Intel cache on boot (e.g. after fixing N/A / sector bugs). Set CLEAR_DEAL_INTEL_CACHE_ON_STARTUP=1
+if os.getenv("CLEAR_DEAL_INTEL_CACHE_ON_STARTUP", "").lower() in ("1", "true", "yes"):
+    try:
+        r = clear_deal_intel_cache()
+        if r.get("ok"):
+            print(f"🧹 Deal intel ai_cache cleared ({r.get('deleted', 0)} rows)")
+        else:
+            print(f"⚠️ Deal intel cache clear skipped: {r.get('error')}")
+    except Exception as e:
+        print(f"⚠️ Deal intel cache clear failed: {e}")
+
+
+# ─────────────────────────────────────────────
+# DEV: shortcut to same clear as POST /comps/deal-intel/clear-cache
+# ─────────────────────────────────────────────
+
+@app.post("/clear-cache")
+def clear_cache_development():
+    r = clear_deal_intel_cache()
+    if not r.get("ok"):
+        raise HTTPException(status_code=500, detail=r.get("error", "clear failed"))
+    return r
 
 
 # ─────────────────────────────────────────────

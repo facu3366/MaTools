@@ -10,6 +10,7 @@ M&A Intelligence: 3-Tier classification with real strategic analysis.
 """
 
 import os
+import re
 import json
 import logging
 import time
@@ -20,13 +21,16 @@ import psycopg2
 from datetime import datetime, timedelta, timezone
 DATABASE_URL = os.getenv("DATABASE_URL")
 CACHE_TTL_HOURS = 24
+# Bump this string when deal-intel output or caching semantics change so old rows are ignored.
+DEAL_INTEL_CACHE_VERSION = "v2"
 
 def _get_conn():
     return psycopg2.connect(DATABASE_URL)
 
 
-def _cache_key(target_ticker, target_industry):
-    return f"{target_ticker}_{target_industry}".lower()
+def _cache_key(target_ticker: str, target_industry: str) -> str:
+    base = f"{target_ticker}_{target_industry}".lower()
+    return f"deal_intel:{DEAL_INTEL_CACHE_VERSION}:{base}"
 
 
 def _get_from_cache(key):
@@ -85,6 +89,27 @@ def _save_to_cache(key, data):
 
 
 logger = logging.getLogger(__name__)
+
+
+def clear_deal_intel_cache() -> dict:
+    """
+    DELETE all rows from ai_cache (Deal Intel is the only consumer in this codebase).
+    Used by POST /comps/deal-intel/clear-cache and optional CLEAR_DEAL_INTEL_CACHE_ON_STARTUP.
+    """
+    if not DATABASE_URL:
+        return {"ok": False, "deleted": 0, "error": "DATABASE_URL not set"}
+    try:
+        conn = _get_conn()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM ai_cache")
+        deleted = cur.rowcount
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"ok": True, "deleted": deleted}
+    except Exception as e:
+        logger.exception("clear_deal_intel_cache failed")
+        return {"ok": False, "deleted": 0, "error": str(e)}
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 
@@ -178,11 +203,70 @@ def _get_tier2_for_industry(industry: str) -> list[dict]:
 # NORMALIZE FIELDS
 # ─────────────────────────────────────────────
 
+def _resolve_sector_label(c: dict) -> str:
+    """Sector for thesis text: deal/UI sector first, then Yahoo Sector/Industria."""
+    for key in ("sector", "Sector", "Industria", "industry"):
+        v = c.get(key)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if not s or s.upper() == "N/A":
+            continue
+        return s
+    return "Multiple sectors"
+
+
+def _tier1_display_sector(comp: dict | None, target_industry: str) -> str:
+    """Label for Tier 1 thesis: comp row first, then Yahoo industry from target."""
+    if comp:
+        label = _resolve_sector_label(comp)
+        if label != "Multiple sectors":
+            return label
+    ti = (target_industry or "").strip()
+    if ti and ti.upper() != "N/A":
+        return ti
+    return "Multiple sectors"
+
+
+_STRATEGIC_BUYER_BAD_SECTOR = re.compile(
+    r"direct competitor in (?:N/A|n/a|Unknown(?: sector)?|NONE|TBD)(?=[\s,.]| with)",
+    re.IGNORECASE,
+)
+
+
+def _patch_strategic_buyer_theses(
+    briefs: list[dict], comps: list[dict], target_industry: str
+) -> None:
+    """Gemini/cached Tier 1 often echoes N/A; rewrite using same normalization as mock Tier 1."""
+    if not briefs:
+        return
+    by_ticker: dict[str, dict] = {}
+    for c in comps:
+        t = (c.get("Ticker") or c.get("ticker") or "").strip().upper()
+        if t:
+            by_ticker[t] = c
+
+    for b in briefs:
+        if b.get("tier") != "STRATEGIC_BUYER":
+            continue
+        thesis = (b.get("deal_thesis") or "").strip()
+        if not thesis or not _STRATEGIC_BUYER_BAD_SECTOR.search(thesis):
+            continue
+        tick = (b.get("ticker") or "").strip().upper()
+        comp = by_ticker.get(tick)
+        label = _tier1_display_sector(comp, target_industry)
+        b["deal_thesis"] = _STRATEGIC_BUYER_BAD_SECTOR.sub(
+            f"direct competitor in {label}", thesis, count=1
+        )
+
+
 def _normalize_comp(c: dict) -> dict:
+    sector_label = _resolve_sector_label(c)
     return {
         "ticker": c.get("Ticker") or c.get("ticker") or "???",
         "name": c.get("Empresa") or c.get("name") or c.get("ticker") or "???",
-        "industry": c.get("Industria") or c.get("industry") or "N/A",
+        "sector": sector_label,
+        "industry": sector_label,
         "country": c.get("País") or c.get("Pais") or c.get("country") or "N/A",
         "revenue": c.get("Revenue ($mm)") or c.get("revenue") or 0,
         "ebitda": c.get("EBITDA ($mm)") or c.get("ebitda") or 0,
@@ -225,6 +309,7 @@ RULES:
 2. PRIORITY = has means + motive + strategic fit. Maximum 3-4 companies.
 3. Be brutally specific. "Market consolidation" is not enough. Say "Combined 35% market share in Brazilian e-commerce would create pricing power in electronics category."
 4. For Tier 3 (PE), focus on financial engineering: LBO capacity, spin-off potential, multiple arbitrage.
+5. For Tier 1 (STRATEGIC_BUYER) deal_thesis: use the EXACT sector/industry shown after each ticker in the Tier 1 list above (third field after "|" pipes). Never write "N/A", "Unknown", or "TBD" for that vertical.
 
 Return ONLY a valid JSON array. No markdown fences. No explanation."""
 
@@ -233,7 +318,7 @@ def _build_tier1_text(comps: list[dict]) -> str:
     lines = []
     for c in comps[:12]:
         n = _normalize_comp(c)
-        lines.append(f"- {n['ticker']}: {n['name']} | {n['industry']} | {n['country']} | Rev: ${n['revenue']:,.0f}M | EV: ${n['ev']:,.0f}M")
+        lines.append(f"- {n['ticker']}: {n['name']} | {n['sector']} | {n['country']} | Rev: ${n['revenue']:,.0f}M | EV: ${n['ev']:,.0f}M")
     return "\n".join(lines) if lines else "No Tier 1 candidates available."
 
 
@@ -322,7 +407,7 @@ def _generate_mock_briefs(comps: list[dict], target_name: str, target_industry: 
         result.append({
             "ticker": n["ticker"].upper(),
             "tier": "STRATEGIC_BUYER",
-            "deal_thesis": f"{n['name']} is a direct competitor in {n['industry']} with ${rev:,.0f}M revenue. Acquisition would consolidate market share and create pricing power in overlapping segments.",
+            "deal_thesis": f"{n['name']} is a direct competitor in {n['sector']} with ${rev:,.0f}M revenue. Acquisition would consolidate market share and create pricing power in overlapping segments.",
             "strategic_rationale": f"Cost synergies estimated at 15-20% of combined SG&A from eliminating duplicate operations.",
             "risks": "Antitrust scrutiny in overlapping markets. Integration of competing product lines and technology stacks.",
             "expansion_signal": "HIGH" if rev > 50000 else "MEDIUM",
@@ -380,7 +465,7 @@ def generate_deal_intelligence(
     # ─────────────────────────────
     # CACHE KEY
     # ─────────────────────────────
-    key = f"{target_ticker}_{target_industry}".lower()
+    key = _cache_key(target_ticker, target_industry)
 
     # ── 1. TRY CACHE ──
     try:
@@ -403,7 +488,9 @@ def generate_deal_intelligence(
 
             if datetime.now(timezone.utc) - created_at <= timedelta(hours=CACHE_TTL_HOURS):
                 print("   💾 CACHE HIT")
-                return data if isinstance(data, list) else json.loads(data)
+                out = data if isinstance(data, list) else json.loads(data)
+                _patch_strategic_buyer_theses(out, comps, target_industry)
+                return out
             else:
                 print("   ⏳ Cache expired")
 
@@ -443,6 +530,8 @@ def generate_deal_intelligence(
                         b.setdefault("expansion_signal", "MEDIUM")
                         b.setdefault("expansion_note", "")
                         b.setdefault("approach_rec", "SECONDARY")
+
+                    _patch_strategic_buyer_theses(briefs, comps, target_industry)
 
                     t1 = sum(1 for b in briefs if b["tier"] == "STRATEGIC_BUYER")
                     t2 = sum(1 for b in briefs if b["tier"] == "ADJACENT_SYNERGY")
@@ -484,6 +573,7 @@ def generate_deal_intelligence(
     fallback = _generate_mock_briefs(
         comps, target_name, target_industry, target_revenue
     )
+    _patch_strategic_buyer_theses(fallback, comps, target_industry)
 
     # 💾 SAVE FALLBACK TAMBIÉN
     try:
@@ -509,6 +599,15 @@ def generate_deal_intelligence(
 # ─────────────────────────────────────────────
 # ENDPOINT
 # ─────────────────────────────────────────────
+
+@router.post("/comps/deal-intel/clear-cache")
+def clear_deal_intelligence_cache():
+    """Development / ops: wipe ai_cache so Deal Intel stops serving stale briefs."""
+    result = clear_deal_intel_cache()
+    if not result.get("ok"):
+        raise HTTPException(status_code=500, detail=result.get("error", "clear failed"))
+    return result
+
 
 @router.post("/comps/deal-intel")
 def get_deal_intelligence(request: DealIntelRequest):

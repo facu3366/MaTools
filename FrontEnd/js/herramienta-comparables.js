@@ -950,9 +950,12 @@ function triggerDealIntel() {
   comps = comps.slice(0, 25).map((c) => ({
     ticker: c.Ticker,
     name: c.Empresa,
-    sector: d.sector,
+    sector: d.sector || c.Sector || c.Industria || "",
+    Sector: c.Sector,
+    Industria: c.Industria,
     revenue: c["Revenue ($mm)"],
     ev: c["EV ($mm)"],
+    ebitda: c["EBITDA ($mm)"],
   }));
 
   console.log("🧠 DEAL INTEL TRIGGER", comps);

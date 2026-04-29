@@ -51,6 +51,11 @@ async function fetchDealIntel(nombre, ticker, industria, revenue, comparables) {
   try {
     const compsClean = (comparables || []).map((c) => ({
       ticker: c.ticker || c.Ticker || "",
+      name: c.name || c.Empresa || "",
+      sector: c.sector || c.Sector || "",
+      Sector: c.Sector || "",
+      Industria: c.Industria || c.industry || "",
+      industry: c.industry || c.Industria || "",
       revenue: c.revenue || c["Revenue ($mm)"] || null,
       ev: c.ev || c["EV ($mm)"] || null,
       ebitda: c.ebitda || c["EBITDA ($mm)"] || null,
